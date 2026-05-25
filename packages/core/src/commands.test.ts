@@ -1,5 +1,5 @@
 import { Schema, type Node as ProseMirrorNode } from 'prosemirror-model';
-import { EditorState, TextSelection } from 'prosemirror-state';
+import { EditorState, NodeSelection, TextSelection } from 'prosemirror-state';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -12,7 +12,13 @@ import {
   deleteColumn,
   deleteRow,
   deleteTable,
+  goToNextCell,
+  goToPreviousCell,
   insertHtmlTable,
+  selectCell,
+  selectColumn,
+  selectRow,
+  selectTable,
   setCellAttribute,
   toggleHeaderCell,
   toggleHeaderColumn,
@@ -72,6 +78,19 @@ function getBody(table: ProseMirrorNode): ProseMirrorNode {
   }
 
   throw new Error('Expected htmlTableBody child.');
+}
+
+function getSelectedCellType(state: EditorState): string | undefined {
+  const { $from } = state.selection;
+
+  for (let depth = $from.depth; depth > 0; depth -= 1) {
+    const node = $from.node(depth);
+    if (node.type.name === 'htmlTableHeaderCell' || node.type.name === 'htmlTableCell') {
+      return node.type.name;
+    }
+  }
+
+  return undefined;
 }
 
 function findFirstNodePos(doc: ProseMirrorNode, typeName: string): number {
@@ -201,5 +220,50 @@ describe('html table commands', () => {
     expect(body.child(0).child(0).type.name).toBe('htmlTableHeaderCell');
     expect(body.child(1).child(0).type.name).toBe('htmlTableHeaderCell');
     expect(body.child(1).child(1).type.name).toBe('htmlTableCell');
+  });
+
+  it('moves the selection to the next and previous table cells', () => {
+    const nextState = applyCommand(createStateWithTable(2, 2), goToNextCell());
+    expect(getSelectedCellType(nextState)).toBe('htmlTableHeaderCell');
+    expect(nextState.selection.from).toBeGreaterThan(1);
+
+    const previousState = applyCommand(nextState, goToPreviousCell());
+    expect(getSelectedCellType(previousState)).toBe('htmlTableHeaderCell');
+    expect(previousState.selection.from).toBeLessThan(nextState.selection.from);
+  });
+
+  it('cycles cell navigation when requested', () => {
+    const firstState = createStateWithTable(1, 1);
+    const nextState = applyCommand(firstState, goToNextCell({ cycle: true }));
+
+    expect(getSelectedCellType(nextState)).toBe('htmlTableHeaderCell');
+  });
+
+  it('selects the current cell as a node selection', () => {
+    const nextState = applyCommand(createStateWithTable(2, 2), selectCell());
+
+    expect(nextState.selection).toBeInstanceOf(NodeSelection);
+    expect((nextState.selection as NodeSelection).node.type.name).toBe('htmlTableHeaderCell');
+  });
+
+  it('selects the current row as a text range', () => {
+    const nextState = applyCommand(createStateWithTable(2, 2), selectRow());
+
+    expect(nextState.selection).toBeInstanceOf(TextSelection);
+    expect(nextState.selection.empty).toBe(false);
+  });
+
+  it('selects the current column as a text range', () => {
+    const nextState = applyCommand(createStateWithTable(2, 2), selectColumn());
+
+    expect(nextState.selection).toBeInstanceOf(TextSelection);
+    expect(nextState.selection.empty).toBe(false);
+  });
+
+  it('selects the whole table as a node selection', () => {
+    const nextState = applyCommand(createStateWithTable(2, 2), selectTable());
+
+    expect(nextState.selection).toBeInstanceOf(NodeSelection);
+    expect((nextState.selection as NodeSelection).node.type.name).toBe('htmlTable');
   });
 });
