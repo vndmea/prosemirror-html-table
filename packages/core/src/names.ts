@@ -12,5 +12,3 @@ export const htmlTableNodeNames = {
 } as const;
 
 export type HtmlTableNodeNameKey = keyof typeof htmlTableNodeNames;
-
-export type HtmlTableNodeNames = typeof htmlTableNodeNames;
