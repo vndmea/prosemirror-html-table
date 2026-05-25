@@ -156,6 +156,84 @@ export function deleteTable(options: HtmlTableCommandOptions = {}): Command {
   };
 }
 
+export function setCellAttribute(
+  name: string,
+  value: unknown,
+  options: HtmlTableCommandOptions = {},
+): Command {
+  return (state, dispatch) => {
+    const context = findCellContext(state, options);
+    if (!context) return false;
+
+    const table = updateCellAt(context, context.cell, (cell) => copyCellWithAttrs(cell, { [name]: value }));
+    return replaceTable(state, dispatch, context, table);
+  };
+}
+
+export function toggleHeaderCell(options: HtmlTableCommandOptions = {}): Command {
+  return (state, dispatch) => {
+    const context = findCellContext(state, options);
+    if (!context) return false;
+
+    const table = updateCellAt(context, context.cell, (cell) =>
+      convertCellType(state.schema, context.names, cell, isHeaderCell(context.names, cell) ? 'body' : 'header'),
+    );
+
+    return replaceTable(state, dispatch, context, table);
+  };
+}
+
+export function toggleHeaderRow(options: HtmlTableCommandOptions = {}): Command {
+  return (state, dispatch) => {
+    const context = findRowContext(state, options);
+    if (!context) return false;
+
+    const rowChildren = getChildren(context.row);
+    const shouldConvertToHeader = rowChildren.some((cell) => !isHeaderCell(context.names, cell));
+    const nextRow = context.row.copy(
+      Fragment.fromArray(
+        rowChildren.map((cell) =>
+          convertCellType(state.schema, context.names, cell, shouldConvertToHeader ? 'header' : 'body'),
+        ),
+      ),
+    );
+    const table = updateRowAt(context, nextRow);
+
+    return replaceTable(state, dispatch, context, table);
+  };
+}
+
+export function toggleHeaderColumn(options: HtmlTableCommandOptions = {}): Command {
+  return (state, dispatch) => {
+    const context = findCellContext(state, options);
+    if (!context) return false;
+
+    const grid = createHtmlTableGrid(context.table, { names: context.names });
+    const targetColumn = context.cell.columnIndex;
+    const targetCells = grid.cells.filter((cell) => cell.columnIndex <= targetColumn && cell.columnIndex + cell.colSpan > targetColumn);
+    if (targetCells.length === 0) return false;
+
+    const shouldConvertToHeader = targetCells.some((cell) => !isHeaderCell(context.names, cell.node));
+    const targetCellSet = new Set(targetCells.map((cell) => cell.node));
+    const tableChildren = getChildren(context.table);
+
+    forEachSection(context.table, context.names, (section, _sectionName, sectionChildIndex) => {
+      const rows = getChildren(section).map((row) => {
+        const rowChildren = getChildren(row).map((cell) => {
+          if (!targetCellSet.has(cell)) return cell;
+          return convertCellType(state.schema, context.names, cell, shouldConvertToHeader ? 'header' : 'body');
+        });
+
+        return row.copy(Fragment.fromArray(rowChildren));
+      });
+
+      tableChildren[sectionChildIndex] = section.copy(Fragment.fromArray(rows));
+    });
+
+    return replaceTable(state, dispatch, context, context.table.copy(Fragment.fromArray(tableChildren)));
+  };
+}
+
 function addRow(direction: 'before' | 'after', options: HtmlTableCommandOptions): Command {
   return (state, dispatch) => {
     const context = findRowContext(state, options);
@@ -368,6 +446,35 @@ function createEmptyCell(
   return cell;
 }
 
+function updateCellAt(
+  context: CellContext,
+  cell: HtmlTableCellRef,
+  updater: (cell: ProseMirrorNode) => ProseMirrorNode,
+): ProseMirrorNode {
+  const tableChildren = getChildren(context.table);
+  const sectionChildren = getChildren(context.section);
+  const row = sectionChildren[cell.rowIndexInSection];
+
+  if (!row) return context.table;
+
+  const rowChildren = getChildren(row);
+  rowChildren[cell.cellIndex] = updater(rowChildren[cell.cellIndex]!);
+  sectionChildren[cell.rowIndexInSection] = row.copy(Fragment.fromArray(rowChildren));
+  tableChildren[context.sectionChildIndex] = context.section.copy(Fragment.fromArray(sectionChildren));
+
+  return context.table.copy(Fragment.fromArray(tableChildren));
+}
+
+function updateRowAt(context: RowContext, row: ProseMirrorNode): ProseMirrorNode {
+  const tableChildren = getChildren(context.table);
+  const sectionChildren = getChildren(context.section);
+
+  sectionChildren[context.rowIndexInSection] = row;
+  tableChildren[context.sectionChildIndex] = context.section.copy(Fragment.fromArray(sectionChildren));
+
+  return context.table.copy(Fragment.fromArray(tableChildren));
+}
+
 function getChildren(node: ProseMirrorNode): ProseMirrorNode[] {
   const children: ProseMirrorNode[] = [];
   node.forEach((child) => children.push(child));
@@ -400,6 +507,23 @@ function countAnchorsBeforeColumn(grid: HtmlTableGrid, rowIndex: number, columnI
 
 function findGlobalRowIndexByNode(grid: HtmlTableGrid, row: ProseMirrorNode): number {
   return grid.rows.find((item) => item.node === row)?.rowIndex ?? 0;
+}
+
+function isHeaderCell(names: HtmlTableNodeNames, cell: ProseMirrorNode): boolean {
+  return cell.type.name === names.headerCell;
+}
+
+function convertCellType(
+  schema: Schema,
+  names: HtmlTableNodeNames,
+  cell: ProseMirrorNode,
+  kind: 'header' | 'body',
+): ProseMirrorNode {
+  const targetType = getNodeType(schema, kind === 'header' ? names.headerCell : names.cell);
+
+  if (cell.type === targetType) return cell;
+
+  return targetType.create(cell.attrs, cell.content, cell.marks);
 }
 
 function copyCellWithAttrs(cell: ProseMirrorNode, attrs: Record<string, unknown>): ProseMirrorNode {
