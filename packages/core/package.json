@@ -1,0 +1,48 @@
+{
+  "name": "prosemirror-html-table",
+  "version": "0.1.0",
+  "description": "A ProseMirror table engine foundation for full HTML table structures.",
+  "type": "module",
+  "license": "MIT",
+  "author": "vndmea",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/vndmea/prosemirror-html-table.git",
+    "directory": "packages/core"
+  },
+  "keywords": [
+    "prosemirror",
+    "table",
+    "html-table",
+    "editor",
+    "typescript"
+  ],
+  "sideEffects": false,
+  "files": [
+    "dist"
+  ],
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit"
+  },
+  "peerDependencies": {
+    "prosemirror-model": "^1.0.0",
+    "prosemirror-state": "^1.0.0",
+    "prosemirror-view": "^1.0.0"
+  },
+  "devDependencies": {
+    "prosemirror-model": "^1.0.0",
+    "prosemirror-state": "^1.0.0",
+    "prosemirror-view": "^1.0.0"
+  }
+}
