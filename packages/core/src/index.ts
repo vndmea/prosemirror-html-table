@@ -7,7 +7,13 @@ export {
   deleteColumn,
   deleteRow,
   deleteTable,
+  goToNextCell,
+  goToPreviousCell,
   insertHtmlTable,
+  selectCell,
+  selectColumn,
+  selectRow,
+  selectTable,
   setCellAttribute,
   toggleHeaderCell,
   toggleHeaderColumn,
@@ -18,7 +24,11 @@ export { createHtmlTableGrid, getCellAt, isCellAnchor } from './grid.js';
 export { createHtmlTableNodeSpecs, normalizeHtmlTableSchemaOptions } from './schema.js';
 
 export type { CreateHtmlTableOptions } from './builders.js';
-export type { HtmlTableCommandOptions, InsertHtmlTableCommandOptions } from './commands.js';
+export type {
+  HtmlTableCellNavigationOptions,
+  HtmlTableCommandOptions,
+  InsertHtmlTableCommandOptions,
+} from './commands.js';
 export type { HtmlTableNodeNameKey } from './names.js';
 
 export type {
