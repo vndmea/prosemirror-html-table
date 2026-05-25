@@ -75,7 +75,7 @@ export const HtmlTableCol = Node.create({
       },
       width: {
         default: null,
-        parseHTML: (element) => element.getAttribute('width') ?? element.style.width || null,
+        parseHTML: (element) => element.getAttribute('width') ?? (element.style.width || null),
         renderHTML: (attrs) => (attrs.width ? { width: attrs.width } : {}),
       },
     };
