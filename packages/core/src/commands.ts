@@ -1,5 +1,5 @@
 import { Fragment, type Node as ProseMirrorNode, type Schema } from 'prosemirror-model';
-import type { Command, EditorState } from 'prosemirror-state';
+import { NodeSelection, TextSelection, type Command, type EditorState } from 'prosemirror-state';
 
 import { createHtmlTableNode, type CreateHtmlTableOptions } from './builders.js';
 import { createHtmlTableGrid, type HtmlTableCellRef, type HtmlTableGrid, type HtmlTableSectionName } from './grid.js';
@@ -8,6 +8,10 @@ import type { HtmlTableNodeNames } from './types.js';
 
 export interface HtmlTableCommandOptions {
   names?: Partial<HtmlTableNodeNames>;
+}
+
+export interface HtmlTableCellNavigationOptions extends HtmlTableCommandOptions {
+  cycle?: boolean;
 }
 
 export interface InsertHtmlTableCommandOptions extends CreateHtmlTableOptions {
@@ -231,6 +235,87 @@ export function toggleHeaderColumn(options: HtmlTableCommandOptions = {}): Comma
     });
 
     return replaceTable(state, dispatch, context, context.table.copy(Fragment.fromArray(tableChildren)));
+  };
+}
+
+export function goToNextCell(options: HtmlTableCellNavigationOptions = {}): Command {
+  return goToRelativeCell(1, options);
+}
+
+export function goToPreviousCell(options: HtmlTableCellNavigationOptions = {}): Command {
+  return goToRelativeCell(-1, options);
+}
+
+export function selectCell(options: HtmlTableCommandOptions = {}): Command {
+  return (state, dispatch) => {
+    const context = findCellContext(state, options);
+    if (!context) return false;
+
+    return setCellNodeSelection(state, dispatch, context, context.cell);
+  };
+}
+
+export function selectRow(options: HtmlTableCommandOptions = {}): Command {
+  return (state, dispatch) => {
+    const context = findCellContext(state, options);
+    if (!context) return false;
+
+    const grid = createHtmlTableGrid(context.table, { names: context.names });
+    const rowCells = grid.cells
+      .filter((cell) => cell.rowIndex === context.cell.rowIndex)
+      .sort((a, b) => a.columnIndex - b.columnIndex);
+
+    return setCellRangeSelection(state, dispatch, context, rowCells);
+  };
+}
+
+export function selectColumn(options: HtmlTableCommandOptions = {}): Command {
+  return (state, dispatch) => {
+    const context = findCellContext(state, options);
+    if (!context) return false;
+
+    const grid = createHtmlTableGrid(context.table, { names: context.names });
+    const columnCells = grid.cells
+      .filter((cell) => cell.columnIndex <= context.cell.columnIndex && cell.columnIndex + cell.colSpan > context.cell.columnIndex)
+      .sort((a, b) => a.rowIndex - b.rowIndex);
+
+    return setCellRangeSelection(state, dispatch, context, columnCells);
+  };
+}
+
+export function selectTable(options: HtmlTableCommandOptions = {}): Command {
+  return (state, dispatch) => {
+    const context = findTableContext(state, options);
+    if (!context) return false;
+
+    if (dispatch) {
+      dispatch(state.tr.setSelection(NodeSelection.create(state.doc, context.tablePos)).scrollIntoView());
+    }
+
+    return true;
+  };
+}
+
+function goToRelativeCell(direction: 1 | -1, options: HtmlTableCellNavigationOptions): Command {
+  return (state, dispatch) => {
+    const context = findCellContext(state, options);
+    if (!context) return false;
+
+    const grid = createHtmlTableGrid(context.table, { names: context.names });
+    const currentIndex = grid.cells.findIndex((cell) => cell.node === context.cell.node);
+    if (currentIndex < 0) return false;
+
+    let targetIndex = currentIndex + direction;
+
+    if (targetIndex < 0 || targetIndex >= grid.cells.length) {
+      if (!options.cycle) return false;
+      targetIndex = direction > 0 ? 0 : grid.cells.length - 1;
+    }
+
+    const targetCell = grid.cells[targetIndex];
+    if (!targetCell) return false;
+
+    return setSelectionInsideCell(state, dispatch, context, targetCell);
   };
 }
 
@@ -473,6 +558,106 @@ function updateRowAt(context: RowContext, row: ProseMirrorNode): ProseMirrorNode
   tableChildren[context.sectionChildIndex] = context.section.copy(Fragment.fromArray(sectionChildren));
 
   return context.table.copy(Fragment.fromArray(tableChildren));
+}
+
+function setSelectionInsideCell(
+  state: EditorState,
+  dispatch: Parameters<Command>[1],
+  context: TableContext,
+  cell: HtmlTableCellRef,
+): boolean {
+  const cellPos = findCellPosition(context, cell);
+  if (cellPos === undefined) return false;
+
+  if (dispatch) {
+    const $cellStart = state.doc.resolve(cellPos + 1);
+    dispatch(state.tr.setSelection(TextSelection.near($cellStart, 1)).scrollIntoView());
+  }
+
+  return true;
+}
+
+function setCellNodeSelection(
+  state: EditorState,
+  dispatch: Parameters<Command>[1],
+  context: TableContext,
+  cell: HtmlTableCellRef,
+): boolean {
+  const cellPos = findCellPosition(context, cell);
+  if (cellPos === undefined) return false;
+
+  if (dispatch) {
+    dispatch(state.tr.setSelection(NodeSelection.create(state.doc, cellPos)).scrollIntoView());
+  }
+
+  return true;
+}
+
+function setCellRangeSelection(
+  state: EditorState,
+  dispatch: Parameters<Command>[1],
+  context: TableContext,
+  cells: HtmlTableCellRef[],
+): boolean {
+  if (cells.length === 0) return false;
+  if (cells.length === 1) return setCellNodeSelection(state, dispatch, context, cells[0]!);
+
+  const firstCell = cells[0]!;
+  const lastCell = cells[cells.length - 1]!;
+  const firstCellPos = findCellPosition(context, firstCell);
+  const lastCellPos = findCellPosition(context, lastCell);
+
+  if (firstCellPos === undefined || lastCellPos === undefined) return false;
+
+  if (dispatch) {
+    const $from = state.doc.resolve(firstCellPos + 1);
+    const $to = state.doc.resolve(lastCellPos + lastCell.node.nodeSize - 1);
+    dispatch(state.tr.setSelection(TextSelection.between($from, $to)).scrollIntoView());
+  }
+
+  return true;
+}
+
+function findCellPosition(context: TableContext, cell: HtmlTableCellRef): number | undefined {
+  let result: number | undefined;
+  const sectionCounters: Record<HtmlTableSectionName, number> = {
+    head: 0,
+    body: 0,
+    foot: 0,
+  };
+
+  context.table.forEach((section, sectionOffset) => {
+    if (result !== undefined) return;
+
+    const sectionName = getSectionName(section, context.names);
+    if (!sectionName) return;
+
+    const sectionIndex = sectionCounters[sectionName];
+    sectionCounters[sectionName] += 1;
+
+    if (sectionName !== cell.section || sectionIndex !== cell.sectionIndex) return;
+
+    section.forEach((row, rowOffset, rowIndexInSection) => {
+      if (result !== undefined || rowIndexInSection !== cell.rowIndexInSection) return;
+
+      row.forEach((cellNode, cellOffset, cellIndex) => {
+        if (result !== undefined) return;
+
+        if (cellIndex === cell.cellIndex && cellNode === cell.node) {
+          result = context.tablePos + 1 + sectionOffset + 1 + rowOffset + 1 + cellOffset;
+        }
+      });
+    });
+  });
+
+  return result;
+}
+
+function getSectionName(node: ProseMirrorNode, names: HtmlTableNodeNames): HtmlTableSectionName | undefined {
+  if (node.type.name === names.head) return 'head';
+  if (node.type.name === names.body) return 'body';
+  if (node.type.name === names.foot) return 'foot';
+  return undefined;
 }
 
 function getChildren(node: ProseMirrorNode): ProseMirrorNode[] {
