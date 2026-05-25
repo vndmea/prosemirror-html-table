@@ -77,7 +77,13 @@ import {
   deleteColumn,
   deleteRow,
   deleteTable,
+  goToNextCell,
+  goToPreviousCell,
   insertHtmlTable,
+  selectCell,
+  selectColumn,
+  selectRow,
+  selectTable,
   setCellAttribute,
   toggleHeaderCell,
   toggleHeaderColumn,
@@ -100,11 +106,19 @@ setCellAttribute
 toggleHeaderCell
 toggleHeaderRow
 toggleHeaderColumn
+goToNextCell
+goToPreviousCell
+selectCell
+selectRow
+selectColumn
+selectTable
 ```
 
 These commands are the first editing layer. They are designed for regular table editing and use the section-aware grid internally. Complex spanning behavior is still conservative: deleting a column can shrink a covering `colspan`, while advanced merge/split and full normalization will be implemented separately.
 
 Header commands convert between `htmlTableHeaderCell` and `htmlTableCell` while preserving cell attributes, content, and marks.
+
+Selection commands currently use ProseMirror's built-in `NodeSelection` and `TextSelection`. They provide practical cell, row, column, and whole-table selection behavior without introducing a custom `CellSelection` class yet. A dedicated table-cell selection implementation can still be added later for merge/split workflows.
 
 ### Tiptap usage
 
@@ -135,7 +149,19 @@ editor.commands.setHtmlTableCellAttribute('colspan', 2);
 editor.commands.toggleHtmlTableHeaderCell();
 editor.commands.toggleHtmlTableHeaderRow();
 editor.commands.toggleHtmlTableHeaderColumn();
+editor.commands.goToNextHtmlTableCell();
+editor.commands.goToPreviousHtmlTableCell();
+editor.commands.selectHtmlTableCell();
+editor.commands.selectHtmlTableRow();
+editor.commands.selectHtmlTableColumn();
+editor.commands.selectHtmlTable();
 editor.commands.deleteHtmlTable();
+```
+
+`goToNextHtmlTableCell` and `goToPreviousHtmlTableCell` support optional cycling:
+
+```ts
+editor.commands.goToNextHtmlTableCell({ cycle: true });
 ```
 
 ## Roadmap
@@ -143,7 +169,7 @@ editor.commands.deleteHtmlTable();
 The next major areas are:
 
 ```txt
-1. CellSelection and keyboard cell navigation
+1. Dedicated CellSelection for rectangular selections
 2. mergeCells / splitCell / mergeOrSplit
 3. table normalization / fixTables
 4. column resizing
