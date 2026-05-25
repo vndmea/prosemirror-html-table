@@ -1,6 +1,7 @@
 import type { Schema, Node as ProseMirrorNode } from 'prosemirror-model';
 
-import { htmlTableNodeNames, type HtmlTableNodeNames } from './names.js';
+import { htmlTableNodeNames } from './names.js';
+import type { HtmlTableNodeNames } from './types.js';
 
 export interface CreateHtmlTableOptions {
   names?: Partial<HtmlTableNodeNames>;
@@ -12,7 +13,7 @@ export interface CreateHtmlTableOptions {
 }
 
 export function createHtmlTableNode(schema: Schema, options: CreateHtmlTableOptions = {}): ProseMirrorNode {
-  const names = {
+  const names: HtmlTableNodeNames = {
     ...htmlTableNodeNames,
     ...options.names,
   };
@@ -23,7 +24,7 @@ export function createHtmlTableNode(schema: Schema, options: CreateHtmlTableOpti
 
   if (options.withCaption) {
     const captionContent = options.captionText ? schema.text(options.captionText) : undefined;
-    tableChildren.push(schema.nodes[names.caption]!.create(null, captionContent));
+    tableChildren.push(getNodeType(schema, names.caption).create(null, captionContent));
   }
 
   for (let rowIndex = 0; rowIndex < rows; rowIndex += 1) {
@@ -31,15 +32,31 @@ export function createHtmlTableNode(schema: Schema, options: CreateHtmlTableOpti
     const isHeaderRow = options.withHeaderRow === true && rowIndex === 0;
 
     for (let columnIndex = 0; columnIndex < cols; columnIndex += 1) {
-      const cellType = isHeaderRow ? schema.nodes[names.headerCell]! : schema.nodes[names.cell]!;
+      const cellType = getNodeType(schema, isHeaderRow ? names.headerCell : names.cell);
       const paragraph = schema.nodes.paragraph?.createAndFill();
-      cells.push(cellType.createAndFill(null, paragraph ? [paragraph] : undefined)!);
+      const cell = cellType.createAndFill(null, paragraph ? [paragraph] : undefined);
+
+      if (!cell) {
+        throw new Error(`Unable to create table cell node: ${cellType.name}`);
+      }
+
+      cells.push(cell);
     }
 
-    bodyRows.push(schema.nodes[names.row]!.create(null, cells));
+    bodyRows.push(getNodeType(schema, names.row).create(null, cells));
   }
 
-  tableChildren.push(schema.nodes[names.body]!.create(null, bodyRows));
+  tableChildren.push(getNodeType(schema, names.body).create(null, bodyRows));
 
-  return schema.nodes[names.table]!.create(null, tableChildren);
+  return getNodeType(schema, names.table).create(null, tableChildren);
+}
+
+function getNodeType(schema: Schema, name: string) {
+  const nodeType = schema.nodes[name];
+
+  if (!nodeType) {
+    throw new Error(`Missing node type in schema: ${name}`);
+  }
+
+  return nodeType;
 }
