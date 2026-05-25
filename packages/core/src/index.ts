@@ -6,11 +6,7 @@ export { createHtmlTableNodeSpecs, normalizeHtmlTableSchemaOptions } from './sch
 
 export type { CreateHtmlTableOptions } from './builders.js';
 export type { InsertHtmlTableCommandOptions } from './commands.js';
-
-export type {
-  HtmlTableNodeNameKey,
-  HtmlTableNodeNames,
-} from './names.js';
+export type { HtmlTableNodeNameKey } from './names.js';
 
 export type {
   HtmlTableCellRef,
@@ -22,6 +18,7 @@ export type {
 } from './grid.js';
 
 export type {
+  HtmlTableNodeNames,
   HtmlTableNodeSpecs,
   HtmlTableSchemaOptions,
   NormalizedHtmlTableSchemaOptions,
