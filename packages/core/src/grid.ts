@@ -1,6 +1,7 @@
 import type { Node as ProseMirrorNode } from 'prosemirror-model';
 
-import { htmlTableNodeNames, type HtmlTableNodeNames } from './names.js';
+import { htmlTableNodeNames } from './names.js';
+import type { HtmlTableNodeNames } from './types.js';
 
 export type HtmlTableSectionName = 'head' | 'body' | 'foot';
 
@@ -44,7 +45,7 @@ export interface HtmlTableGrid {
 }
 
 export function createHtmlTableGrid(table: ProseMirrorNode, options: HtmlTableGridOptions = {}): HtmlTableGrid {
-  const names = {
+  const names: HtmlTableNodeNames = {
     ...htmlTableNodeNames,
     ...options.names,
   };
