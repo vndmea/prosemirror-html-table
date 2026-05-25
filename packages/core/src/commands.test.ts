@@ -13,6 +13,10 @@ import {
   deleteRow,
   deleteTable,
   insertHtmlTable,
+  setCellAttribute,
+  toggleHeaderCell,
+  toggleHeaderColumn,
+  toggleHeaderRow,
 } from './index.js';
 
 const schema = new Schema({
@@ -166,5 +170,36 @@ describe('html table commands', () => {
     const nextState = applyCommand(state, deleteTable());
 
     expect(nextState.doc.firstChild?.type.name).toBe('paragraph');
+  });
+
+  it('sets an attribute on the selected cell', () => {
+    const nextState = applyCommand(createStateWithTable(2, 2), setCellAttribute('colspan', 2));
+    const firstCell = getBody(getTable(nextState.doc)).child(0).child(0);
+
+    expect(firstCell.attrs.colspan).toBe(2);
+  });
+
+  it('toggles the selected cell between header and body cell types', () => {
+    const nextState = applyCommand(createStateWithTable(2, 2), toggleHeaderCell());
+    const firstCell = getBody(getTable(nextState.doc)).child(0).child(0);
+
+    expect(firstCell.type.name).toBe('htmlTableCell');
+  });
+
+  it('toggles the selected row between header and body cell types', () => {
+    const nextState = applyCommand(createStateWithTable(2, 2), toggleHeaderRow());
+    const firstRow = getBody(getTable(nextState.doc)).child(0);
+
+    expect(firstRow.child(0).type.name).toBe('htmlTableCell');
+    expect(firstRow.child(1).type.name).toBe('htmlTableCell');
+  });
+
+  it('toggles the selected column between header and body cell types', () => {
+    const nextState = applyCommand(createStateWithTable(2, 2), toggleHeaderColumn());
+    const body = getBody(getTable(nextState.doc));
+
+    expect(body.child(0).child(0).type.name).toBe('htmlTableHeaderCell');
+    expect(body.child(1).child(0).type.name).toBe('htmlTableHeaderCell');
+    expect(body.child(1).child(1).type.name).toBe('htmlTableCell');
   });
 });
