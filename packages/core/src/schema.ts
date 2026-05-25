@@ -33,7 +33,7 @@ export function createHtmlTableNodeSpecs(options: HtmlTableSchemaOptions = {}): 
     [names.row]: createRowSpec(config),
     [names.headerCell]: createCellSpec('th', config),
     [names.cell]: createCellSpec('td', config),
-  } as HtmlTableNodeSpecs;
+  };
 }
 
 function createTableSpec(config: NormalizedHtmlTableSchemaOptions): NodeSpec {
@@ -81,7 +81,7 @@ function createColSpec(): NodeSpec {
           const element = dom as HTMLElement;
           return {
             span: element.getAttribute('span'),
-            width: element.getAttribute('width') ?? element.style.width || null,
+            width: element.getAttribute('width') ?? (element.style.width || null),
           };
         },
       },
