@@ -1,6 +1,9 @@
+export { createHtmlTableNode } from './builders.js';
 export { htmlTableNodeNames } from './names.js';
 export { createHtmlTableGrid, getCellAt, isCellAnchor } from './grid.js';
 export { createHtmlTableNodeSpecs, normalizeHtmlTableSchemaOptions } from './schema.js';
+
+export type { CreateHtmlTableOptions } from './builders.js';
 
 export type {
   HtmlTableNodeNameKey,
