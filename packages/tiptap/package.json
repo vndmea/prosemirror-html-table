@@ -41,6 +41,6 @@
   },
   "devDependencies": {
     "@tiptap/core": "^3.0.0",
-    "prosemirror-html-table": "workspace:*"
+    "prosemirror-html-table": "0.1.0"
   }
 }
