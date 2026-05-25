@@ -1,0 +1,46 @@
+{
+  "name": "tiptap-html-table",
+  "version": "0.1.0",
+  "description": "Tiptap v3 extensions for full HTML table structures.",
+  "type": "module",
+  "license": "MIT",
+  "author": "vndmea",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/vndmea/prosemirror-html-table.git",
+    "directory": "packages/tiptap"
+  },
+  "keywords": [
+    "tiptap",
+    "prosemirror",
+    "table",
+    "html-table",
+    "typescript"
+  ],
+  "sideEffects": false,
+  "files": [
+    "dist"
+  ],
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit"
+  },
+  "peerDependencies": {
+    "@tiptap/core": "^3.0.0",
+    "prosemirror-html-table": "^0.1.0"
+  },
+  "devDependencies": {
+    "@tiptap/core": "^3.0.0",
+    "prosemirror-html-table": "workspace:*"
+  }
+}
