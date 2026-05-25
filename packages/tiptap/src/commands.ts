@@ -7,11 +7,18 @@ import {
   deleteColumn as deleteCoreColumn,
   deleteRow as deleteCoreRow,
   deleteTable as deleteCoreTable,
+  goToNextCell as goToCoreNextCell,
+  goToPreviousCell as goToCorePreviousCell,
   insertHtmlTable as insertCoreHtmlTable,
+  selectCell as selectCoreCell,
+  selectColumn as selectCoreColumn,
+  selectRow as selectCoreRow,
+  selectTable as selectCoreTable,
   setCellAttribute as setCoreCellAttribute,
   toggleHeaderCell as toggleCoreHeaderCell,
   toggleHeaderColumn as toggleCoreHeaderColumn,
   toggleHeaderRow as toggleCoreHeaderRow,
+  type HtmlTableCellNavigationOptions,
   type HtmlTableCommandOptions,
   type InsertHtmlTableCommandOptions,
 } from 'prosemirror-html-table';
@@ -31,6 +38,12 @@ declare module '@tiptap/core' {
       toggleHtmlTableHeaderCell: (options?: HtmlTableCommandOptions) => ReturnType;
       toggleHtmlTableHeaderRow: (options?: HtmlTableCommandOptions) => ReturnType;
       toggleHtmlTableHeaderColumn: (options?: HtmlTableCommandOptions) => ReturnType;
+      goToNextHtmlTableCell: (options?: HtmlTableCellNavigationOptions) => ReturnType;
+      goToPreviousHtmlTableCell: (options?: HtmlTableCellNavigationOptions) => ReturnType;
+      selectHtmlTableCell: (options?: HtmlTableCommandOptions) => ReturnType;
+      selectHtmlTableRow: (options?: HtmlTableCommandOptions) => ReturnType;
+      selectHtmlTableColumn: (options?: HtmlTableCommandOptions) => ReturnType;
+      selectHtmlTable: (options?: HtmlTableCommandOptions) => ReturnType;
     };
   }
 }
@@ -96,7 +109,41 @@ export function createHtmlTableCommands(): Partial<RawCommands> {
       (options?: HtmlTableCommandOptions) =>
       ({ state, dispatch }) =>
         toggleCoreHeaderColumn(options)(state, dispatch),
+
+    goToNextHtmlTableCell:
+      (options?: HtmlTableCellNavigationOptions) =>
+      ({ state, dispatch }) =>
+        goToCoreNextCell(options)(state, dispatch),
+
+    goToPreviousHtmlTableCell:
+      (options?: HtmlTableCellNavigationOptions) =>
+      ({ state, dispatch }) =>
+        goToCorePreviousCell(options)(state, dispatch),
+
+    selectHtmlTableCell:
+      (options?: HtmlTableCommandOptions) =>
+      ({ state, dispatch }) =>
+        selectCoreCell(options)(state, dispatch),
+
+    selectHtmlTableRow:
+      (options?: HtmlTableCommandOptions) =>
+      ({ state, dispatch }) =>
+        selectCoreRow(options)(state, dispatch),
+
+    selectHtmlTableColumn:
+      (options?: HtmlTableCommandOptions) =>
+      ({ state, dispatch }) =>
+        selectCoreColumn(options)(state, dispatch),
+
+    selectHtmlTable:
+      (options?: HtmlTableCommandOptions) =>
+      ({ state, dispatch }) =>
+        selectCoreTable(options)(state, dispatch),
   };
 }
 
-export type { HtmlTableCommandOptions, InsertHtmlTableCommandOptions } from 'prosemirror-html-table';
+export type {
+  HtmlTableCellNavigationOptions,
+  HtmlTableCommandOptions,
+  InsertHtmlTableCommandOptions,
+} from 'prosemirror-html-table';
