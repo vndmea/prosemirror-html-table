@@ -15,7 +15,7 @@
   "scripts": {
     "clean": "rimraf packages/*/dist coverage",
     "build": "npm run build --workspaces --if-present",
-    "typecheck": "tsc -b tsconfig.build.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run",
     "test:watch": "vitest",
     "coverage": "vitest run --coverage",
