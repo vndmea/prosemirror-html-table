@@ -1,7 +1,6 @@
 {
-  "files": [],
-  "references": [
-    { "path": "./packages/core" },
-    { "path": "./packages/tiptap" }
-  ]
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true
+  }
 }
