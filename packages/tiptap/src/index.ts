@@ -1,3 +1,5 @@
+export { createHtmlTableCommands } from './commands.js';
+
 export {
   HtmlTable,
   HtmlTableBody,
@@ -13,4 +15,5 @@ export {
 } from './nodes.js';
 
 export { defaultHtmlTableTiptapOptions } from './options.js';
+export type { InsertHtmlTableCommandOptions } from './commands.js';
 export type { HtmlTableTiptapOptions } from './options.js';
