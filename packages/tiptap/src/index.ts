@@ -15,5 +15,9 @@ export {
 } from './nodes.js';
 
 export { defaultHtmlTableTiptapOptions } from './options.js';
-export type { InsertHtmlTableCommandOptions } from './commands.js';
+export type {
+  HtmlTableCellNavigationOptions,
+  HtmlTableCommandOptions,
+  InsertHtmlTableCommandOptions,
+} from './commands.js';
 export type { HtmlTableTiptapOptions } from './options.js';
