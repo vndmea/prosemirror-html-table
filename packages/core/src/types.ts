@@ -1,6 +1,8 @@
 import type { NodeSpec } from 'prosemirror-model';
 
-import type { HtmlTableNodeNames } from './names.js';
+import type { HtmlTableNodeNameKey } from './names.js';
+
+export type HtmlTableNodeNames = Record<HtmlTableNodeNameKey, string>;
 
 export interface HtmlTableSchemaOptions {
   names?: Partial<HtmlTableNodeNames>;
@@ -10,7 +12,7 @@ export interface HtmlTableSchemaOptions {
   cellGroup?: string;
 }
 
-export type HtmlTableNodeSpecs = Record<HtmlTableNodeNames[keyof HtmlTableNodeNames], NodeSpec>;
+export type HtmlTableNodeSpecs = Record<string, NodeSpec>;
 
 export interface NormalizedHtmlTableSchemaOptions {
   names: HtmlTableNodeNames;
