@@ -78,6 +78,10 @@ import {
   deleteRow,
   deleteTable,
   insertHtmlTable,
+  setCellAttribute,
+  toggleHeaderCell,
+  toggleHeaderColumn,
+  toggleHeaderRow,
 } from 'prosemirror-html-table';
 ```
 
@@ -92,9 +96,15 @@ addColumnBefore
 addColumnAfter
 deleteColumn
 deleteTable
+setCellAttribute
+toggleHeaderCell
+toggleHeaderRow
+toggleHeaderColumn
 ```
 
 These commands are the first editing layer. They are designed for regular table editing and use the section-aware grid internally. Complex spanning behavior is still conservative: deleting a column can shrink a covering `colspan`, while advanced merge/split and full normalization will be implemented separately.
+
+Header commands convert between `htmlTableHeaderCell` and `htmlTableCell` while preserving cell attributes, content, and marks.
 
 ### Tiptap usage
 
@@ -121,6 +131,10 @@ editor.commands.addHtmlTableRowAfter();
 editor.commands.addHtmlTableColumnAfter();
 editor.commands.deleteHtmlTableRow();
 editor.commands.deleteHtmlTableColumn();
+editor.commands.setHtmlTableCellAttribute('colspan', 2);
+editor.commands.toggleHtmlTableHeaderCell();
+editor.commands.toggleHtmlTableHeaderRow();
+editor.commands.toggleHtmlTableHeaderColumn();
 editor.commands.deleteHtmlTable();
 ```
 
@@ -129,13 +143,11 @@ editor.commands.deleteHtmlTable();
 The next major areas are:
 
 ```txt
-1. setCellAttribute
-2. toggleHeaderCell / toggleHeaderRow / toggleHeaderColumn
-3. CellSelection and keyboard cell navigation
-4. mergeCells / splitCell / mergeOrSplit
-5. table normalization / fixTables
-6. column resizing
-7. optional UI components for row and column controls
+1. CellSelection and keyboard cell navigation
+2. mergeCells / splitCell / mergeOrSplit
+3. table normalization / fixTables
+4. column resizing
+5. optional UI components for row and column controls
 ```
 
 ## Development
