@@ -1,4 +1,4 @@
-import { Schema } from 'prosemirror-model';
+import { Schema, type Node as ProseMirrorNode } from 'prosemirror-model';
 import { describe, expect, it } from 'vitest';
 
 import { createHtmlTableGrid, createHtmlTableNode, createHtmlTableNodeSpecs, getCellAt, isCellAnchor } from './index.js';
@@ -16,6 +16,16 @@ const schema = new Schema({
     ...createHtmlTableNodeSpecs(),
   },
 });
+
+function createFilledNode(name: string): ProseMirrorNode {
+  const node = schema.nodes[name]?.createAndFill();
+
+  if (!node) {
+    throw new Error(`Unable to create filled node: ${name}`);
+  }
+
+  return node;
+}
 
 describe('createHtmlTableGrid', () => {
   it('maps generated table rows and cells into a logical grid', () => {
@@ -39,17 +49,17 @@ describe('createHtmlTableGrid', () => {
   });
 
   it('expands rowspan and colspan into occupied slots', () => {
-    const paragraph = schema.nodes.paragraph!.createAndFill();
+    const paragraph = createFilledNode('paragraph');
     const wideCell = schema.nodes.htmlTableCell!.create(
       {
         colspan: 2,
         rowspan: 2,
       },
-      paragraph ? [paragraph] : undefined,
+      [paragraph],
     );
-    const normalCell = schema.nodes.htmlTableCell!.createAndFill();
+    const normalCell = createFilledNode('htmlTableCell');
     const rowA = schema.nodes.htmlTableRow!.create(null, [wideCell, normalCell]);
-    const rowB = schema.nodes.htmlTableRow!.create(null, [schema.nodes.htmlTableCell!.createAndFill()]);
+    const rowB = schema.nodes.htmlTableRow!.create(null, [createFilledNode('htmlTableCell')]);
     const body = schema.nodes.htmlTableBody!.create(null, [rowA, rowB]);
     const table = schema.nodes.htmlTable!.create(null, [body]);
 
