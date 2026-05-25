@@ -8,6 +8,10 @@ export {
   deleteRow,
   deleteTable,
   insertHtmlTable,
+  setCellAttribute,
+  toggleHeaderCell,
+  toggleHeaderColumn,
+  toggleHeaderRow,
 } from './commands.js';
 export { htmlTableNodeNames } from './names.js';
 export { createHtmlTableGrid, getCellAt, isCellAnchor } from './grid.js';
