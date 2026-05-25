@@ -1,11 +1,20 @@
 export { createHtmlTableNode } from './builders.js';
-export { insertHtmlTable } from './commands.js';
+export {
+  addColumnAfter,
+  addColumnBefore,
+  addRowAfter,
+  addRowBefore,
+  deleteColumn,
+  deleteRow,
+  deleteTable,
+  insertHtmlTable,
+} from './commands.js';
 export { htmlTableNodeNames } from './names.js';
 export { createHtmlTableGrid, getCellAt, isCellAnchor } from './grid.js';
 export { createHtmlTableNodeSpecs, normalizeHtmlTableSchemaOptions } from './schema.js';
 
 export type { CreateHtmlTableOptions } from './builders.js';
-export type { InsertHtmlTableCommandOptions } from './commands.js';
+export type { HtmlTableCommandOptions, InsertHtmlTableCommandOptions } from './commands.js';
 export type { HtmlTableNodeNameKey } from './names.js';
 
 export type {
