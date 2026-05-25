@@ -1,5 +1,6 @@
 import { mergeAttributes, Node } from '@tiptap/core';
 
+import { createHtmlTableCommands } from './commands.js';
 import { defaultHtmlTableTiptapOptions, type HtmlTableTiptapOptions } from './options.js';
 
 export const HtmlTable = Node.create<HtmlTableTiptapOptions>({
@@ -13,6 +14,10 @@ export const HtmlTable = Node.create<HtmlTableTiptapOptions>({
 
   addOptions() {
     return defaultHtmlTableTiptapOptions;
+  },
+
+  addCommands() {
+    return createHtmlTableCommands();
   },
 
   parseHTML() {
