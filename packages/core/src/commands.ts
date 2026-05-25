@@ -2,7 +2,7 @@ import { Fragment, type Node as ProseMirrorNode, type Schema } from 'prosemirror
 import type { Command, EditorState } from 'prosemirror-state';
 
 import { createHtmlTableNode, type CreateHtmlTableOptions } from './builders.js';
-import { createHtmlTableGrid, type HtmlTableCellRef, type HtmlTableSectionName } from './grid.js';
+import { createHtmlTableGrid, type HtmlTableCellRef, type HtmlTableGrid, type HtmlTableSectionName } from './grid.js';
 import { htmlTableNodeNames } from './names.js';
 import type { HtmlTableNodeNames } from './types.js';
 
@@ -95,9 +95,9 @@ export function deleteColumn(options: HtmlTableCommandOptions = {}): Command {
     const targetColumn = context.cell.columnIndex;
     const tableChildren = getChildren(context.table);
 
-    forEachSection(context.table, context.names, (section, sectionName, sectionChildIndex) => {
-      const rows = getChildren(section).map((row, rowIndexInSection) => {
-        const globalRowIndex = findGlobalRowIndex(grid, sectionName, sectionChildIndex, rowIndexInSection);
+    forEachSection(context.table, context.names, (section, _sectionName, sectionChildIndex) => {
+      const rows = getChildren(section).map((row) => {
+        const globalRowIndex = findGlobalRowIndexByNode(grid, row);
         const rowChildren = getChildren(row);
         const nextRowChildren: ProseMirrorNode[] = [];
 
@@ -185,8 +185,8 @@ function addColumn(direction: 'before' | 'after', options: HtmlTableCommandOptio
     const tableChildren = getChildren(context.table);
 
     forEachSection(context.table, context.names, (section, sectionName, sectionChildIndex) => {
-      const rows = getChildren(section).map((row, rowIndexInSection) => {
-        const globalRowIndex = findGlobalRowIndex(grid, sectionName, sectionChildIndex, rowIndexInSection);
+      const rows = getChildren(section).map((row) => {
+        const globalRowIndex = findGlobalRowIndexByNode(grid, row);
         const rowChildren = getChildren(row);
         const insertCellIndex = countAnchorsBeforeColumn(grid, globalRowIndex, insertColumn);
         const cell = createEmptyCell(state.schema, context.names, sectionName === 'head' ? 'header' : 'body');
@@ -394,28 +394,12 @@ function countSections(table: ProseMirrorNode, sectionNodeName: string): number 
   return count;
 }
 
-function countAnchorsBeforeColumn(grid: ReturnType<typeof createHtmlTableGrid>, rowIndex: number, columnIndex: number): number {
+function countAnchorsBeforeColumn(grid: HtmlTableGrid, rowIndex: number, columnIndex: number): number {
   return grid.cells.filter((cell) => cell.rowIndex === rowIndex && cell.columnIndex < columnIndex).length;
 }
 
-function findGlobalRowIndex(
-  grid: ReturnType<typeof createHtmlTableGrid>,
-  sectionName: HtmlTableSectionName,
-  sectionChildIndex: number,
-  rowIndexInSection: number,
-): number {
-  const sectionIndex = grid.rows.filter(
-    (row) => row.section === sectionName && row.rowIndex < (grid.rows.find((item) => item.section === sectionName && item.sectionIndex === sectionChildIndex)?.rowIndex ?? 0),
-  ).length;
-
-  const row = grid.rows.find(
-    (item) =>
-      item.section === sectionName &&
-      item.sectionIndex === sectionIndex &&
-      item.rowIndexInSection === rowIndexInSection,
-  );
-
-  return row?.rowIndex ?? rowIndexInSection;
+function findGlobalRowIndexByNode(grid: HtmlTableGrid, row: ProseMirrorNode): number {
+  return grid.rows.find((item) => item.node === row)?.rowIndex ?? 0;
 }
 
 function copyCellWithAttrs(cell: ProseMirrorNode, attrs: Record<string, unknown>): ProseMirrorNode {
