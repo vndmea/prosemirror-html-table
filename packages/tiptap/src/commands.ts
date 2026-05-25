@@ -8,6 +8,10 @@ import {
   deleteRow as deleteCoreRow,
   deleteTable as deleteCoreTable,
   insertHtmlTable as insertCoreHtmlTable,
+  setCellAttribute as setCoreCellAttribute,
+  toggleHeaderCell as toggleCoreHeaderCell,
+  toggleHeaderColumn as toggleCoreHeaderColumn,
+  toggleHeaderRow as toggleCoreHeaderRow,
   type HtmlTableCommandOptions,
   type InsertHtmlTableCommandOptions,
 } from 'prosemirror-html-table';
@@ -23,6 +27,10 @@ declare module '@tiptap/core' {
       addHtmlTableColumnAfter: (options?: HtmlTableCommandOptions) => ReturnType;
       deleteHtmlTableColumn: (options?: HtmlTableCommandOptions) => ReturnType;
       deleteHtmlTable: (options?: HtmlTableCommandOptions) => ReturnType;
+      setHtmlTableCellAttribute: (name: string, value: unknown, options?: HtmlTableCommandOptions) => ReturnType;
+      toggleHtmlTableHeaderCell: (options?: HtmlTableCommandOptions) => ReturnType;
+      toggleHtmlTableHeaderRow: (options?: HtmlTableCommandOptions) => ReturnType;
+      toggleHtmlTableHeaderColumn: (options?: HtmlTableCommandOptions) => ReturnType;
     };
   }
 }
@@ -68,6 +76,26 @@ export function createHtmlTableCommands(): Partial<RawCommands> {
       (options?: HtmlTableCommandOptions) =>
       ({ state, dispatch }) =>
         deleteCoreTable(options)(state, dispatch),
+
+    setHtmlTableCellAttribute:
+      (name: string, value: unknown, options?: HtmlTableCommandOptions) =>
+      ({ state, dispatch }) =>
+        setCoreCellAttribute(name, value, options)(state, dispatch),
+
+    toggleHtmlTableHeaderCell:
+      (options?: HtmlTableCommandOptions) =>
+      ({ state, dispatch }) =>
+        toggleCoreHeaderCell(options)(state, dispatch),
+
+    toggleHtmlTableHeaderRow:
+      (options?: HtmlTableCommandOptions) =>
+      ({ state, dispatch }) =>
+        toggleCoreHeaderRow(options)(state, dispatch),
+
+    toggleHtmlTableHeaderColumn:
+      (options?: HtmlTableCommandOptions) =>
+      ({ state, dispatch }) =>
+        toggleCoreHeaderColumn(options)(state, dispatch),
   };
 }
 
