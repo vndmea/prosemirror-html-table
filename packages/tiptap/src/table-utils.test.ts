@@ -7,8 +7,11 @@ import { CellSelection, createHtmlTableNode, createHtmlTableNodeSpecs } from 'pr
 import {
   applyColumnWidths,
   createColumnResizeTransaction,
+  createColumnSelectionTransaction,
+  createRowSelectionTransaction,
   getTableColumnWidths,
   measureRenderedColumnBoundaries,
+  measureRenderedRowBoundaries,
 } from './table-utils.js';
 
 const schema = new Schema({
@@ -74,6 +77,25 @@ describe('table width utilities', () => {
     expect(measureRenderedColumnBoundaries(table)).toEqual([0, 120, 240, 360]);
   });
 
+  it('measures rendered row boundaries from actual row boxes', () => {
+    const table = createMeasuredTable(
+      10,
+      370,
+      [
+        [{ left: 10, right: 370 }],
+        [{ left: 10, right: 370 }],
+      ],
+      [
+        { top: 20, bottom: 52 },
+        { top: 52, bottom: 104 },
+      ],
+      20,
+      104,
+    );
+
+    expect(measureRenderedRowBoundaries(table)).toEqual([0, 32, 84]);
+  });
+
   it('builds resize transactions that preserve cell selections', () => {
     const table = createHtmlTableNode(schema, { rows: 1, cols: 2 });
     const doc = schema.nodes.doc!.create(null, [table]);
@@ -100,6 +122,38 @@ describe('table width utilities', () => {
     expect((nextState.selection as CellSelection).anchorCellPos).toBe(nextCellPositions[1]);
     expect((nextState.selection as CellSelection).headCellPos).toBe(nextCellPositions[1]);
   });
+
+  it('builds row selection transactions for a specific rendered row', () => {
+    const table = createHtmlTableNode(schema, { rows: 2, cols: 2 });
+    const doc = schema.nodes.doc!.create(null, [table]);
+    const cellPositions = findNodePositions(doc, 'htmlTableCell');
+    const state = EditorState.create({
+      schema,
+      doc,
+      selection: CellSelection.create(doc, cellPositions[0]!),
+    });
+
+    const transaction = createRowSelectionTransaction(state, 0, table, 1);
+    expect(transaction?.selection).toBeInstanceOf(CellSelection);
+    expect((transaction?.selection as CellSelection).anchorCellPos).toBe(cellPositions[2]);
+    expect((transaction?.selection as CellSelection).headCellPos).toBe(cellPositions[3]);
+  });
+
+  it('builds column selection transactions for a specific rendered column', () => {
+    const table = createHtmlTableNode(schema, { rows: 2, cols: 2 });
+    const doc = schema.nodes.doc!.create(null, [table]);
+    const cellPositions = findNodePositions(doc, 'htmlTableCell');
+    const state = EditorState.create({
+      schema,
+      doc,
+      selection: CellSelection.create(doc, cellPositions[0]!),
+    });
+
+    const transaction = createColumnSelectionTransaction(state, 0, table, 1);
+    expect(transaction?.selection).toBeInstanceOf(CellSelection);
+    expect((transaction?.selection as CellSelection).anchorCellPos).toBe(cellPositions[1]);
+    expect((transaction?.selection as CellSelection).headCellPos).toBe(cellPositions[3]);
+  });
 });
 
 function findNodePositions(doc: import('prosemirror-model').Node, typeName: string): number[] {
@@ -120,16 +174,32 @@ function createMeasuredTable(
   left: number,
   right: number,
   rows: Array<Array<{ left: number; right: number; colSpan?: number; rowSpan?: number }>>,
+  rowRects?: Array<{ top: number; bottom: number }>,
+  tableTop = 0,
+  tableBottom = 24,
 ): HTMLTableElement {
   return {
-    rows: rows.map((cells) => ({
+    rows: rows.map((cells, rowIndex) => ({
       cells: cells.map((cell) => ({
         colSpan: cell.colSpan ?? 1,
         rowSpan: cell.rowSpan ?? 1,
-        getBoundingClientRect: () => createRect(cell.left, cell.right),
+        getBoundingClientRect: () =>
+          createRect(
+            cell.left,
+            cell.right,
+            rowRects?.[rowIndex]?.top ?? tableTop,
+            rowRects?.[rowIndex]?.bottom ?? tableBottom,
+          ),
       })),
+      getBoundingClientRect: () =>
+        createRect(
+          left,
+          right,
+          rowRects?.[rowIndex]?.top ?? tableTop,
+          rowRects?.[rowIndex]?.bottom ?? tableBottom,
+        ),
     })),
-    getBoundingClientRect: () => createRect(left, right),
+    getBoundingClientRect: () => createRect(left, right, tableTop, tableBottom),
   } as unknown as HTMLTableElement;
 }
 

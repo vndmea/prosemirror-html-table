@@ -210,6 +210,44 @@ export function measureRenderedColumnBoundaries(table: HTMLTableElement): number
   return resolvedBoundaries.map((boundary) => boundary ?? 0);
 }
 
+export function measureRenderedRowBoundaries(table: HTMLTableElement): number[] {
+  const tableRect = table.getBoundingClientRect();
+  const boundaries: number[] = [0];
+
+  for (const row of Array.from(table.rows)) {
+    const rect = row.getBoundingClientRect();
+    boundaries.push(rect.bottom - tableRect.top);
+  }
+
+  return boundaries;
+}
+
+export function createRowSelectionTransaction(
+  state: EditorState,
+  tablePos: number,
+  table: ProseMirrorNode,
+  rowIndex: number,
+): Transaction | undefined {
+  const grid = createHtmlTableGrid(table);
+  if (rowIndex < 0 || rowIndex >= grid.height) return undefined;
+
+  const cells = getCellsForRow(grid, rowIndex);
+  return createAxisSelectionTransaction(state, tablePos, table, grid, cells);
+}
+
+export function createColumnSelectionTransaction(
+  state: EditorState,
+  tablePos: number,
+  table: ProseMirrorNode,
+  columnIndex: number,
+): Transaction | undefined {
+  const grid = createHtmlTableGrid(table);
+  if (columnIndex < 0 || columnIndex >= grid.width) return undefined;
+
+  const cells = getCellsForColumn(grid, columnIndex);
+  return createAxisSelectionTransaction(state, tablePos, table, grid, cells);
+}
+
 export function createSelectionDecorations(
   state: import('@tiptap/pm/state').EditorState,
   options: HtmlTableTiptapOptions,
@@ -278,7 +316,7 @@ export function getTableSelectionInfo(
   if (!tableContext) return undefined;
 
   const grid = createHtmlTableGrid(tableContext.table);
-  const cellPositions = collectCellPositions(tableContext.table, tableContext.tablePos);
+  const cellPositions = collectCellPositions(tableContext.table, tableContext.tablePos, grid);
   const cellPosToRef = new Map<number, HtmlTableCellRef>();
   for (const [cell, pos] of cellPositions.entries()) {
     cellPosToRef.set(pos, cell);
@@ -354,8 +392,11 @@ function findTableContext(doc: ProseMirrorNode, selection: import('@tiptap/pm/st
   return undefined;
 }
 
-function collectCellPositions(table: ProseMirrorNode, tablePos: number): Map<HtmlTableCellRef, number> {
-  const grid = createHtmlTableGrid(table);
+function collectCellPositions(
+  table: ProseMirrorNode,
+  tablePos: number,
+  grid = createHtmlTableGrid(table),
+): Map<HtmlTableCellRef, number> {
   const cellPositions = new Map<HtmlTableCellRef, number>();
   const sectionCounters = {
     head: 0,
@@ -462,6 +503,59 @@ function findChild(node: ProseMirrorNode, typeName: string): ProseMirrorNode | u
 function normalizeWidth(value: unknown, fallback: number) {
   const width = Number(value);
   return Number.isFinite(width) && width > 0 ? width : fallback;
+}
+
+function createAxisSelectionTransaction(
+  state: EditorState,
+  tablePos: number,
+  table: ProseMirrorNode,
+  grid: ReturnType<typeof createHtmlTableGrid>,
+  cells: HtmlTableCellRef[],
+): Transaction | undefined {
+  if (cells.length === 0) return undefined;
+
+  const cellPositions = collectCellPositions(table, tablePos, grid);
+  const anchorCellPos = cellPositions.get(cells[0]!);
+  const headCellPos = cellPositions.get(cells[cells.length - 1]!);
+  if (anchorCellPos === undefined || headCellPos === undefined) return undefined;
+
+  return state.tr.setSelection(CellSelection.create(state.doc, anchorCellPos, headCellPos)).scrollIntoView();
+}
+
+function getCellsForRow(
+  grid: ReturnType<typeof createHtmlTableGrid>,
+  rowIndex: number,
+): HtmlTableCellRef[] {
+  const cells: HtmlTableCellRef[] = [];
+  const seen = new Set<HtmlTableCellRef>();
+
+  for (let columnIndex = 0; columnIndex < grid.width; columnIndex += 1) {
+    const cell = grid.slots[rowIndex]?.[columnIndex]?.cell;
+    if (cell && !seen.has(cell)) {
+      seen.add(cell);
+      cells.push(cell);
+    }
+  }
+
+  return cells.sort((a, b) => (a.columnIndex - b.columnIndex) || (a.rowIndex - b.rowIndex));
+}
+
+function getCellsForColumn(
+  grid: ReturnType<typeof createHtmlTableGrid>,
+  columnIndex: number,
+): HtmlTableCellRef[] {
+  const cells: HtmlTableCellRef[] = [];
+  const seen = new Set<HtmlTableCellRef>();
+
+  for (let rowIndex = 0; rowIndex < grid.height; rowIndex += 1) {
+    const cell = grid.slots[rowIndex]?.[columnIndex]?.cell;
+    if (cell && !seen.has(cell)) {
+      seen.add(cell);
+      cells.push(cell);
+    }
+  }
+
+  return cells.sort((a, b) => (a.rowIndex - b.rowIndex) || (a.columnIndex - b.columnIndex));
 }
 
 function preserveSelectionOnResize(

@@ -68,7 +68,8 @@ onBeforeUnmount(() => {
         This demo uses <code>tiptap-html-table</code> to edit a table with
         <code>caption</code>, <code>colgroup</code>, <code>thead</code>,
         <code>tbody</code>, and <code>tfoot</code>. Drag column edges to resize,
-        use <code>Tab</code>/<code>Shift+Tab</code> to move, and use
+        click the row and column handles to select full axes, use
+        <code>Tab</code>/<code>Shift+Tab</code> to move, and use
         <code>Shift+Arrow</code> to extend cell selection.
       </p>
     </section>

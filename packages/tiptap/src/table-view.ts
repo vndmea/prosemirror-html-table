@@ -3,7 +3,14 @@ import type { Node as ProseMirrorNode } from '@tiptap/pm/model';
 import type { ViewMutationRecord } from '@tiptap/pm/view';
 
 import type { HtmlTableTiptapOptions } from './options.js';
-import { createColumnResizeTransaction, getTableColumnWidths, measureRenderedColumnBoundaries } from './table-utils.js';
+import {
+  createColumnResizeTransaction,
+  createColumnSelectionTransaction,
+  createRowSelectionTransaction,
+  getTableColumnWidths,
+  measureRenderedColumnBoundaries,
+  measureRenderedRowBoundaries,
+} from './table-utils.js';
 
 interface ActiveColumnResize {
   pointerId: number;
@@ -21,13 +28,16 @@ export class HtmlTableNodeView {
   contentDOM: HTMLElement;
   private readonly wrapper: HTMLElement;
   private readonly table: HTMLTableElement;
-  private readonly handles: HTMLDivElement;
+  private readonly resizeHandles: HTMLDivElement;
+  private readonly rowHandles: HTMLDivElement;
+  private readonly columnHandles: HTMLDivElement;
   private node: ProseMirrorNode;
   private readonly getPos: NodeViewRendererProps['getPos'];
   private readonly view: NodeViewRendererProps['view'];
   private readonly options: HtmlTableTiptapOptions;
   private readonly htmlAttributes: Record<string, unknown>;
-  private removeHandleListeners: (() => void) | undefined;
+  private removeResizeHandleListeners: (() => void) | undefined;
+  private removeSelectionHandleListeners: (() => void) | undefined;
   private currentWidths: number[] = [];
   private activeResize: ActiveColumnResize | undefined;
   private layoutFrame = 0;
@@ -44,12 +54,16 @@ export class HtmlTableNodeView {
     this.wrapper.className = this.options.wrapperClassName;
     this.table = document.createElement('table');
     this.table.className = 'html-table-node__table';
-    this.handles = document.createElement('div');
-    this.handles.className = 'html-table-node__handles';
+    this.resizeHandles = document.createElement('div');
+    this.resizeHandles.className = 'html-table-node__handles';
+    this.rowHandles = document.createElement('div');
+    this.rowHandles.className = 'html-table-node__row-handles';
+    this.columnHandles = document.createElement('div');
+    this.columnHandles.className = 'html-table-node__column-handles';
 
     const shouldWrap = this.options.renderWrapper || this.options.resizable;
     if (shouldWrap) {
-      this.wrapper.append(this.table, this.handles);
+      this.wrapper.append(this.table, this.resizeHandles, this.rowHandles, this.columnHandles);
       this.dom = this.wrapper;
     } else {
       this.dom = this.table;
@@ -87,18 +101,23 @@ export class HtmlTableNodeView {
     if (this.activeResize) return true;
 
     const target = event.target as HTMLElement | null;
-    return Boolean(target?.closest('.html-table-node__resize-handle'));
+    return Boolean(target?.closest('.html-table-node__resize-handle, .html-table-node__selection-handle'));
   }
 
   ignoreMutation(mutation: ViewMutationRecord): boolean {
     if (this.activeResize) return true;
     if (mutation.type === 'selection') return false;
-    return this.handles.contains(mutation.target);
+    return (
+      this.resizeHandles.contains(mutation.target)
+      || this.rowHandles.contains(mutation.target)
+      || this.columnHandles.contains(mutation.target)
+    );
   }
 
   destroy(): void {
     this.finishActiveResize(false);
-    this.removeHandleListeners?.();
+    this.removeResizeHandleListeners?.();
+    this.removeSelectionHandleListeners?.();
     if (this.layoutFrame) {
       cancelAnimationFrame(this.layoutFrame);
       this.layoutFrame = 0;
@@ -118,7 +137,7 @@ export class HtmlTableNodeView {
 
     this.table.style.tableLayout = this.options.resizable ? 'fixed' : '';
     this.applyRenderedWidths(widths);
-    this.handles.style.display = this.options.resizable ? '' : 'none';
+    this.resizeHandles.style.display = this.options.resizable ? '' : 'none';
 
     if (this.layoutFrame) {
       cancelAnimationFrame(this.layoutFrame);
@@ -129,6 +148,8 @@ export class HtmlTableNodeView {
       this.applyRenderedWidths(widths);
       this.renderHandles(widths.length);
       this.syncHandlePositions();
+      this.renderSelectionHandles(widths.length, this.table.rows.length);
+      this.syncSelectionHandlePositions();
     });
   }
 
@@ -153,8 +174,8 @@ export class HtmlTableNodeView {
   }
 
   private renderHandles(columnCount: number): void {
-    this.removeHandleListeners?.();
-    this.handles.replaceChildren();
+    this.removeResizeHandleListeners?.();
+    this.resizeHandles.replaceChildren();
 
     if (!this.options.resizable || columnCount === 0) return;
 
@@ -169,26 +190,124 @@ export class HtmlTableNodeView {
 
       handle.addEventListener('pointerdown', onPointerDown);
       cleanup.push(() => handle.removeEventListener('pointerdown', onPointerDown));
-      this.handles.append(handle);
+      this.resizeHandles.append(handle);
     }
 
-    this.removeHandleListeners = () => {
+    this.removeResizeHandleListeners = () => {
       cleanup.forEach((dispose) => dispose());
-      this.removeHandleListeners = undefined;
+      this.removeResizeHandleListeners = undefined;
     };
   }
 
   private syncHandlePositions(): void {
-    if (!this.options.resizable || this.handles.childElementCount === 0) return;
+    if (!this.options.resizable || this.resizeHandles.childElementCount === 0) return;
 
     const boundaries = measureRenderedColumnBoundaries(this.table);
     const totalWidth = boundaries[boundaries.length - 1] ?? 0;
 
-    this.handles.style.width = `${totalWidth}px`;
-    Array.from(this.handles.children).forEach((child, index) => {
+    this.resizeHandles.style.width = `${totalWidth}px`;
+    Array.from(this.resizeHandles.children).forEach((child, index) => {
       const boundary = boundaries[index + 1] ?? totalWidth;
       (child as HTMLElement).style.left = `${boundary - this.options.handleWidth / 2}px`;
     });
+  }
+
+  private renderSelectionHandles(columnCount: number, rowCount: number): void {
+    this.removeSelectionHandleListeners?.();
+    this.rowHandles.replaceChildren();
+    this.columnHandles.replaceChildren();
+
+    if (columnCount === 0 && rowCount === 0) return;
+
+    const cleanup: Array<() => void> = [];
+
+    for (let rowIndex = 0; rowIndex < rowCount; rowIndex += 1) {
+      const handle = document.createElement('button');
+      handle.type = 'button';
+      handle.className = 'html-table-node__selection-handle html-table-node__row-select-handle';
+      handle.setAttribute('aria-label', `Select row ${rowIndex + 1}`);
+      const onPointerDown = (event: PointerEvent) => this.handleRowSelection(event, rowIndex);
+
+      handle.addEventListener('pointerdown', onPointerDown);
+      cleanup.push(() => handle.removeEventListener('pointerdown', onPointerDown));
+      this.rowHandles.append(handle);
+    }
+
+    for (let columnIndex = 0; columnIndex < columnCount; columnIndex += 1) {
+      const handle = document.createElement('button');
+      handle.type = 'button';
+      handle.className = 'html-table-node__selection-handle html-table-node__column-select-handle';
+      handle.setAttribute('aria-label', `Select column ${columnIndex + 1}`);
+      const onPointerDown = (event: PointerEvent) => this.handleColumnSelection(event, columnIndex);
+
+      handle.addEventListener('pointerdown', onPointerDown);
+      cleanup.push(() => handle.removeEventListener('pointerdown', onPointerDown));
+      this.columnHandles.append(handle);
+    }
+
+    this.removeSelectionHandleListeners = () => {
+      cleanup.forEach((dispose) => dispose());
+      this.removeSelectionHandleListeners = undefined;
+    };
+  }
+
+  private syncSelectionHandlePositions(): void {
+    const columnBoundaries = measureRenderedColumnBoundaries(this.table);
+    const rowBoundaries = measureRenderedRowBoundaries(this.table);
+    const tableTop = this.table.offsetTop;
+    const tableLeft = this.table.offsetLeft;
+    const tableHeight = rowBoundaries[rowBoundaries.length - 1] ?? 0;
+    const tableWidth = columnBoundaries[columnBoundaries.length - 1] ?? 0;
+
+    this.rowHandles.style.top = `${tableTop}px`;
+    this.rowHandles.style.left = '0px';
+    this.rowHandles.style.width = `${tableLeft}px`;
+    this.rowHandles.style.height = `${tableHeight}px`;
+
+    this.columnHandles.style.top = '0px';
+    this.columnHandles.style.height = `${tableTop}px`;
+    this.columnHandles.style.left = `${tableLeft}px`;
+    this.columnHandles.style.width = `${tableWidth}px`;
+
+    Array.from(this.rowHandles.children).forEach((child, index) => {
+      const top = rowBoundaries[index] ?? 0;
+      const bottom = rowBoundaries[index + 1] ?? top;
+      const center = top + (bottom - top) / 2;
+      (child as HTMLElement).style.top = `${center}px`;
+    });
+
+    Array.from(this.columnHandles.children).forEach((child, index) => {
+      const left = columnBoundaries[index] ?? 0;
+      const right = columnBoundaries[index + 1] ?? left;
+      const center = left + (right - left) / 2;
+      (child as HTMLElement).style.left = `${center}px`;
+    });
+  }
+
+  private handleRowSelection(event: PointerEvent, rowIndex: number): void {
+    event.preventDefault();
+    event.stopPropagation();
+
+    const tablePos = this.getPos();
+    if (typeof tablePos !== 'number') return;
+
+    const transaction = createRowSelectionTransaction(this.view.state, tablePos, this.node, rowIndex);
+    if (!transaction) return;
+
+    this.view.dispatch(transaction);
+  }
+
+  private handleColumnSelection(event: PointerEvent, columnIndex: number): void {
+    event.preventDefault();
+    event.stopPropagation();
+
+    const tablePos = this.getPos();
+    if (typeof tablePos !== 'number') return;
+
+    const transaction = createColumnSelectionTransaction(this.view.state, tablePos, this.node, columnIndex);
+    if (!transaction) return;
+
+    this.view.dispatch(transaction);
   }
 
   private startResize(event: PointerEvent, columnIndex: number, handle: HTMLDivElement): void {

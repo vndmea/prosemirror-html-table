@@ -138,14 +138,17 @@
 }
 
 .pmht-demo .editor-panel .html-table-node__wrapper {
+  --pmht-selection-gutter: 1rem;
   position: relative;
   width: 100%;
   overflow-x: auto;
-  padding-bottom: 0.25rem;
+  margin: 1rem 0;
+  padding: var(--pmht-selection-gutter) 0 0.25rem var(--pmht-selection-gutter);
 }
 
 .pmht-demo .editor-panel .html-table-node__table {
   background: #ffffff;
+  margin: 0;
 }
 
 .pmht-demo .editor-panel .html-table-node__handles {
@@ -153,6 +156,12 @@
   top: 0;
   left: 0;
   bottom: 0;
+  pointer-events: none;
+}
+
+.pmht-demo .editor-panel .html-table-node__row-handles,
+.pmht-demo .editor-panel .html-table-node__column-handles {
+  position: absolute;
   pointer-events: none;
 }
 
@@ -170,6 +179,43 @@
   transition: opacity 0.15s ease, background 0.15s ease;
 }
 
+.pmht-demo .editor-panel .html-table-node__selection-handle {
+  position: absolute;
+  z-index: 5;
+  min-width: 0;
+  padding: 0;
+  border: 1px solid rgba(37, 99, 235, 0.45);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.16);
+  opacity: 0;
+  pointer-events: auto;
+  transform: translate(-50%, -50%);
+  transition:
+    opacity 0.15s ease,
+    background 0.15s ease,
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.pmht-demo .editor-panel .html-table-node__selection-handle:hover {
+  background: #dbeafe;
+  border-color: rgba(37, 99, 235, 0.72);
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.22);
+}
+
+.pmht-demo .editor-panel .html-table-node__row-select-handle {
+  left: 50%;
+  width: 0.55rem;
+  height: 1.2rem;
+}
+
+.pmht-demo .editor-panel .html-table-node__column-select-handle {
+  top: 50%;
+  width: 1.2rem;
+  height: 0.55rem;
+}
+
 .pmht-demo .editor-panel .html-table-node__wrapper--resizing,
 .pmht-demo .editor-panel .html-table-node__wrapper--resizing * {
   cursor: col-resize;
@@ -177,7 +223,9 @@
 }
 
 .pmht-demo .editor-panel .html-table-node__wrapper:hover .html-table-node__resize-handle,
-.pmht-demo .editor-panel .html-table-node__resize-handle:hover {
+.pmht-demo .editor-panel .html-table-node__resize-handle:hover,
+.pmht-demo .editor-panel .html-table-node__wrapper:hover .html-table-node__selection-handle,
+.pmht-demo .editor-panel .html-table-node__selection-handle:hover {
   opacity: 1;
 }
 
