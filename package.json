@@ -10,10 +10,11 @@
     "url": "git+https://github.com/vndmea/prosemirror-html-table.git"
   },
   "workspaces": [
-    "packages/*"
+    "packages/*",
+    "examples/*"
   ],
   "scripts": {
-    "clean": "rimraf packages/*/dist coverage",
+    "clean": "rimraf packages/*/dist examples/*/dist coverage",
     "build": "npm run build --workspaces --if-present",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run",
