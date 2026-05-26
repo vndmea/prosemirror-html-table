@@ -3,7 +3,18 @@ import type { Node as ProseMirrorNode } from '@tiptap/pm/model';
 import type { ViewMutationRecord } from '@tiptap/pm/view';
 
 import type { HtmlTableTiptapOptions } from './options.js';
-import { applyColumnWidths, getTableColumnWidths } from './table-utils.js';
+import { createColumnResizeTransaction, getTableColumnWidths, measureRenderedColumnBoundaries } from './table-utils.js';
+
+interface ActiveColumnResize {
+  pointerId: number;
+  columnIndex: number;
+  startX: number;
+  startWidth: number;
+  baseWidths: number[];
+  previewWidths: number[];
+  handle: HTMLDivElement;
+  dispose: () => void;
+}
 
 export class HtmlTableNodeView {
   dom: HTMLElement;
@@ -16,7 +27,11 @@ export class HtmlTableNodeView {
   private readonly view: NodeViewRendererProps['view'];
   private readonly options: HtmlTableTiptapOptions;
   private readonly htmlAttributes: Record<string, unknown>;
-  private removeListeners: (() => void) | undefined;
+  private removeHandleListeners: (() => void) | undefined;
+  private currentWidths: number[] = [];
+  private activeResize: ActiveColumnResize | undefined;
+  private layoutFrame = 0;
+  private restoreDomState: (() => void) | undefined;
 
   constructor(props: NodeViewRendererProps, options: HtmlTableTiptapOptions) {
     this.node = props.node;
@@ -48,6 +63,10 @@ export class HtmlTableNodeView {
   update(node: ProseMirrorNode): boolean {
     if (node.type !== this.node.type) return false;
 
+    if (this.activeResize) {
+      this.finishActiveResize(false);
+    }
+
     this.node = node;
     this.applyAttributes();
     this.syncViewState();
@@ -65,17 +84,25 @@ export class HtmlTableNodeView {
   }
 
   stopEvent(event: Event): boolean {
+    if (this.activeResize) return true;
+
     const target = event.target as HTMLElement | null;
     return Boolean(target?.closest('.html-table-node__resize-handle'));
   }
 
   ignoreMutation(mutation: ViewMutationRecord): boolean {
+    if (this.activeResize) return true;
     if (mutation.type === 'selection') return false;
     return this.handles.contains(mutation.target);
   }
 
   destroy(): void {
-    this.removeListeners?.();
+    this.finishActiveResize(false);
+    this.removeHandleListeners?.();
+    if (this.layoutFrame) {
+      cancelAnimationFrame(this.layoutFrame);
+      this.layoutFrame = 0;
+    }
   }
 
   private applyAttributes(): void {
@@ -87,16 +114,30 @@ export class HtmlTableNodeView {
 
   private syncViewState(): void {
     const widths = getTableColumnWidths(this.node, this.options.cellMinWidth);
-    const totalWidth = widths.reduce((sum, width) => sum + width, 0);
+    this.currentWidths = widths;
 
     this.table.style.tableLayout = this.options.resizable ? 'fixed' : '';
-    this.table.style.minWidth = `${Math.max(this.options.cellMinWidth, totalWidth)}px`;
+    this.applyRenderedWidths(widths);
     this.handles.style.display = this.options.resizable ? '' : 'none';
 
-    requestAnimationFrame(() => {
-      this.applyColumnStyles(widths);
-      this.renderHandles(widths);
+    if (this.layoutFrame) {
+      cancelAnimationFrame(this.layoutFrame);
+    }
+
+    this.layoutFrame = requestAnimationFrame(() => {
+      this.layoutFrame = 0;
+      this.applyRenderedWidths(widths);
+      this.renderHandles(widths.length);
+      this.syncHandlePositions();
     });
+  }
+
+  private applyRenderedWidths(widths: number[]): void {
+    const totalWidth = widths.reduce((sum, width) => sum + width, 0);
+
+    this.table.style.minWidth = `${Math.max(this.options.cellMinWidth, totalWidth)}px`;
+    this.table.style.width = this.options.resizable ? `${totalWidth}px` : '';
+    this.applyColumnStyles(widths);
   }
 
   private applyColumnStyles(widths: number[]): void {
@@ -111,74 +152,187 @@ export class HtmlTableNodeView {
     });
   }
 
-  private renderHandles(widths: number[]): void {
-    this.removeListeners?.();
+  private renderHandles(columnCount: number): void {
+    this.removeHandleListeners?.();
     this.handles.replaceChildren();
 
-    if (!this.options.resizable || widths.length === 0) return;
+    if (!this.options.resizable || columnCount === 0) return;
 
-    this.handles.style.width = `${widths.reduce((sum, width) => sum + width, 0)}px`;
-    const stopIndex = this.options.lastColumnResizable ? widths.length : widths.length - 1;
-    let left = 0;
+    const stopIndex = this.options.lastColumnResizable ? columnCount : columnCount - 1;
     const cleanup: Array<() => void> = [];
 
     for (let columnIndex = 0; columnIndex < stopIndex; columnIndex += 1) {
-      left += widths[columnIndex] ?? 0;
       const handle = document.createElement('div');
       handle.className = 'html-table-node__resize-handle';
       handle.style.width = `${this.options.handleWidth}px`;
-      handle.style.left = `${left - this.options.handleWidth / 2}px`;
+      const onPointerDown = (event: PointerEvent) => this.startResize(event, columnIndex, handle);
 
-      const onMouseDown = (event: MouseEvent) => {
-        event.preventDefault();
-        event.stopPropagation();
-
-        const startX = event.clientX;
-        const startWidth = widths[columnIndex] ?? this.options.cellMinWidth;
-        const onMouseMove = (moveEvent: MouseEvent) => {
-          const delta = moveEvent.clientX - startX;
-          const nextWidths = [...widths];
-          nextWidths[columnIndex] = Math.max(this.options.cellMinWidth, startWidth + delta);
-          this.applyColumnStyles(nextWidths);
-          this.handles.style.width = `${nextWidths.reduce((sum, width) => sum + width, 0)}px`;
-          let nextLeft = 0;
-
-          Array.from(this.handles.children).forEach((child, index) => {
-            nextLeft += nextWidths[index] ?? 0;
-            (child as HTMLElement).style.left = `${nextLeft - this.options.handleWidth / 2}px`;
-          });
-        };
-        const onMouseUp = (upEvent: MouseEvent) => {
-          const delta = upEvent.clientX - startX;
-          const nextWidths = [...widths];
-          nextWidths[columnIndex] = Math.max(this.options.cellMinWidth, startWidth + delta);
-          this.commitWidths(nextWidths);
-          window.removeEventListener('mousemove', onMouseMove);
-          window.removeEventListener('mouseup', onMouseUp);
-        };
-
-        window.addEventListener('mousemove', onMouseMove);
-        window.addEventListener('mouseup', onMouseUp, { once: true });
-      };
-
-      handle.addEventListener('mousedown', onMouseDown);
-      cleanup.push(() => handle.removeEventListener('mousedown', onMouseDown));
+      handle.addEventListener('pointerdown', onPointerDown);
+      cleanup.push(() => handle.removeEventListener('pointerdown', onPointerDown));
       this.handles.append(handle);
     }
 
-    this.removeListeners = () => {
+    this.removeHandleListeners = () => {
       cleanup.forEach((dispose) => dispose());
-      this.removeListeners = undefined;
+      this.removeHandleListeners = undefined;
     };
+  }
+
+  private syncHandlePositions(): void {
+    if (!this.options.resizable || this.handles.childElementCount === 0) return;
+
+    const boundaries = measureRenderedColumnBoundaries(this.table);
+    const totalWidth = boundaries[boundaries.length - 1] ?? 0;
+
+    this.handles.style.width = `${totalWidth}px`;
+    Array.from(this.handles.children).forEach((child, index) => {
+      const boundary = boundaries[index + 1] ?? totalWidth;
+      (child as HTMLElement).style.left = `${boundary - this.options.handleWidth / 2}px`;
+    });
+  }
+
+  private startResize(event: PointerEvent, columnIndex: number, handle: HTMLDivElement): void {
+    if (event.button !== 0 || this.activeResize) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    const baseWidths = [...this.currentWidths];
+    const startWidth = baseWidths[columnIndex] ?? this.options.cellMinWidth;
+    const dispose = this.bindActiveResizeEvents(handle);
+
+    this.activeResize = {
+      pointerId: event.pointerId,
+      columnIndex,
+      startX: event.clientX,
+      startWidth,
+      baseWidths,
+      previewWidths: baseWidths,
+      handle,
+      dispose,
+    };
+
+    handle.setPointerCapture(event.pointerId);
+    this.setDomResizeState(true);
+  }
+
+  private bindActiveResizeEvents(handle: HTMLDivElement): () => void {
+    handle.addEventListener('pointermove', this.onActivePointerMove);
+    handle.addEventListener('pointerup', this.onActivePointerUp);
+    handle.addEventListener('pointercancel', this.onActivePointerCancel);
+    handle.addEventListener('lostpointercapture', this.onLostPointerCapture);
+
+    return () => {
+      handle.removeEventListener('pointermove', this.onActivePointerMove);
+      handle.removeEventListener('pointerup', this.onActivePointerUp);
+      handle.removeEventListener('pointercancel', this.onActivePointerCancel);
+      handle.removeEventListener('lostpointercapture', this.onLostPointerCapture);
+    };
+  }
+
+  private readonly onActivePointerMove = (event: PointerEvent): void => {
+    const activeResize = this.activeResize;
+    if (!activeResize || event.pointerId !== activeResize.pointerId) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    const delta = event.clientX - activeResize.startX;
+    const nextWidths = [...activeResize.baseWidths];
+    nextWidths[activeResize.columnIndex] = Math.max(this.options.cellMinWidth, activeResize.startWidth + delta);
+    activeResize.previewWidths = nextWidths;
+    this.previewWidths(nextWidths);
+  };
+
+  private readonly onActivePointerUp = (event: PointerEvent): void => {
+    const activeResize = this.activeResize;
+    if (!activeResize || event.pointerId !== activeResize.pointerId) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+    this.finishActiveResize(true);
+  };
+
+  private readonly onActivePointerCancel = (event: PointerEvent): void => {
+    const activeResize = this.activeResize;
+    if (!activeResize || event.pointerId !== activeResize.pointerId) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+    this.finishActiveResize(false);
+  };
+
+  private readonly onLostPointerCapture = (event: PointerEvent): void => {
+    const activeResize = this.activeResize;
+    if (!activeResize || event.pointerId !== activeResize.pointerId) return;
+
+    this.finishActiveResize(false);
+  };
+
+  private previewWidths(widths: number[]): void {
+    this.applyRenderedWidths(widths);
+    this.syncHandlePositions();
+  }
+
+  private finishActiveResize(commit: boolean): void {
+    const activeResize = this.activeResize;
+    if (!activeResize) return;
+
+    this.activeResize = undefined;
+    activeResize.dispose();
+
+    if (activeResize.handle.hasPointerCapture(activeResize.pointerId)) {
+      activeResize.handle.releasePointerCapture(activeResize.pointerId);
+    }
+
+    this.setDomResizeState(false);
+
+    if (commit) {
+      this.commitWidths(activeResize.previewWidths);
+      return;
+    }
+
+    this.syncViewState();
+  }
+
+  private setDomResizeState(active: boolean): void {
+    const document = this.view.dom.ownerDocument;
+    const body = document.body;
+    const root = document.documentElement;
+
+    if (active) {
+      if (this.restoreDomState) return;
+
+      const previousBodyUserSelect = body.style.userSelect;
+      const previousBodyCursor = body.style.cursor;
+      const previousRootUserSelect = root.style.userSelect;
+      const previousRootCursor = root.style.cursor;
+
+      body.style.userSelect = 'none';
+      body.style.cursor = 'col-resize';
+      root.style.userSelect = 'none';
+      root.style.cursor = 'col-resize';
+      this.wrapper.classList.add('html-table-node__wrapper--resizing');
+
+      this.restoreDomState = () => {
+        body.style.userSelect = previousBodyUserSelect;
+        body.style.cursor = previousBodyCursor;
+        root.style.userSelect = previousRootUserSelect;
+        root.style.cursor = previousRootCursor;
+        this.wrapper.classList.remove('html-table-node__wrapper--resizing');
+        this.restoreDomState = undefined;
+      };
+
+      return;
+    }
+
+    this.restoreDomState?.();
   }
 
   private commitWidths(widths: number[]): void {
     const tablePos = this.getPos();
     if (typeof tablePos !== 'number') return;
 
-    const resizedTable = applyColumnWidths(this.node, widths);
-    this.view.dispatch(
-      this.view.state.tr.replaceWith(tablePos, tablePos + this.node.nodeSize, resizedTable),
-    );
+    this.view.dispatch(createColumnResizeTransaction(this.view.state, tablePos, this.node, widths));
   }
 }

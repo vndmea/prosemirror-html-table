@@ -1,23 +1,20 @@
-:root {
+.pmht-demo {
   color: #1f2937;
   background: #f8fafc;
   font-family:
     Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
     sans-serif;
   line-height: 1.5;
-}
-
-* {
-  box-sizing: border-box;
-}
-
-body {
-  margin: 0;
   min-width: 320px;
   min-height: 100vh;
 }
 
-button {
+.pmht-demo,
+.pmht-demo * {
+  box-sizing: border-box;
+}
+
+.pmht-demo button {
   border: 1px solid #cbd5e1;
   border-radius: 10px;
   background: #ffffff;
@@ -31,52 +28,52 @@ button {
     transform 0.15s ease;
 }
 
-button:hover {
+.pmht-demo button:hover {
   background: #f1f5f9;
   border-color: #94a3b8;
   transform: translateY(-1px);
 }
 
-button.danger {
+.pmht-demo button.danger {
   border-color: #fecaca;
   color: #991b1b;
 }
 
-button.danger:hover {
+.pmht-demo button.danger:hover {
   background: #fef2f2;
   border-color: #fca5a5;
 }
 
-code {
+.pmht-demo code {
   border-radius: 6px;
   background: #e2e8f0;
   padding: 0.1rem 0.3rem;
 }
 
-.demo-shell {
+.pmht-demo.demo-shell {
   margin: 0 auto;
   max-width: 1280px;
   padding: 2rem;
 }
 
-.hero {
+.pmht-demo .hero {
   margin-bottom: 1.5rem;
 }
 
-.hero h1 {
+.pmht-demo .hero h1 {
   margin: 0;
   color: #0f172a;
   font-size: clamp(2rem, 4vw, 3.5rem);
   line-height: 1.05;
 }
 
-.hero p {
+.pmht-demo .hero p {
   max-width: 760px;
   color: #475569;
   font-size: 1.05rem;
 }
 
-.eyebrow {
+.pmht-demo .eyebrow {
   margin: 0 0 0.5rem;
   color: #2563eb;
   font-size: 0.8rem;
@@ -85,7 +82,7 @@ code {
   text-transform: uppercase;
 }
 
-.toolbar {
+.pmht-demo .toolbar {
   display: flex;
   flex-wrap: wrap;
   gap: 0.6rem;
@@ -97,13 +94,13 @@ code {
   box-shadow: 0 18px 48px rgba(15, 23, 42, 0.08);
 }
 
-.content-grid {
+.pmht-demo .content-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.2fr) minmax(320px, 0.8fr);
   gap: 1.5rem;
 }
 
-.panel {
+.pmht-demo .panel {
   min-width: 0;
   border: 1px solid #e2e8f0;
   border-radius: 20px;
@@ -112,7 +109,7 @@ code {
   overflow: hidden;
 }
 
-.panel h2 {
+.pmht-demo .panel h2 {
   margin: 0;
   padding: 1rem 1.25rem;
   border-bottom: 1px solid #e2e8f0;
@@ -120,39 +117,38 @@ code {
   font-size: 1rem;
 }
 
-.editor-panel .tiptap {
+.pmht-demo .editor-panel .tiptap {
   min-height: 520px;
   padding: 1.25rem;
   outline: none;
 }
 
-.editor-panel .tiptap:focus {
+.pmht-demo .editor-panel .tiptap:focus {
   box-shadow: inset 0 0 0 2px #bfdbfe;
 }
 
-.editor-panel p {
+.pmht-demo .editor-panel p {
   margin: 0.5rem 0;
 }
 
-.editor-panel table {
-  width: 100%;
+.pmht-demo .editor-panel table {
   margin: 1rem 0;
   border-collapse: collapse;
   overflow: hidden;
 }
 
-.editor-panel .html-table-node__wrapper {
+.pmht-demo .editor-panel .html-table-node__wrapper {
   position: relative;
   width: 100%;
   overflow-x: auto;
   padding-bottom: 0.25rem;
 }
 
-.editor-panel .html-table-node__table {
+.pmht-demo .editor-panel .html-table-node__table {
   background: #ffffff;
 }
 
-.editor-panel .html-table-node__handles {
+.pmht-demo .editor-panel .html-table-node__handles {
   position: absolute;
   top: 0;
   left: 0;
@@ -160,33 +156,40 @@ code {
   pointer-events: none;
 }
 
-.editor-panel .html-table-node__resize-handle {
+.pmht-demo .editor-panel .html-table-node__resize-handle {
   position: absolute;
   top: 0;
   bottom: 0;
   z-index: 4;
   cursor: col-resize;
   pointer-events: auto;
+  touch-action: none;
   border-radius: 999px;
   background: linear-gradient(180deg, rgba(37, 99, 235, 0), rgba(37, 99, 235, 0.45), rgba(37, 99, 235, 0));
   opacity: 0;
   transition: opacity 0.15s ease, background 0.15s ease;
 }
 
-.editor-panel .html-table-node__wrapper:hover .html-table-node__resize-handle,
-.editor-panel .html-table-node__resize-handle:hover {
+.pmht-demo .editor-panel .html-table-node__wrapper--resizing,
+.pmht-demo .editor-panel .html-table-node__wrapper--resizing * {
+  cursor: col-resize;
+  user-select: none;
+}
+
+.pmht-demo .editor-panel .html-table-node__wrapper:hover .html-table-node__resize-handle,
+.pmht-demo .editor-panel .html-table-node__resize-handle:hover {
   opacity: 1;
 }
 
-.editor-panel caption {
+.pmht-demo .editor-panel caption {
   margin-bottom: 0.5rem;
   color: #334155;
   font-weight: 700;
   text-align: left;
 }
 
-.editor-panel th,
-.editor-panel td {
+.pmht-demo .editor-panel th,
+.pmht-demo .editor-panel td {
   position: relative;
   border: 1px solid #cbd5e1;
   padding: 0.65rem;
@@ -194,25 +197,25 @@ code {
   transition: box-shadow 0.15s ease, background 0.15s ease;
 }
 
-.editor-panel th {
+.pmht-demo .editor-panel th {
   background: #eff6ff;
   color: #1e3a8a;
   font-weight: 700;
 }
 
-.editor-panel tfoot td,
-.editor-panel tfoot th {
+.pmht-demo .editor-panel tfoot td,
+.pmht-demo .editor-panel tfoot th {
   background: #f8fafc;
   font-weight: 700;
 }
 
-.editor-panel .html-table-cell--selected {
+.pmht-demo .editor-panel .html-table-cell--selected {
   background: linear-gradient(180deg, rgba(191, 219, 254, 0.38), rgba(219, 234, 254, 0.5));
   box-shadow: inset 0 0 0 2px rgba(37, 99, 235, 0.35);
 }
 
-.editor-panel .html-table-cell--selected.html-table-cell--selected--anchor::after,
-.editor-panel .html-table-cell--selected.html-table-cell--selected--head::after {
+.pmht-demo .editor-panel .html-table-cell--selected.html-table-cell--selected--anchor::after,
+.pmht-demo .editor-panel .html-table-cell--selected.html-table-cell--selected--head::after {
   content: "";
   position: absolute;
   right: 0.3rem;
@@ -223,15 +226,15 @@ code {
   background: #2563eb;
 }
 
-.editor-panel .html-table-node--has-selection {
+.pmht-demo .editor-panel .html-table-node--has-selection {
   box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.14);
 }
 
-.editor-panel .html-table-node--selected {
+.pmht-demo .editor-panel .html-table-node--selected {
   box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.22);
 }
 
-.output-panel pre {
+.pmht-demo .output-panel pre {
   max-height: 620px;
   margin: 0;
   overflow: auto;
@@ -243,17 +246,17 @@ code {
   white-space: pre-wrap;
 }
 
-.output-panel code {
+.pmht-demo .output-panel code {
   background: transparent;
   padding: 0;
 }
 
 @media (max-width: 960px) {
-  .demo-shell {
+  .pmht-demo.demo-shell {
     padding: 1rem;
   }
 
-  .content-grid {
+  .pmht-demo .content-grid {
     grid-template-columns: 1fr;
   }
 }

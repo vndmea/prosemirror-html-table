@@ -1,6 +1,6 @@
 import { Fragment, type Node as ProseMirrorNode } from '@tiptap/pm/model';
 import { Decoration, DecorationSet } from '@tiptap/pm/view';
-import { NodeSelection, Plugin, PluginKey } from '@tiptap/pm/state';
+import { NodeSelection, Plugin, PluginKey, TextSelection, type EditorState, type Selection, type Transaction } from '@tiptap/pm/state';
 import { CellSelection, createHtmlTableGrid, htmlTableNodeNames, normalizeHtmlTable, type HtmlTableCellRef } from 'prosemirror-html-table';
 
 import type { HtmlTableTiptapOptions } from './options.js';
@@ -107,6 +107,107 @@ export function applyColumnWidths(table: ProseMirrorNode, widths: number[]): Pro
   });
 
   return normalizeHtmlTable(table.copy(Fragment.fromArray(tableChildren)));
+}
+
+export function createColumnResizeTransaction(
+  state: EditorState,
+  tablePos: number,
+  table: ProseMirrorNode,
+  widths: number[],
+): Transaction {
+  const resizedTable = applyColumnWidths(table, widths);
+  const transaction = state.tr.replaceWith(tablePos, tablePos + table.nodeSize, resizedTable);
+  const selection = preserveSelectionOnResize(state.selection, transaction.doc, tablePos, table, resizedTable)
+    ?? state.selection.getBookmark().map(transaction.mapping).resolve(transaction.doc);
+
+  return transaction.setSelection(selection);
+}
+
+export function measureRenderedColumnBoundaries(table: HTMLTableElement): number[] {
+  const tableRect = table.getBoundingClientRect();
+  const activeRowSpans: number[] = [];
+  const boundaries: Array<number | undefined> = [0];
+  const spanningCells: Array<{ start: number; span: number; left: number; right: number }> = [];
+  let width = 0;
+
+  for (const row of Array.from(table.rows)) {
+    let columnIndex = 0;
+
+    for (const cell of Array.from(row.cells)) {
+      while ((activeRowSpans[columnIndex] ?? 0) > 0) {
+        columnIndex += 1;
+      }
+
+      const colSpan = Math.max(1, cell.colSpan || 1);
+      const rowSpan = Math.max(1, cell.rowSpan || 1);
+      const rect = cell.getBoundingClientRect();
+      const left = rect.left - tableRect.left;
+      const right = rect.right - tableRect.left;
+
+      boundaries[columnIndex] = left;
+      boundaries[columnIndex + colSpan] = right;
+      width = Math.max(width, columnIndex + colSpan);
+
+      if (colSpan > 1) {
+        spanningCells.push({
+          start: columnIndex,
+          span: colSpan,
+          left,
+          right,
+        });
+      }
+
+      for (let offset = 0; offset < colSpan; offset += 1) {
+        activeRowSpans[columnIndex + offset] = Math.max(activeRowSpans[columnIndex + offset] ?? 0, rowSpan);
+      }
+
+      columnIndex += colSpan;
+    }
+
+    for (let index = 0; index < activeRowSpans.length; index += 1) {
+      if ((activeRowSpans[index] ?? 0) > 0) {
+        activeRowSpans[index] = (activeRowSpans[index] ?? 0) - 1;
+      }
+    }
+  }
+
+  const resolvedBoundaries = boundaries.slice(0, width + 1);
+  resolvedBoundaries[0] ??= 0;
+  resolvedBoundaries[width] ??= tableRect.width;
+
+  for (const cell of spanningCells) {
+    const start = cell.start;
+    const end = cell.start + cell.span;
+
+    if (resolvedBoundaries[start] === undefined) {
+      resolvedBoundaries[start] = cell.left;
+    }
+
+    if (resolvedBoundaries[end] === undefined) {
+      resolvedBoundaries[end] = cell.right;
+    }
+
+    let hasGap = false;
+    for (let index = start + 1; index < end; index += 1) {
+      if (resolvedBoundaries[index] === undefined) {
+        hasGap = true;
+        break;
+      }
+    }
+
+    if (!hasGap) continue;
+
+    const segmentWidth = cell.right - cell.left;
+    for (let index = start + 1; index < end; index += 1) {
+      resolvedBoundaries[index] ??= cell.left + (segmentWidth * (index - start)) / cell.span;
+    }
+  }
+
+  for (let index = 1; index < resolvedBoundaries.length; index += 1) {
+    resolvedBoundaries[index] ??= resolvedBoundaries[index - 1] ?? 0;
+  }
+
+  return resolvedBoundaries.map((boundary) => boundary ?? 0);
 }
 
 export function createSelectionDecorations(
@@ -361,4 +462,71 @@ function findChild(node: ProseMirrorNode, typeName: string): ProseMirrorNode | u
 function normalizeWidth(value: unknown, fallback: number) {
   const width = Number(value);
   return Number.isFinite(width) && width > 0 ? width : fallback;
+}
+
+function preserveSelectionOnResize(
+  selection: Selection,
+  doc: ProseMirrorNode,
+  tablePos: number,
+  previousTable: ProseMirrorNode,
+  nextTable: ProseMirrorNode,
+): Selection | undefined {
+  if (selection instanceof NodeSelection && selection.from === tablePos) {
+    return NodeSelection.create(doc, tablePos);
+  }
+
+  const previousSectionStart = getFirstSectionStart(previousTable);
+  const nextSectionStart = getFirstSectionStart(nextTable);
+  if (previousSectionStart === undefined || nextSectionStart === undefined) return undefined;
+
+  const delta = nextSectionStart - previousSectionStart;
+  if (
+    selection.from < tablePos ||
+    selection.to > tablePos + previousTable.nodeSize
+  ) {
+    return undefined;
+  }
+
+  if (selection instanceof CellSelection) {
+    const anchorCellPos = selection.anchorCellPos + delta;
+    const headCellPos = selection.headCellPos + delta;
+
+    if (isCellPosition(doc, anchorCellPos) && isCellPosition(doc, headCellPos)) {
+      return CellSelection.create(doc, anchorCellPos, headCellPos);
+    }
+
+    return undefined;
+  }
+
+  const mappedFrom = clampSelectionPos(doc, selection.from + delta);
+  const mappedTo = clampSelectionPos(doc, selection.to + delta);
+  return TextSelection.create(doc, mappedFrom, mappedTo);
+}
+
+function getFirstSectionStart(table: ProseMirrorNode): number | undefined {
+  let result: number | undefined;
+
+  table.forEach((child, offset) => {
+    if (result !== undefined) return;
+    if (
+      child.type.name === htmlTableNodeNames.head ||
+      child.type.name === htmlTableNodeNames.body ||
+      child.type.name === htmlTableNodeNames.foot
+    ) {
+      result = offset;
+    }
+  });
+
+  return result;
+}
+
+function isCellPosition(doc: ProseMirrorNode, pos: number): boolean {
+  if (pos < 0 || pos >= doc.content.size) return false;
+
+  const node = doc.nodeAt(pos);
+  return node?.type.name === htmlTableNodeNames.cell || node?.type.name === htmlTableNodeNames.headerCell;
+}
+
+function clampSelectionPos(doc: ProseMirrorNode, pos: number): number {
+  return Math.max(0, Math.min(pos, doc.content.size));
 }

@@ -1,9 +1,15 @@
 import { Schema } from 'prosemirror-model';
+import { EditorState } from 'prosemirror-state';
 import { describe, expect, it } from 'vitest';
 
-import { createHtmlTableNode, createHtmlTableNodeSpecs } from 'prosemirror-html-table';
+import { CellSelection, createHtmlTableNode, createHtmlTableNodeSpecs } from 'prosemirror-html-table';
 
-import { applyColumnWidths, getTableColumnWidths } from './table-utils.js';
+import {
+  applyColumnWidths,
+  createColumnResizeTransaction,
+  getTableColumnWidths,
+  measureRenderedColumnBoundaries,
+} from './table-utils.js';
 
 const schema = new Schema({
   nodes: {
@@ -45,4 +51,98 @@ describe('table width utilities', () => {
     expect(firstRow.child(0).attrs.colwidth).toEqual([160]);
     expect(firstRow.child(1).attrs.colwidth).toEqual([220]);
   });
+
+  it('measures rendered column boundaries from actual cell boxes', () => {
+    const table = createMeasuredTable(
+      20,
+      320,
+      [
+        [{ left: 20, right: 320, colSpan: 2 }],
+        [
+          { left: 20, right: 140 },
+          { left: 140, right: 320 },
+        ],
+      ],
+    );
+
+    expect(measureRenderedColumnBoundaries(table)).toEqual([0, 120, 300]);
+  });
+
+  it('falls back to proportional boundaries when only spanning cells are rendered', () => {
+    const table = createMeasuredTable(10, 370, [[{ left: 10, right: 370, colSpan: 3 }]]);
+
+    expect(measureRenderedColumnBoundaries(table)).toEqual([0, 120, 240, 360]);
+  });
+
+  it('builds resize transactions that preserve cell selections', () => {
+    const table = createHtmlTableNode(schema, { rows: 1, cols: 2 });
+    const doc = schema.nodes.doc!.create(null, [table]);
+    const cellPositions = findNodePositions(doc, 'htmlTableCell');
+    const state = EditorState.create({
+      schema,
+      doc,
+      selection: CellSelection.create(doc, cellPositions[1]!),
+    });
+
+    const transaction = createColumnResizeTransaction(state, 0, table, [160, 220]);
+    const nextState = state.apply(transaction);
+    const resizedTable = nextState.doc.firstChild!;
+    const colgroup = resizedTable.child(0);
+    const body = resizedTable.child(resizedTable.childCount - 1);
+    const firstRow = body.child(0);
+    const nextCellPositions = findNodePositions(nextState.doc, 'htmlTableCell');
+
+    expect(colgroup.child(0).attrs.width).toBe(160);
+    expect(colgroup.child(1).attrs.width).toBe(220);
+    expect(firstRow.child(0).attrs.colwidth).toEqual([160]);
+    expect(firstRow.child(1).attrs.colwidth).toEqual([220]);
+    expect(nextState.selection).toBeInstanceOf(CellSelection);
+    expect((nextState.selection as CellSelection).anchorCellPos).toBe(nextCellPositions[1]);
+    expect((nextState.selection as CellSelection).headCellPos).toBe(nextCellPositions[1]);
+  });
 });
+
+function findNodePositions(doc: import('prosemirror-model').Node, typeName: string): number[] {
+  const positions: number[] = [];
+
+  doc.descendants((node, pos) => {
+    if (node.type.name === typeName) {
+      positions.push(pos);
+    }
+
+    return true;
+  });
+
+  return positions;
+}
+
+function createMeasuredTable(
+  left: number,
+  right: number,
+  rows: Array<Array<{ left: number; right: number; colSpan?: number; rowSpan?: number }>>,
+): HTMLTableElement {
+  return {
+    rows: rows.map((cells) => ({
+      cells: cells.map((cell) => ({
+        colSpan: cell.colSpan ?? 1,
+        rowSpan: cell.rowSpan ?? 1,
+        getBoundingClientRect: () => createRect(cell.left, cell.right),
+      })),
+    })),
+    getBoundingClientRect: () => createRect(left, right),
+  } as unknown as HTMLTableElement;
+}
+
+function createRect(left: number, right: number, top = 0, bottom = 24): DOMRect {
+  return {
+    x: left,
+    y: top,
+    left,
+    right,
+    top,
+    bottom,
+    width: right - left,
+    height: bottom - top,
+    toJSON: () => ({}),
+  } as DOMRect;
+}

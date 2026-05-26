@@ -60,7 +60,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <main class="demo-shell">
+  <main class="pmht-demo demo-shell">
     <section class="hero">
       <p class="eyebrow">prosemirror-html-table</p>
       <h1>Vue 3 + Tiptap v3 full HTML table demo</h1>
