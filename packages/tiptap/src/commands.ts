@@ -7,14 +7,18 @@ import {
   deleteColumn as deleteCoreColumn,
   deleteRow as deleteCoreRow,
   deleteTable as deleteCoreTable,
+  fixTables as fixCoreTables,
   goToNextCell as goToCoreNextCell,
   goToPreviousCell as goToCorePreviousCell,
   insertHtmlTable as insertCoreHtmlTable,
+  mergeCells as mergeCoreCells,
+  mergeOrSplit as mergeOrSplitCoreCells,
   selectCell as selectCoreCell,
   selectColumn as selectCoreColumn,
   selectRow as selectCoreRow,
   selectTable as selectCoreTable,
   setCellAttribute as setCoreCellAttribute,
+  splitCell as splitCoreCell,
   toggleHeaderCell as toggleCoreHeaderCell,
   toggleHeaderColumn as toggleCoreHeaderColumn,
   toggleHeaderRow as toggleCoreHeaderRow,
@@ -34,12 +38,16 @@ declare module '@tiptap/core' {
       addHtmlTableColumnAfter: (options?: HtmlTableCommandOptions) => ReturnType;
       deleteHtmlTableColumn: (options?: HtmlTableCommandOptions) => ReturnType;
       deleteHtmlTable: (options?: HtmlTableCommandOptions) => ReturnType;
+      mergeHtmlTableCells: (options?: HtmlTableCommandOptions) => ReturnType;
+      splitHtmlTableCell: (options?: HtmlTableCommandOptions) => ReturnType;
+      mergeOrSplitHtmlTableCells: (options?: HtmlTableCommandOptions) => ReturnType;
       setHtmlTableCellAttribute: (name: string, value: unknown, options?: HtmlTableCommandOptions) => ReturnType;
       toggleHtmlTableHeaderCell: (options?: HtmlTableCommandOptions) => ReturnType;
       toggleHtmlTableHeaderRow: (options?: HtmlTableCommandOptions) => ReturnType;
       toggleHtmlTableHeaderColumn: (options?: HtmlTableCommandOptions) => ReturnType;
       goToNextHtmlTableCell: (options?: HtmlTableCellNavigationOptions) => ReturnType;
       goToPreviousHtmlTableCell: (options?: HtmlTableCellNavigationOptions) => ReturnType;
+      fixHtmlTables: (options?: HtmlTableCommandOptions) => ReturnType;
       selectHtmlTableCell: (options?: HtmlTableCommandOptions) => ReturnType;
       selectHtmlTableRow: (options?: HtmlTableCommandOptions) => ReturnType;
       selectHtmlTableColumn: (options?: HtmlTableCommandOptions) => ReturnType;
@@ -90,6 +98,21 @@ export function createHtmlTableCommands(): Partial<RawCommands> {
       ({ state, dispatch }) =>
         deleteCoreTable(options)(state, dispatch),
 
+    mergeHtmlTableCells:
+      (options?: HtmlTableCommandOptions) =>
+      ({ state, dispatch }) =>
+        mergeCoreCells(options)(state, dispatch),
+
+    splitHtmlTableCell:
+      (options?: HtmlTableCommandOptions) =>
+      ({ state, dispatch }) =>
+        splitCoreCell(options)(state, dispatch),
+
+    mergeOrSplitHtmlTableCells:
+      (options?: HtmlTableCommandOptions) =>
+      ({ state, dispatch }) =>
+        mergeOrSplitCoreCells(options)(state, dispatch),
+
     setHtmlTableCellAttribute:
       (name: string, value: unknown, options?: HtmlTableCommandOptions) =>
       ({ state, dispatch }) =>
@@ -119,6 +142,11 @@ export function createHtmlTableCommands(): Partial<RawCommands> {
       (options?: HtmlTableCellNavigationOptions) =>
       ({ state, dispatch }) =>
         goToCorePreviousCell(options)(state, dispatch),
+
+    fixHtmlTables:
+      (options?: HtmlTableCommandOptions) =>
+      ({ state, dispatch }) =>
+        fixCoreTables(options)(state, dispatch),
 
     selectHtmlTableCell:
       (options?: HtmlTableCommandOptions) =>

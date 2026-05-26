@@ -67,7 +67,9 @@ onBeforeUnmount(() => {
       <p>
         This demo uses <code>tiptap-html-table</code> to edit a table with
         <code>caption</code>, <code>colgroup</code>, <code>thead</code>,
-        <code>tbody</code>, and <code>tfoot</code>.
+        <code>tbody</code>, and <code>tfoot</code>. Drag column edges to resize,
+        use <code>Tab</code>/<code>Shift+Tab</code> to move, and use
+        <code>Shift+Arrow</code> to extend cell selection.
       </p>
     </section>
 
@@ -92,6 +94,15 @@ onBeforeUnmount(() => {
       </button>
       <button type="button" @click="run(() => editor?.commands.deleteHtmlTableColumn() ?? false)">
         Delete column
+      </button>
+      <button type="button" @click="run(() => editor?.commands.mergeHtmlTableCells() ?? false)">
+        Merge cells
+      </button>
+      <button type="button" @click="run(() => editor?.commands.splitHtmlTableCell() ?? false)">
+        Split cell
+      </button>
+      <button type="button" @click="run(() => editor?.commands.mergeOrSplitHtmlTableCells() ?? false)">
+        Merge or split
       </button>
       <button type="button" @click="run(() => editor?.commands.setHtmlTableCellAttribute('colspan', 2) ?? false)">
         Set colspan=2
@@ -119,6 +130,9 @@ onBeforeUnmount(() => {
       </button>
       <button type="button" @click="run(() => editor?.commands.selectHtmlTableColumn() ?? false)">
         Select column
+      </button>
+      <button type="button" @click="run(() => editor?.commands.fixHtmlTables() ?? false)">
+        Fix tables
       </button>
       <button type="button" class="danger" @click="run(() => editor?.commands.deleteHtmlTable() ?? false)">
         Delete table

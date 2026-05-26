@@ -1,7 +1,10 @@
-import { mergeAttributes, Node } from '@tiptap/core';
+import { mergeAttributes, Node, type NodeViewRendererProps } from '@tiptap/core';
+import { CellSelection } from 'prosemirror-html-table';
 
 import { createHtmlTableCommands } from './commands.js';
 import { defaultHtmlTableTiptapOptions, type HtmlTableTiptapOptions } from './options.js';
+import { HtmlTableNodeView } from './table-view.js';
+import { createHtmlTableSelectionPlugin, findAdjacentCell, getTableSelectionInfo } from './table-utils.js';
 
 export const HtmlTable = Node.create<HtmlTableTiptapOptions>({
   name: 'htmlTable',
@@ -18,6 +21,51 @@ export const HtmlTable = Node.create<HtmlTableTiptapOptions>({
 
   addCommands() {
     return createHtmlTableCommands();
+  },
+
+  addKeyboardShortcuts() {
+    const moveSelection =
+      (direction: 'left' | 'right' | 'up' | 'down') =>
+      () => {
+        const selectionInfo = getTableSelectionInfo(this.editor.state.doc, this.editor.state.selection);
+        if (!selectionInfo) return false;
+
+        const targetCell = findAdjacentCell(selectionInfo, direction);
+        if (!targetCell) return false;
+
+        const targetPos = selectionInfo.cellPositions.get(targetCell);
+        const anchorPos = selectionInfo.cellPositions.get(selectionInfo.anchorCell);
+        if (targetPos === undefined || anchorPos === undefined) return false;
+
+        this.editor.view.dispatch(
+          this.editor.state.tr.setSelection(CellSelection.create(this.editor.state.doc, anchorPos, targetPos)).scrollIntoView(),
+        );
+
+        return true;
+      };
+
+    return {
+      Tab: () => {
+        if (this.editor.commands.goToNextHtmlTableCell()) return true;
+        if (!this.editor.commands.addHtmlTableRowAfter()) return false;
+        return this.editor.commands.goToNextHtmlTableCell();
+      },
+      'Shift-Tab': () => this.editor.commands.goToPreviousHtmlTableCell(),
+      'Shift-ArrowLeft': moveSelection('left'),
+      'Shift-ArrowRight': moveSelection('right'),
+      'Shift-ArrowUp': moveSelection('up'),
+      'Shift-ArrowDown': moveSelection('down'),
+    };
+  },
+
+  addProseMirrorPlugins() {
+    return [createHtmlTableSelectionPlugin(this.options)];
+  },
+
+  addNodeView() {
+    const View = this.options.View ?? HtmlTableNodeView;
+
+    return (props: NodeViewRendererProps) => new View(props, this.options);
   },
 
   parseHTML() {

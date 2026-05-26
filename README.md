@@ -88,14 +88,18 @@ import {
   deleteColumn,
   deleteRow,
   deleteTable,
+  fixTables,
   goToNextCell,
   goToPreviousCell,
   insertHtmlTable,
+  mergeCells,
+  mergeOrSplit,
   selectCell,
   selectColumn,
   selectRow,
   selectTable,
   setCellAttribute,
+  splitCell,
   toggleHeaderCell,
   toggleHeaderColumn,
   toggleHeaderRow,
@@ -113,6 +117,10 @@ addColumnBefore
 addColumnAfter
 deleteColumn
 deleteTable
+mergeCells
+splitCell
+mergeOrSplit
+fixTables
 setCellAttribute
 toggleHeaderCell
 toggleHeaderRow
@@ -125,11 +133,38 @@ selectColumn
 selectTable
 ```
 
-These commands are the first editing layer. They are designed for regular table editing and use the section-aware grid internally. Complex spanning behavior is still conservative: deleting a column can shrink a covering `colspan`, while advanced merge/split and full normalization will be implemented separately.
+These commands use the section-aware grid internally. They now cover dedicated cell selection, rectangular merge, merged-cell splitting, and full-table normalization through `fixTables`.
 
 Header commands convert between `htmlTableHeaderCell` and `htmlTableCell` while preserving cell attributes, content, and marks.
 
-Selection commands currently use ProseMirror's built-in `NodeSelection` and `TextSelection`. They provide practical cell, row, column, and whole-table selection behavior without introducing a custom `CellSelection` class yet. A dedicated table-cell selection implementation can still be added later for merge/split workflows.
+Selection commands use a dedicated `CellSelection` for cell, row, and column ranges, while whole-table selection still uses `NodeSelection`.
+
+### Tiptap interaction layer
+
+The Tiptap package now includes:
+
+```txt
+- custom table node view with optional wrapper
+- column resize handles
+- persisted colgroup / colwidth state
+- selected-cell decorations
+- Tab / Shift-Tab navigation
+- Shift-Arrow cell-range expansion
+```
+
+Available options:
+
+```ts
+{
+  HTMLAttributes: {},
+  resizable: true,
+  renderWrapper: true,
+  handleWidth: 6,
+  cellMinWidth: 120,
+  lastColumnResizable: true,
+  allowTableNodeSelection: true,
+}
+```
 
 ### Tiptap usage
 
@@ -166,6 +201,10 @@ editor.commands.selectHtmlTableCell();
 editor.commands.selectHtmlTableRow();
 editor.commands.selectHtmlTableColumn();
 editor.commands.selectHtmlTable();
+editor.commands.mergeHtmlTableCells();
+editor.commands.splitHtmlTableCell();
+editor.commands.mergeOrSplitHtmlTableCells();
+editor.commands.fixHtmlTables();
 editor.commands.deleteHtmlTable();
 ```
 
@@ -180,11 +219,10 @@ editor.commands.goToNextHtmlTableCell({ cycle: true });
 The next major areas are:
 
 ```txt
-1. Dedicated CellSelection for rectangular selections
-2. mergeCells / splitCell / mergeOrSplit
-3. table normalization / fixTables
-4. column resizing
-5. optional UI components for row and column controls
+1. optional UI components for row and column controls
+2. richer keyboard shortcuts and copy/paste behavior
+3. copy/paste cell ranges
+4. row and column move / duplicate controls
 ```
 
 ## Development

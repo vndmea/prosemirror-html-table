@@ -1,4 +1,5 @@
 export { createHtmlTableCommands } from './commands.js';
+export { HtmlTableNodeView } from './table-view.js';
 
 export {
   HtmlTable,

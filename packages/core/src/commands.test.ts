@@ -1,5 +1,5 @@
 import { Schema, type Node as ProseMirrorNode } from 'prosemirror-model';
-import { EditorState, NodeSelection, TextSelection } from 'prosemirror-state';
+import { EditorState, NodeSelection } from 'prosemirror-state';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -7,19 +7,25 @@ import {
   addColumnBefore,
   addRowAfter,
   addRowBefore,
+  CellSelection,
   createHtmlTableNode,
   createHtmlTableNodeSpecs,
   deleteColumn,
   deleteRow,
   deleteTable,
+  fixTables,
   goToNextCell,
   goToPreviousCell,
   insertHtmlTable,
+  mergeCells,
+  mergeOrSplit,
+  normalizeHtmlTable,
   selectCell,
   selectColumn,
   selectRow,
   selectTable,
   setCellAttribute,
+  splitCell,
   toggleHeaderCell,
   toggleHeaderColumn,
   toggleHeaderRow,
@@ -42,12 +48,12 @@ const schema = new Schema({
 function createStateWithTable(rows = 2, cols = 2): EditorState {
   const table = createHtmlTableNode(schema, { rows, cols, withHeaderRow: true });
   const doc = schema.nodes.doc!.create(null, [table]);
-  const paragraphPos = findFirstNodePos(doc, 'paragraph');
+  const firstCellPos = findNodePositions(doc, 'htmlTableHeaderCell')[0] ?? findNodePositions(doc, 'htmlTableCell')[0];
 
   return EditorState.create({
     schema,
     doc,
-    selection: TextSelection.near(doc.resolve(paragraphPos + 1)),
+    selection: CellSelection.create(doc, firstCellPos!),
   });
 }
 
@@ -93,23 +99,18 @@ function getSelectedCellType(state: EditorState): string | undefined {
   return undefined;
 }
 
-function findFirstNodePos(doc: ProseMirrorNode, typeName: string): number {
-  let found: number | undefined;
+function findNodePositions(doc: ProseMirrorNode, typeName: string): number[] {
+  const positions: number[] = [];
 
   doc.descendants((node, pos) => {
     if (node.type.name === typeName) {
-      found = pos;
-      return false;
+      positions.push(pos);
     }
 
     return true;
   });
 
-  if (found === undefined) {
-    throw new Error(`Unable to find node: ${typeName}`);
-  }
-
-  return found;
+  return positions;
 }
 
 describe('html table commands', () => {
@@ -180,10 +181,11 @@ describe('html table commands', () => {
     const table = createHtmlTableNode(schema, { rows: 2, cols: 2 });
     const trailingParagraph = schema.nodes.paragraph!.create();
     const doc = schema.nodes.doc!.create(null, [table, trailingParagraph]);
+    const firstCellPos = findNodePositions(doc, 'htmlTableCell')[0] ?? findNodePositions(doc, 'htmlTableHeaderCell')[0];
     const state = EditorState.create({
       schema,
       doc,
-      selection: TextSelection.near(doc.resolve(findFirstNodePos(doc, 'paragraph') + 1)),
+      selection: CellSelection.create(doc, firstCellPos!),
     });
 
     const nextState = applyCommand(state, deleteTable());
@@ -242,21 +244,21 @@ describe('html table commands', () => {
   it('selects the current cell as a node selection', () => {
     const nextState = applyCommand(createStateWithTable(2, 2), selectCell());
 
-    expect(nextState.selection).toBeInstanceOf(NodeSelection);
-    expect((nextState.selection as NodeSelection).node.type.name).toBe('htmlTableHeaderCell');
+    expect(nextState.selection).toBeInstanceOf(CellSelection);
+    expect(getSelectedCellType(nextState)).toBe('htmlTableHeaderCell');
   });
 
   it('selects the current row as a text range', () => {
     const nextState = applyCommand(createStateWithTable(2, 2), selectRow());
 
-    expect(nextState.selection).toBeInstanceOf(TextSelection);
+    expect(nextState.selection).toBeInstanceOf(CellSelection);
     expect(nextState.selection.empty).toBe(false);
   });
 
   it('selects the current column as a text range', () => {
     const nextState = applyCommand(createStateWithTable(2, 2), selectColumn());
 
-    expect(nextState.selection).toBeInstanceOf(TextSelection);
+    expect(nextState.selection).toBeInstanceOf(CellSelection);
     expect(nextState.selection.empty).toBe(false);
   });
 
@@ -265,5 +267,96 @@ describe('html table commands', () => {
 
     expect(nextState.selection).toBeInstanceOf(NodeSelection);
     expect((nextState.selection as NodeSelection).node.type.name).toBe('htmlTable');
+  });
+
+  it('merges a rectangular cell selection', () => {
+    const state = createStateWithTable(2, 2);
+    const cellPositions = [
+      ...findNodePositions(state.doc, 'htmlTableHeaderCell'),
+      ...findNodePositions(state.doc, 'htmlTableCell'),
+    ];
+    const selectedState = EditorState.create({
+      schema,
+      doc: state.doc,
+      selection: CellSelection.create(state.doc, cellPositions[0]!, cellPositions[cellPositions.length - 1]!),
+    });
+
+    const nextState = applyCommand(selectedState, mergeCells());
+    const firstCell = getBody(getTable(nextState.doc)).child(0).child(0);
+
+    expect(firstCell.attrs.colspan).toBe(2);
+    expect(firstCell.attrs.rowspan).toBe(2);
+  });
+
+  it('splits a merged cell back into individual cells', () => {
+    const state = createStateWithTable(1, 2);
+    const cellPositions = findNodePositions(state.doc, 'htmlTableHeaderCell');
+    const selectedState = EditorState.create({
+      schema,
+      doc: state.doc,
+      selection: CellSelection.create(state.doc, cellPositions[0]!, cellPositions[1]!),
+    });
+    const mergedState = applyCommand(selectedState, mergeCells());
+    const nextState = applyCommand(mergedState, splitCell());
+    const firstRow = getBody(getTable(nextState.doc)).child(0);
+
+    expect(firstRow.childCount).toBe(2);
+    expect(firstRow.child(0).attrs.colspan).toBe(1);
+  });
+
+  it('merges first and splits on repeated mergeOrSplit', () => {
+    const state = createStateWithTable(2, 2);
+    const cellPositions = [
+      ...findNodePositions(state.doc, 'htmlTableHeaderCell'),
+      ...findNodePositions(state.doc, 'htmlTableCell'),
+    ];
+    const selectedState = EditorState.create({
+      schema,
+      doc: state.doc,
+      selection: CellSelection.create(state.doc, cellPositions[0]!, cellPositions[cellPositions.length - 1]!),
+    });
+
+    const mergedState = applyCommand(selectedState, mergeOrSplit());
+    expect(getBody(getTable(mergedState.doc)).child(0).child(0).attrs.colspan).toBe(2);
+
+    const mergedCellPos = (findNodePositions(mergedState.doc, 'htmlTableHeaderCell')[0]
+      ?? findNodePositions(mergedState.doc, 'htmlTableCell')[0])!;
+    const mergeFocusedState = EditorState.create({
+      schema,
+      doc: mergedState.doc,
+      selection: CellSelection.create(mergedState.doc, mergedCellPos),
+    });
+    const splitState = applyCommand(mergeFocusedState, mergeOrSplit());
+    expect(getBody(getTable(splitState.doc)).child(0).child(0).attrs.colspan).toBe(1);
+  });
+
+  it('normalizes malformed table structure and clamps invalid spans', () => {
+    const overflowCell = schema.nodes.htmlTableCell!.create(
+      {
+        colspan: 3,
+        rowspan: 99,
+      },
+      [schema.nodes.paragraph!.create()],
+    );
+    const body = schema.nodes.htmlTableBody!.create(null, [
+      schema.nodes.htmlTableRow!.create(null, [overflowCell]),
+      schema.nodes.htmlTableRow!.create(null, []),
+    ]);
+    const malformed = schema.nodes.htmlTable!.create(null, [body]);
+    const normalized = normalizeHtmlTable(malformed);
+    const normalizedBody = getBody(normalized);
+
+    expect(normalizedBody.child(0).child(0).attrs.rowspan).toBe(2);
+    expect(normalizedBody.child(0).childCount).toBeGreaterThan(0);
+    expect(normalizedBody.child(1).childCount).toBeGreaterThan(0);
+  });
+
+  it('fixes malformed tables across the document', () => {
+    const malformed = schema.nodes.htmlTable!.create(null, []);
+    const doc = schema.nodes.doc!.create(null, [malformed]);
+    const state = EditorState.create({ schema, doc });
+    const nextState = applyCommand(state, fixTables());
+
+    expect(getBody(getTable(nextState.doc)).childCount).toBe(1);
   });
 });
