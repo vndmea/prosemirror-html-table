@@ -2,6 +2,7 @@ import { mergeAttributes, Node, type NodeViewRendererProps } from '@tiptap/core'
 import { CellSelection } from 'prosemirror-html-table';
 
 import { createHtmlTableCommands } from './commands.js';
+import { createHtmlTableInteractionPlugin } from './html-table-interaction.js';
 import { defaultHtmlTableTiptapOptions, type HtmlTableTiptapOptions } from './options.js';
 import { HtmlTableNodeView } from './table-view.js';
 import { createHtmlTableSelectionPlugin, findAdjacentCell, getTableSelectionInfo } from './table-utils.js';
@@ -59,7 +60,10 @@ export const HtmlTable = Node.create<HtmlTableTiptapOptions>({
   },
 
   addProseMirrorPlugins() {
-    return [createHtmlTableSelectionPlugin(this.options)];
+    return [
+      createHtmlTableInteractionPlugin(),
+      createHtmlTableSelectionPlugin(this.options),
+    ];
   },
 
   addNodeView() {

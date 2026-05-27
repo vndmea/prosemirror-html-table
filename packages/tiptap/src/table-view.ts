@@ -4,12 +4,14 @@ import type { ViewMutationRecord } from '@tiptap/pm/view';
 
 import type { HtmlTableTiptapOptions } from './options.js';
 import {
+  measureRenderedColumnBoundaries,
+  measureRenderedRowBoundaries,
+} from './table-dom.js';
+import {
   createColumnResizeTransaction,
   createColumnSelectionTransaction,
   createRowSelectionTransaction,
   getTableColumnWidths,
-  measureRenderedColumnBoundaries,
-  measureRenderedRowBoundaries,
 } from './table-utils.js';
 
 interface ActiveColumnResize {
@@ -52,8 +54,10 @@ export class HtmlTableNodeView {
 
     this.wrapper = document.createElement('div');
     this.wrapper.className = this.options.wrapperClassName;
+    this.wrapper.dataset.htmlTableWrapper = 'true';
     this.table = document.createElement('table');
     this.table.className = 'html-table-node__table';
+    this.table.dataset.htmlTable = 'true';
     this.resizeHandles = document.createElement('div');
     this.resizeHandles.className = 'html-table-node__handles';
     this.rowHandles = document.createElement('div');
@@ -61,7 +65,7 @@ export class HtmlTableNodeView {
     this.columnHandles = document.createElement('div');
     this.columnHandles.className = 'html-table-node__column-handles';
 
-    const shouldWrap = this.options.renderWrapper || this.options.resizable;
+    const shouldWrap = this.options.renderWrapper || this.options.resizable || this.options.renderLegacyControls;
     if (shouldWrap) {
       this.wrapper.append(this.table, this.resizeHandles, this.rowHandles, this.columnHandles);
       this.dom = this.wrapper;
@@ -99,6 +103,7 @@ export class HtmlTableNodeView {
 
   stopEvent(event: Event): boolean {
     if (this.activeResize) return true;
+    if (!this.options.renderLegacyControls) return false;
 
     const target = event.target as HTMLElement | null;
     return Boolean(target?.closest('.html-table-node__resize-handle, .html-table-node__selection-handle'));
@@ -107,6 +112,7 @@ export class HtmlTableNodeView {
   ignoreMutation(mutation: ViewMutationRecord): boolean {
     if (this.activeResize) return true;
     if (mutation.type === 'selection') return false;
+    if (!this.options.renderLegacyControls) return false;
     return (
       this.resizeHandles.contains(mutation.target)
       || this.rowHandles.contains(mutation.target)
@@ -137,7 +143,9 @@ export class HtmlTableNodeView {
 
     this.table.style.tableLayout = this.options.resizable ? 'fixed' : '';
     this.applyRenderedWidths(widths);
-    this.resizeHandles.style.display = this.options.resizable ? '' : 'none';
+    this.resizeHandles.style.display = this.options.renderLegacyControls && this.options.resizable ? '' : 'none';
+    this.rowHandles.style.display = this.options.renderLegacyControls ? '' : 'none';
+    this.columnHandles.style.display = this.options.renderLegacyControls ? '' : 'none';
 
     if (this.layoutFrame) {
       cancelAnimationFrame(this.layoutFrame);
@@ -146,10 +154,18 @@ export class HtmlTableNodeView {
     this.layoutFrame = requestAnimationFrame(() => {
       this.layoutFrame = 0;
       this.applyRenderedWidths(widths);
-      this.renderHandles(widths.length);
-      this.syncHandlePositions();
-      this.renderSelectionHandles(widths.length, this.table.rows.length);
-      this.syncSelectionHandlePositions();
+      if (this.options.renderLegacyControls) {
+        this.renderHandles(widths.length);
+        this.syncHandlePositions();
+        this.renderSelectionHandles(widths.length, this.table.rows.length);
+        this.syncSelectionHandlePositions();
+      } else {
+        this.removeResizeHandleListeners?.();
+        this.removeSelectionHandleListeners?.();
+        this.resizeHandles.replaceChildren();
+        this.rowHandles.replaceChildren();
+        this.columnHandles.replaceChildren();
+      }
     });
   }
 
@@ -177,7 +193,7 @@ export class HtmlTableNodeView {
     this.removeResizeHandleListeners?.();
     this.resizeHandles.replaceChildren();
 
-    if (!this.options.resizable || columnCount === 0) return;
+    if (!this.options.renderLegacyControls || !this.options.resizable || columnCount === 0) return;
 
     const stopIndex = this.options.lastColumnResizable ? columnCount : columnCount - 1;
     const cleanup: Array<() => void> = [];
@@ -200,7 +216,7 @@ export class HtmlTableNodeView {
   }
 
   private syncHandlePositions(): void {
-    if (!this.options.resizable || this.resizeHandles.childElementCount === 0) return;
+    if (!this.options.renderLegacyControls || !this.options.resizable || this.resizeHandles.childElementCount === 0) return;
 
     const boundaries = measureRenderedColumnBoundaries(this.table);
     const totalWidth = boundaries[boundaries.length - 1] ?? 0;
@@ -217,6 +233,7 @@ export class HtmlTableNodeView {
     this.rowHandles.replaceChildren();
     this.columnHandles.replaceChildren();
 
+    if (!this.options.renderLegacyControls) return;
     if (columnCount === 0 && rowCount === 0) return;
 
     const cleanup: Array<() => void> = [];
@@ -252,6 +269,8 @@ export class HtmlTableNodeView {
   }
 
   private syncSelectionHandlePositions(): void {
+    if (!this.options.renderLegacyControls) return;
+
     const columnBoundaries = measureRenderedColumnBoundaries(this.table);
     const rowBoundaries = measureRenderedRowBoundaries(this.table);
     const tableTop = this.table.offsetTop;
@@ -285,6 +304,7 @@ export class HtmlTableNodeView {
   }
 
   private handleRowSelection(event: PointerEvent, rowIndex: number): void {
+    if (!this.options.renderLegacyControls) return;
     event.preventDefault();
     event.stopPropagation();
 
@@ -298,6 +318,7 @@ export class HtmlTableNodeView {
   }
 
   private handleColumnSelection(event: PointerEvent, columnIndex: number): void {
+    if (!this.options.renderLegacyControls) return;
     event.preventDefault();
     event.stopPropagation();
 
@@ -311,7 +332,7 @@ export class HtmlTableNodeView {
   }
 
   private startResize(event: PointerEvent, columnIndex: number, handle: HTMLDivElement): void {
-    if (event.button !== 0 || this.activeResize) return;
+    if (!this.options.renderLegacyControls || event.button !== 0 || this.activeResize) return;
 
     event.preventDefault();
     event.stopPropagation();

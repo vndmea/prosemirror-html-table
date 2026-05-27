@@ -4,6 +4,16 @@ import { NodeSelection, Plugin, PluginKey, TextSelection, type EditorState, type
 import { CellSelection, createHtmlTableGrid, htmlTableNodeNames, normalizeHtmlTable, type HtmlTableCellRef } from 'prosemirror-html-table';
 
 import type { HtmlTableTiptapOptions } from './options.js';
+export {
+  measureHtmlTableGeometry,
+  measureRenderedColumnBoundaries,
+  measureRenderedRowBoundaries,
+  type HtmlTableColumnGeometry,
+  type HtmlTableDOMContext,
+  type HtmlTableGeometry,
+  type HtmlTableRect,
+  type HtmlTableRowGeometry,
+} from './table-dom.js';
 
 export interface TableContext {
   table: ProseMirrorNode;
@@ -121,105 +131,6 @@ export function createColumnResizeTransaction(
     ?? state.selection.getBookmark().map(transaction.mapping).resolve(transaction.doc);
 
   return transaction.setSelection(selection);
-}
-
-export function measureRenderedColumnBoundaries(table: HTMLTableElement): number[] {
-  const tableRect = table.getBoundingClientRect();
-  const activeRowSpans: number[] = [];
-  const boundaries: Array<number | undefined> = [0];
-  const spanningCells: Array<{ start: number; span: number; left: number; right: number }> = [];
-  let width = 0;
-
-  for (const row of Array.from(table.rows)) {
-    let columnIndex = 0;
-
-    for (const cell of Array.from(row.cells)) {
-      while ((activeRowSpans[columnIndex] ?? 0) > 0) {
-        columnIndex += 1;
-      }
-
-      const colSpan = Math.max(1, cell.colSpan || 1);
-      const rowSpan = Math.max(1, cell.rowSpan || 1);
-      const rect = cell.getBoundingClientRect();
-      const left = rect.left - tableRect.left;
-      const right = rect.right - tableRect.left;
-
-      boundaries[columnIndex] = left;
-      boundaries[columnIndex + colSpan] = right;
-      width = Math.max(width, columnIndex + colSpan);
-
-      if (colSpan > 1) {
-        spanningCells.push({
-          start: columnIndex,
-          span: colSpan,
-          left,
-          right,
-        });
-      }
-
-      for (let offset = 0; offset < colSpan; offset += 1) {
-        activeRowSpans[columnIndex + offset] = Math.max(activeRowSpans[columnIndex + offset] ?? 0, rowSpan);
-      }
-
-      columnIndex += colSpan;
-    }
-
-    for (let index = 0; index < activeRowSpans.length; index += 1) {
-      if ((activeRowSpans[index] ?? 0) > 0) {
-        activeRowSpans[index] = (activeRowSpans[index] ?? 0) - 1;
-      }
-    }
-  }
-
-  const resolvedBoundaries = boundaries.slice(0, width + 1);
-  resolvedBoundaries[0] ??= 0;
-  resolvedBoundaries[width] ??= tableRect.width;
-
-  for (const cell of spanningCells) {
-    const start = cell.start;
-    const end = cell.start + cell.span;
-
-    if (resolvedBoundaries[start] === undefined) {
-      resolvedBoundaries[start] = cell.left;
-    }
-
-    if (resolvedBoundaries[end] === undefined) {
-      resolvedBoundaries[end] = cell.right;
-    }
-
-    let hasGap = false;
-    for (let index = start + 1; index < end; index += 1) {
-      if (resolvedBoundaries[index] === undefined) {
-        hasGap = true;
-        break;
-      }
-    }
-
-    if (!hasGap) continue;
-
-    const segmentWidth = cell.right - cell.left;
-    for (let index = start + 1; index < end; index += 1) {
-      resolvedBoundaries[index] ??= cell.left + (segmentWidth * (index - start)) / cell.span;
-    }
-  }
-
-  for (let index = 1; index < resolvedBoundaries.length; index += 1) {
-    resolvedBoundaries[index] ??= resolvedBoundaries[index - 1] ?? 0;
-  }
-
-  return resolvedBoundaries.map((boundary) => boundary ?? 0);
-}
-
-export function measureRenderedRowBoundaries(table: HTMLTableElement): number[] {
-  const tableRect = table.getBoundingClientRect();
-  const boundaries: number[] = [0];
-
-  for (const row of Array.from(table.rows)) {
-    const rect = row.getBoundingClientRect();
-    boundaries.push(rect.bottom - tableRect.top);
-  }
-
-  return boundaries;
 }
 
 export function createRowSelectionTransaction(
