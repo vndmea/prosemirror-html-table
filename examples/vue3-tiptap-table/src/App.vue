@@ -3,7 +3,7 @@ import Document from '@tiptap/extension-document';
 import Paragraph from '@tiptap/extension-paragraph';
 import Text from '@tiptap/extension-text';
 import { EditorContent, useEditor } from '@tiptap/vue-3';
-import { computed, onBeforeUnmount } from 'vue';
+import { onBeforeUnmount } from 'vue';
 import { HtmlTableExtensions } from 'tiptap-html-table';
 
 const editor = useEditor({
@@ -14,7 +14,6 @@ const editor = useEditor({
     ...HtmlTableExtensions,
   ],
   content: `
-    <p>Use the toolbar to edit the full HTML table structure.</p>
     <table>
       <caption>Maintenance checklist</caption>
       <colgroup>
@@ -47,12 +46,132 @@ const editor = useEditor({
   `,
 });
 
-const htmlOutput = computed(() => editor.value?.getHTML() ?? '');
+type ToolbarButton = {
+  label: string;
+  title: string;
+  action: () => boolean;
+  danger?: boolean;
+};
 
 function run(command: () => boolean): void {
   command();
   editor.value?.commands.focus();
 }
+
+const toolbarButtons: ToolbarButton[] = [
+  {
+    label: 'Insert table',
+    title: 'Insert table',
+    action: () => editor.value?.commands.insertHtmlTable({
+      rows: 3,
+      cols: 3,
+      withHeaderRow: true,
+      withCaption: true,
+      captionText: 'New table',
+    }) ?? false,
+  },
+  {
+    label: 'Row before',
+    title: 'Insert row before',
+    action: () => editor.value?.commands.addHtmlTableRowBefore() ?? false,
+  },
+  {
+    label: 'Row after',
+    title: 'Insert row after',
+    action: () => editor.value?.commands.addHtmlTableRowAfter() ?? false,
+  },
+  {
+    label: 'Del row',
+    title: 'Delete row',
+    action: () => editor.value?.commands.deleteHtmlTableRow() ?? false,
+  },
+  {
+    label: 'Column before',
+    title: 'Insert column before',
+    action: () => editor.value?.commands.addHtmlTableColumnBefore() ?? false,
+  },
+  {
+    label: 'Column after',
+    title: 'Insert column after',
+    action: () => editor.value?.commands.addHtmlTableColumnAfter() ?? false,
+  },
+  {
+    label: 'Delete column',
+    title: 'Delete column',
+    action: () => editor.value?.commands.deleteHtmlTableColumn() ?? false,
+  },
+  {
+    label: 'Merge cells',
+    title: 'Merge cells',
+    action: () => editor.value?.commands.mergeHtmlTableCells() ?? false,
+  },
+  {
+    label: 'Split cell',
+    title: 'Split cell',
+    action: () => editor.value?.commands.splitHtmlTableCell() ?? false,
+  },
+  {
+    label: 'Merge or split',
+    title: 'Merge or split cells',
+    action: () => editor.value?.commands.mergeOrSplitHtmlTableCells() ?? false,
+  },
+  {
+    label: 'Set colspan=2',
+    title: 'Set colspan to 2',
+    action: () => editor.value?.commands.setHtmlTableCellAttribute('colspan', 2) ?? false,
+  },
+  {
+    label: 'Toggle header cell',
+    title: 'Toggle header cell',
+    action: () => editor.value?.commands.toggleHtmlTableHeaderCell() ?? false,
+  },
+  {
+    label: 'Toggle header row',
+    title: 'Toggle header row',
+    action: () => editor.value?.commands.toggleHtmlTableHeaderRow() ?? false,
+  },
+  {
+    label: 'Toggle header column',
+    title: 'Toggle header column',
+    action: () => editor.value?.commands.toggleHtmlTableHeaderColumn() ?? false,
+  },
+  {
+    label: 'Previous cell',
+    title: 'Go to previous cell',
+    action: () => editor.value?.commands.goToPreviousHtmlTableCell({ cycle: true }) ?? false,
+  },
+  {
+    label: 'Next cell',
+    title: 'Go to next cell',
+    action: () => editor.value?.commands.goToNextHtmlTableCell({ cycle: true }) ?? false,
+  },
+  {
+    label: 'Select cell',
+    title: 'Select cell',
+    action: () => editor.value?.commands.selectHtmlTableCell() ?? false,
+  },
+  {
+    label: 'Select row',
+    title: 'Select row',
+    action: () => editor.value?.commands.selectHtmlTableRow() ?? false,
+  },
+  {
+    label: 'Select column',
+    title: 'Select column',
+    action: () => editor.value?.commands.selectHtmlTableColumn() ?? false,
+  },
+  {
+    label: 'Fix tables',
+    title: 'Normalize tables',
+    action: () => editor.value?.commands.fixHtmlTables() ?? false,
+  },
+  {
+    label: 'Delete table',
+    title: 'Delete table',
+    action: () => editor.value?.commands.deleteHtmlTable() ?? false,
+    danger: true,
+  },
+];
 
 onBeforeUnmount(() => {
   editor.value?.destroy();
@@ -62,7 +181,6 @@ onBeforeUnmount(() => {
 <template>
   <main class="pmht-demo demo-shell">
     <section class="hero">
-      <p class="eyebrow">prosemirror-html-table</p>
       <h1>Vue 3 + Tiptap v3 full HTML table demo</h1>
       <p>
         This demo uses <code>tiptap-html-table</code> to edit a table with
@@ -70,85 +188,26 @@ onBeforeUnmount(() => {
         <code>tbody</code>, and <code>tfoot</code>. Drag column edges to resize,
         click the row and column handles to select full axes, use
         <code>Tab</code>/<code>Shift+Tab</code> to move, and use
-        <code>Shift+Arrow</code> to extend cell selection.
+        <code>Shift+Arrow</code> to extend cell selection. Use the toolbar to edit the full HTML table structure.
       </p>
     </section>
 
     <section class="toolbar" aria-label="Table commands">
-      <button type="button" @click="run(() => editor?.commands.insertHtmlTable({ rows: 3, cols: 3, withHeaderRow: true, withCaption: true, captionText: 'New table' }) ?? false)">
-        Insert table
-      </button>
-      <button type="button" @click="run(() => editor?.commands.addHtmlTableRowBefore() ?? false)">
-        Row before
-      </button>
-      <button type="button" @click="run(() => editor?.commands.addHtmlTableRowAfter() ?? false)">
-        Row after
-      </button>
-      <button type="button" @click="run(() => editor?.commands.deleteHtmlTableRow() ?? false)">
-        Delete row
-      </button>
-      <button type="button" @click="run(() => editor?.commands.addHtmlTableColumnBefore() ?? false)">
-        Column before
-      </button>
-      <button type="button" @click="run(() => editor?.commands.addHtmlTableColumnAfter() ?? false)">
-        Column after
-      </button>
-      <button type="button" @click="run(() => editor?.commands.deleteHtmlTableColumn() ?? false)">
-        Delete column
-      </button>
-      <button type="button" @click="run(() => editor?.commands.mergeHtmlTableCells() ?? false)">
-        Merge cells
-      </button>
-      <button type="button" @click="run(() => editor?.commands.splitHtmlTableCell() ?? false)">
-        Split cell
-      </button>
-      <button type="button" @click="run(() => editor?.commands.mergeOrSplitHtmlTableCells() ?? false)">
-        Merge or split
-      </button>
-      <button type="button" @click="run(() => editor?.commands.setHtmlTableCellAttribute('colspan', 2) ?? false)">
-        Set colspan=2
-      </button>
-      <button type="button" @click="run(() => editor?.commands.toggleHtmlTableHeaderCell() ?? false)">
-        Toggle header cell
-      </button>
-      <button type="button" @click="run(() => editor?.commands.toggleHtmlTableHeaderRow() ?? false)">
-        Toggle header row
-      </button>
-      <button type="button" @click="run(() => editor?.commands.toggleHtmlTableHeaderColumn() ?? false)">
-        Toggle header column
-      </button>
-      <button type="button" @click="run(() => editor?.commands.goToPreviousHtmlTableCell({ cycle: true }) ?? false)">
-        Previous cell
-      </button>
-      <button type="button" @click="run(() => editor?.commands.goToNextHtmlTableCell({ cycle: true }) ?? false)">
-        Next cell
-      </button>
-      <button type="button" @click="run(() => editor?.commands.selectHtmlTableCell() ?? false)">
-        Select cell
-      </button>
-      <button type="button" @click="run(() => editor?.commands.selectHtmlTableRow() ?? false)">
-        Select row
-      </button>
-      <button type="button" @click="run(() => editor?.commands.selectHtmlTableColumn() ?? false)">
-        Select column
-      </button>
-      <button type="button" @click="run(() => editor?.commands.fixHtmlTables() ?? false)">
-        Fix tables
-      </button>
-      <button type="button" class="danger" @click="run(() => editor?.commands.deleteHtmlTable() ?? false)">
-        Delete table
+      <button
+        v-for="button in toolbarButtons"
+        :key="button.title"
+        type="button"
+        :class="{ danger: button.danger }"
+        :title="button.title"
+        @click="run(button.action)"
+      >
+        {{ button.label }}
       </button>
     </section>
 
     <section class="content-grid">
       <div class="panel editor-panel">
-        <h2>Editor</h2>
         <EditorContent v-if="editor" :editor="editor" />
-      </div>
-
-      <div class="panel output-panel">
-        <h2>HTML output</h2>
-        <pre><code>{{ htmlOutput }}</code></pre>
       </div>
     </section>
   </main>
