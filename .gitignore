@@ -1,6 +1,7 @@
 node_modules
 coverage
 packages/*/dist
+examples/vue3-tiptap-table/dist
 *.tsbuildinfo
 .DS_Store
 .env
