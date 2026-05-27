@@ -9,16 +9,19 @@ import {
 } from './html-table-interaction.js';
 import { getRenderedHtmlTableContext, measureHtmlTableGeometry } from './table-dom.js';
 import {
+  createAxisFocusTransaction,
   createColumnResizeTransaction,
-  createColumnSelectionTransaction,
   createRowSelectionTransaction,
   getTableColumnWidths,
+  getTableSelectionInfo,
 } from './table-utils.js';
 
 const ROW_HANDLE_OFFSET = 10;
 const COLUMN_HANDLE_OFFSET = 10;
 const MIN_HANDLE_INSET = 8;
 const EXTEND_BUTTON_OFFSET = 14;
+const HANDLE_CROSS_AXIS_SIZE = 12;
+const HANDLE_MAIN_AXIS_INSET = 8;
 
 export const htmlTableHandlePluginKey = new PluginKey('html-table-handle-overlay');
 
@@ -37,6 +40,7 @@ class HtmlTableHandleOverlayView {
   private readonly root: HTMLDivElement;
   private readonly rowSelectionOverlay: HTMLDivElement;
   private readonly columnSelectionOverlay: HTMLDivElement;
+  private readonly cellSelectionHandle: HTMLButtonElement;
   private readonly addRowButton: HTMLButtonElement;
   private readonly addColumnButton: HTMLButtonElement;
   private currentWrapper: HTMLElement | null = null;
@@ -67,11 +71,19 @@ class HtmlTableHandleOverlayView {
     this.columnSelectionOverlay = this.root.ownerDocument.createElement('div');
     this.columnSelectionOverlay.className =
       'html-table-overlay__selection-band html-table-overlay__selection-band--column';
+    this.cellSelectionHandle = this.root.ownerDocument.createElement('button');
+    this.cellSelectionHandle.type = 'button';
+    this.cellSelectionHandle.className = 'html-table-overlay__cell-selection-handle';
+    this.cellSelectionHandle.tabIndex = -1;
+    this.cellSelectionHandle.hidden = true;
+    this.cellSelectionHandle.setAttribute('aria-label', 'Selected cells handle');
+    this.cellSelectionHandle.title = 'Selected cells handle';
     this.addRowButton = this.createExtendButton('row');
     this.addColumnButton = this.createExtendButton('column');
     this.root.append(
       this.rowSelectionOverlay,
       this.columnSelectionOverlay,
+      this.cellSelectionHandle,
       this.addRowButton,
       this.addColumnButton,
     );
@@ -119,6 +131,7 @@ class HtmlTableHandleOverlayView {
     this.syncHandleCount('column', geometry.columns.length);
     this.syncResizeHandleCount(this.options.resizable ? geometry.columns.length : 0);
     this.syncSelectionOverlay(interaction, activeTable.tablePos, geometry, tableLeft, tableTop);
+    this.syncCellSelectionHandle(activeTable.tablePos, geometry, tableLeft, tableTop);
     this.syncExtendButtons(tableLeft, tableTop, geometry);
 
     for (const row of geometry.rows) {
@@ -130,15 +143,24 @@ class HtmlTableHandleOverlayView {
       handle.title = `Select row ${row.index + 1}`;
       handle.style.left = `${rowHandleLeft}px`;
       handle.style.top = `${tableTop + row.top + row.height / 2}px`;
+      handle.style.width = `${HANDLE_CROSS_AXIS_SIZE}px`;
+      handle.style.height = `${Math.max(HANDLE_CROSS_AXIS_SIZE, row.height - HANDLE_MAIN_AXIS_INSET)}px`;
+      const isRowHovered =
+        interaction.hovered?.kind === 'cell' &&
+        interaction.hovered.tablePos === activeTable.tablePos &&
+        interaction.hovered.rowIndex === row.index;
+      const isRowSelected =
+        interaction.selectedAxis.kind === 'row' &&
+        interaction.selectedAxis.index === row.index &&
+        interaction.selectedAxis.tablePos === activeTable.tablePos;
+      handle.hidden = !isRowHovered && !isRowSelected;
       handle.classList.toggle(
         'is-hovered',
-        interaction.hovered?.tablePos === activeTable.tablePos && interaction.hovered.rowIndex === row.index,
+        isRowHovered,
       );
       handle.classList.toggle(
         'is-selected',
-        interaction.selectedAxis.kind === 'row' &&
-          interaction.selectedAxis.index === row.index &&
-          interaction.selectedAxis.tablePos === activeTable.tablePos,
+        isRowSelected,
       );
     }
 
@@ -151,15 +173,24 @@ class HtmlTableHandleOverlayView {
       handle.title = `Select column ${column.index + 1}`;
       handle.style.left = `${tableLeft + column.left + column.width / 2}px`;
       handle.style.top = `${columnHandleTop}px`;
+      handle.style.width = `${Math.max(HANDLE_CROSS_AXIS_SIZE, column.width - HANDLE_MAIN_AXIS_INSET)}px`;
+      handle.style.height = `${HANDLE_CROSS_AXIS_SIZE}px`;
+      const isColumnHovered =
+        interaction.hovered?.kind === 'cell' &&
+        interaction.hovered.tablePos === activeTable.tablePos &&
+        interaction.hovered.columnIndex === column.index;
+      const isColumnSelected =
+        interaction.selectedAxis.kind === 'column' &&
+        interaction.selectedAxis.index === column.index &&
+        interaction.selectedAxis.tablePos === activeTable.tablePos;
+      handle.hidden = !isColumnHovered && !isColumnSelected;
       handle.classList.toggle(
         'is-hovered',
-        interaction.hovered?.tablePos === activeTable.tablePos && interaction.hovered.columnIndex === column.index,
+        isColumnHovered,
       );
       handle.classList.toggle(
         'is-selected',
-        interaction.selectedAxis.kind === 'column' &&
-          interaction.selectedAxis.index === column.index &&
-          interaction.selectedAxis.tablePos === activeTable.tablePos,
+        isColumnSelected,
       );
 
       const resizeHandle = this.resizeHandles[column.index];
@@ -256,6 +287,42 @@ class HtmlTableHandleOverlayView {
     }
   }
 
+  private syncCellSelectionHandle(
+    tablePos: number,
+    geometry: ReturnType<typeof measureHtmlTableGeometry>,
+    tableLeft: number,
+    tableTop: number,
+  ): void {
+    const selectionInfo = getTableSelectionInfo(this.view.state.doc, this.view.state.selection);
+    if (!selectionInfo || selectionInfo.tablePos !== tablePos) {
+      this.cellSelectionHandle.hidden = true;
+      return;
+    }
+
+    const interaction = getHtmlTableInteractionState(this.view.state);
+    if (interaction.selectedAxis.kind) {
+      this.cellSelectionHandle.hidden = true;
+      return;
+    }
+
+    const leftColumn = geometry.columns[selectionInfo.left];
+    const rightColumn = geometry.columns[selectionInfo.right];
+    const topRow = geometry.rows[selectionInfo.top];
+    const bottomRow = geometry.rows[selectionInfo.bottom];
+    if (!leftColumn || !rightColumn || !topRow || !bottomRow) {
+      this.cellSelectionHandle.hidden = true;
+      return;
+    }
+
+    const selectionTop = tableTop + topRow.top;
+    const selectionBottom = tableTop + bottomRow.top + bottomRow.height;
+    const selectionRight = tableLeft + rightColumn.left + rightColumn.width;
+
+    this.cellSelectionHandle.hidden = false;
+    this.cellSelectionHandle.style.left = `${selectionRight - 1}px`;
+    this.cellSelectionHandle.style.top = `${selectionTop + (selectionBottom - selectionTop) / 2}px`;
+  }
+
   private createHandle(axis: 'row' | 'column'): HTMLButtonElement {
     const handle = this.root.ownerDocument.createElement('button');
     handle.type = 'button';
@@ -309,7 +376,16 @@ class HtmlTableHandleOverlayView {
     const transaction =
       axis === 'row'
         ? createRowSelectionTransaction(this.view.state, activeTable.tablePos, table, index)
-        : createColumnSelectionTransaction(this.view.state, activeTable.tablePos, table, index);
+        : createAxisFocusTransaction(this.view.state, activeTable.tablePos, table, 'column', index)?.setMeta(
+            htmlTableInteractionPluginKey,
+            {
+              selectedAxis: {
+                kind: 'column',
+                index,
+                tablePos: activeTable.tablePos,
+              },
+            },
+          );
 
     if (!transaction) return;
 
@@ -372,12 +448,19 @@ class HtmlTableHandleOverlayView {
     const selectionTransaction =
       axis === 'row'
         ? createRowSelectionTransaction(this.view.state, activeTable.tablePos, table, Math.max(0, geometry.rows.length - 1))
-        : createColumnSelectionTransaction(
+        : createAxisFocusTransaction(
             this.view.state,
             activeTable.tablePos,
             table,
+            'column',
             Math.max(0, geometry.columns.length - 1),
-          );
+          )?.setMeta(htmlTableInteractionPluginKey, {
+            selectedAxis: {
+              kind: 'column',
+              index: Math.max(0, geometry.columns.length - 1),
+              tablePos: activeTable.tablePos,
+            },
+          });
     if (!selectionTransaction) return;
 
     const commandState = this.view.state.apply(selectionTransaction);

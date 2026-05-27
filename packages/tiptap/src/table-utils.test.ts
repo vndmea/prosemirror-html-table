@@ -96,6 +96,25 @@ describe('table width utilities', () => {
     expect(measureRenderedRowBoundaries(table)).toEqual([0, 32, 84]);
   });
 
+  it('measures row boundaries from the rendered grid area instead of the caption box', () => {
+    const table = createMeasuredTable(
+      10,
+      370,
+      [
+        [{ left: 10, right: 370 }],
+        [{ left: 10, right: 370 }],
+      ],
+      [
+        { top: 44, bottom: 76 },
+        { top: 76, bottom: 128 },
+      ],
+      20,
+      128,
+    );
+
+    expect(measureRenderedRowBoundaries(table)).toEqual([0, 32, 84]);
+  });
+
   it('builds resize transactions that preserve cell selections', () => {
     const table = createHtmlTableNode(schema, { rows: 1, cols: 2 });
     const doc = schema.nodes.doc!.create(null, [table]);

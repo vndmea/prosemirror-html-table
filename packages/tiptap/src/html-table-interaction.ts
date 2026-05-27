@@ -50,6 +50,7 @@ interface HtmlTableInteractionMeta {
   hoveredTable?: HtmlTableReference | null;
   geometry?: HtmlTableGeometry | null;
   resizing?: HtmlTableResizeState | null;
+  selectedAxis?: HtmlTableSelectedAxisState | null;
 }
 
 const defaultSelectedAxisState: HtmlTableSelectedAxisState = {
@@ -77,7 +78,7 @@ export function createHtmlTableInteractionPlugin(): Plugin<HtmlTableInteractionS
       },
       apply(transaction, pluginState, _oldState, newState) {
         const meta = transaction.getMeta(htmlTableInteractionPluginKey) as HtmlTableInteractionMeta | undefined;
-        return buildInteractionState(newState, pluginState, meta);
+        return buildInteractionState(newState, pluginState, meta, transaction.selectionSet);
       },
     },
     view(view) {
@@ -98,10 +99,17 @@ function buildInteractionState(
   state: EditorState,
   previous: HtmlTableInteractionState | undefined,
   meta: HtmlTableInteractionMeta = {},
+  selectionChanged = false,
 ): HtmlTableInteractionState {
   const selectionTable = getSelectionTableReference(state.selection);
   const activeTable = selectionTable ?? meta.hoveredTable ?? null;
-  const selectedAxis = selectionTable ? getSelectedAxisState(state.selection, selectionTable) : defaultSelectedAxisState;
+  const derivedSelectedAxis = selectionTable ? getSelectedAxisState(state.selection, selectionTable) : defaultSelectedAxisState;
+  const selectedAxis =
+    meta.selectedAxis !== undefined
+      ? meta.selectedAxis ?? defaultSelectedAxisState
+      : derivedSelectedAxis.kind || selectionChanged || !previous || previous.activeTable?.tablePos !== activeTable?.tablePos
+        ? derivedSelectedAxis
+        : previous.selectedAxis;
   const hovered = activeTable && meta.hovered?.tablePos === activeTable.tablePos ? meta.hovered : null;
   const geometry =
     activeTable && meta.geometry

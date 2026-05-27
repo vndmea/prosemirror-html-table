@@ -128,7 +128,7 @@ export function measureRenderedColumnBoundaries(table: HTMLTableElement): number
 }
 
 export function measureRenderedRowBoundaries(table: HTMLTableElement): number[] {
-  const tableRect = table.getBoundingClientRect();
+  const tableRect = getRenderedGridRect(table);
   const boundaries: number[] = [0];
 
   for (const row of Array.from(table.rows)) {
@@ -140,12 +140,12 @@ export function measureRenderedRowBoundaries(table: HTMLTableElement): number[] 
 }
 
 export function measureHtmlTableGeometry(table: HTMLTableElement): HtmlTableGeometry {
-  const tableRect = table.getBoundingClientRect();
+  const tableRect = getRenderedGridRect(table);
   const columnBoundaries = measureRenderedColumnBoundaries(table);
   const rowBoundaries = measureRenderedRowBoundaries(table);
 
   return {
-    tableRect: toRect(tableRect),
+    tableRect,
     columns: Array.from({ length: Math.max(0, columnBoundaries.length - 1) }, (_value, index) => ({
       index,
       left: columnBoundaries[index] ?? 0,
@@ -156,6 +156,29 @@ export function measureHtmlTableGeometry(table: HTMLTableElement): HtmlTableGeom
       top: rowBoundaries[index] ?? 0,
       height: Math.max(0, (rowBoundaries[index + 1] ?? 0) - (rowBoundaries[index] ?? 0)),
     })),
+  };
+}
+
+function getRenderedGridRect(table: HTMLTableElement): HtmlTableRect {
+  const tableRect = table.getBoundingClientRect();
+  const rows = Array.from(table.rows);
+  if (rows.length === 0) {
+    return toRect(tableRect);
+  }
+
+  const firstRowRect = rows[0]?.getBoundingClientRect();
+  const lastRowRect = rows[rows.length - 1]?.getBoundingClientRect();
+  if (!firstRowRect || !lastRowRect) {
+    return toRect(tableRect);
+  }
+
+  return {
+    left: tableRect.left,
+    right: tableRect.right,
+    width: tableRect.width,
+    top: firstRowRect.top,
+    bottom: lastRowRect.bottom,
+    height: Math.max(0, lastRowRect.bottom - firstRowRect.top),
   };
 }
 

@@ -159,6 +159,31 @@ export function createColumnSelectionTransaction(
   return createAxisSelectionTransaction(state, tablePos, table, grid, cells);
 }
 
+export function createAxisFocusTransaction(
+  state: EditorState,
+  tablePos: number,
+  table: ProseMirrorNode,
+  axis: 'row' | 'column',
+  index: number,
+): Transaction | undefined {
+  const grid = createHtmlTableGrid(table);
+  const limit = axis === 'row' ? grid.height : grid.width;
+  if (index < 0 || index >= limit) return undefined;
+
+  const cells = axis === 'row' ? getCellsForRow(grid, index) : getCellsForColumn(grid, index);
+  const focusCell =
+    axis === 'column'
+      ? cells.find((cell) => cell.section === 'body') ?? cells[0]
+      : cells[0];
+  if (!focusCell) return undefined;
+
+  const cellPositions = collectCellPositions(table, tablePos, grid);
+  const focusCellPos = cellPositions.get(focusCell);
+  if (focusCellPos === undefined) return undefined;
+
+  return state.tr.setSelection(TextSelection.near(state.doc.resolve(focusCellPos + 1))).scrollIntoView();
+}
+
 export function createSelectionDecorations(
   state: import('@tiptap/pm/state').EditorState,
   options: HtmlTableTiptapOptions,
