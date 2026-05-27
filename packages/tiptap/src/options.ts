@@ -4,10 +4,7 @@ export interface HtmlTableTiptapOptions {
   HTMLAttributes: Record<string, unknown>;
   resizable: boolean;
   renderWrapper: boolean;
-  renderLegacyControls: boolean;
-  handleWidth: number;
   cellMinWidth: number;
-  lastColumnResizable: boolean;
   allowTableNodeSelection: boolean;
   View: typeof HtmlTableNodeView | null;
   wrapperClassName: string;
@@ -19,10 +16,7 @@ export const defaultHtmlTableTiptapOptions: HtmlTableTiptapOptions = {
   HTMLAttributes: {},
   resizable: true,
   renderWrapper: true,
-  renderLegacyControls: true,
-  handleWidth: 6,
   cellMinWidth: 120,
-  lastColumnResizable: true,
   allowTableNodeSelection: true,
   View: null,
   wrapperClassName: 'html-table-node__wrapper',
