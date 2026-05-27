@@ -1,5 +1,9 @@
 export { createHtmlTableCommands } from './commands.js';
 export {
+  createHtmlTableHandlePlugin,
+  htmlTableHandlePluginKey,
+} from './html-table-handles.js';
+export {
   createHtmlTableInteractionPlugin,
   findSelectedHtmlTable,
   getHtmlTableInteractionState,

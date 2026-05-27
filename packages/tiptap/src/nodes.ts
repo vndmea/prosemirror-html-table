@@ -2,6 +2,7 @@ import { mergeAttributes, Node, type NodeViewRendererProps } from '@tiptap/core'
 import { CellSelection } from 'prosemirror-html-table';
 
 import { createHtmlTableCommands } from './commands.js';
+import { createHtmlTableHandlePlugin } from './html-table-handles.js';
 import { createHtmlTableInteractionPlugin } from './html-table-interaction.js';
 import { defaultHtmlTableTiptapOptions, type HtmlTableTiptapOptions } from './options.js';
 import { HtmlTableNodeView } from './table-view.js';
@@ -62,6 +63,7 @@ export const HtmlTable = Node.create<HtmlTableTiptapOptions>({
   addProseMirrorPlugins() {
     return [
       createHtmlTableInteractionPlugin(),
+      createHtmlTableHandlePlugin(),
       createHtmlTableSelectionPlugin(this.options),
     ];
   },

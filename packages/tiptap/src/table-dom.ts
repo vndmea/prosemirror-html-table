@@ -162,10 +162,13 @@ export function measureHtmlTableGeometry(table: HTMLTableElement): HtmlTableGeom
 export function findHtmlTableAtDOM(view: EditorView, target: EventTarget | null): HtmlTableDOMContext | undefined {
   if (!(target instanceof Node)) return undefined;
 
-  const element = (target instanceof Element ? target : target.parentElement)?.closest(HTML_TABLE_SELECTOR) as HTMLTableElement | null;
+  const targetElement = target instanceof Element ? target : target.parentElement;
+  const wrapper = targetElement?.closest(HTML_TABLE_WRAPPER_SELECTOR) as HTMLElement | null;
+  const element =
+    (targetElement?.closest(HTML_TABLE_SELECTOR) as HTMLTableElement | null) ??
+    ((wrapper?.querySelector('table') as HTMLTableElement | null) ?? null);
   if (!element) return undefined;
 
-  const wrapper = element.closest(HTML_TABLE_WRAPPER_SELECTOR) as HTMLElement | null;
   const tablePos = resolveTablePos(view, wrapper ?? element);
 
   if (tablePos === undefined) return undefined;

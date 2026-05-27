@@ -55,11 +55,16 @@ export class HtmlTableNodeView {
   }
 
   stopEvent(_event: Event): boolean {
-    return false;
+    if (!(_event.target instanceof Node)) return false;
+    return this.wrapper.contains(_event.target) && !this.table.contains(_event.target);
   }
 
   ignoreMutation(mutation: ViewMutationRecord): boolean {
-    return mutation.type !== 'selection' && mutation.target === this.wrapper;
+    if (mutation.type === 'selection' || !(mutation.target instanceof Node)) {
+      return false;
+    }
+
+    return this.wrapper.contains(mutation.target) && !this.table.contains(mutation.target);
   }
 
   private applyAttributes(): void {
