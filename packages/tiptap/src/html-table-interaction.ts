@@ -32,17 +32,24 @@ export interface HtmlTableSelectedAxisState {
   tablePos: number | null;
 }
 
+export interface HtmlTableResizeState {
+  tablePos: number;
+  columnIndex: number;
+}
+
 export interface HtmlTableInteractionState {
   activeTable: HtmlTableReference | null;
   hovered: HtmlTableHoverState | null;
   selectedAxis: HtmlTableSelectedAxisState;
   geometry: HtmlTableGeometry | null;
+  resizing: HtmlTableResizeState | null;
 }
 
 interface HtmlTableInteractionMeta {
   hovered?: HtmlTableHoverState | null;
   hoveredTable?: HtmlTableReference | null;
   geometry?: HtmlTableGeometry | null;
+  resizing?: HtmlTableResizeState | null;
 }
 
 const defaultSelectedAxisState: HtmlTableSelectedAxisState = {
@@ -56,6 +63,7 @@ const defaultInteractionState: HtmlTableInteractionState = {
   hovered: null,
   selectedAxis: defaultSelectedAxisState,
   geometry: null,
+  resizing: null,
 };
 
 export const htmlTableInteractionPluginKey = new PluginKey<HtmlTableInteractionState>('html-table-interaction');
@@ -101,12 +109,19 @@ function buildInteractionState(
       : previous && previous.activeTable?.tablePos === activeTable?.tablePos
         ? previous.geometry
         : null;
+  const resizing =
+    activeTable && meta.resizing !== undefined
+      ? meta.resizing
+      : previous && previous.activeTable?.tablePos === activeTable?.tablePos
+        ? previous.resizing
+        : null;
 
   return {
     activeTable,
     hovered,
     selectedAxis,
     geometry,
+    resizing,
   };
 }
 

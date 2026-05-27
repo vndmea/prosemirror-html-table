@@ -36,6 +36,7 @@ export type {
   HtmlTableHoverKind,
   HtmlTableHoverState,
   HtmlTableInteractionState,
+  HtmlTableResizeState,
   HtmlTableReference,
   HtmlTableSelectedAxisKind,
   HtmlTableSelectedAxisState,

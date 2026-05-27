@@ -63,7 +63,7 @@ export const HtmlTable = Node.create<HtmlTableTiptapOptions>({
   addProseMirrorPlugins() {
     return [
       createHtmlTableInteractionPlugin(),
-      createHtmlTableHandlePlugin(),
+      createHtmlTableHandlePlugin(this.options),
       createHtmlTableSelectionPlugin(this.options),
     ];
   },
