@@ -5,7 +5,9 @@ import {
   getHtmlTableContextActionGroups,
   getHtmlTableContextActions,
   getPrimaryHtmlTableContextAction,
+  runHtmlTableContextAction,
   type HtmlTableContextAction,
+  type HtmlTableContextActionId,
   type HtmlTableContextActionGroup,
 } from './html-table-actions.js';
 import type { HtmlTableInteractionState } from './html-table-interaction.js';
@@ -105,6 +107,33 @@ export function getHtmlTableContextTriggerButtonState(
     primaryAction: menu.primaryAction,
     groups: menu.groups,
   };
+}
+
+export function findHtmlTableContextMenuAction(
+  menu: HtmlTableContextMenuState,
+  actionId: HtmlTableContextActionId,
+): HtmlTableContextAction | null {
+  return menu.actions.find((action) => action.id === actionId) ?? null;
+}
+
+export function runHtmlTableContextMenuAction(
+  state: EditorState,
+  interaction: HtmlTableInteractionState,
+  actionId: HtmlTableContextActionId,
+  dispatch?: Parameters<typeof runHtmlTableContextAction>[2],
+  options: HtmlTableCommandOptions = {},
+): boolean {
+  const menu = getHtmlTableContextMenuState(state, interaction, options);
+  if (!menu.visible) {
+    return false;
+  }
+
+  const action = findHtmlTableContextMenuAction(menu, actionId);
+  if (!action?.enabled) {
+    return false;
+  }
+
+  return runHtmlTableContextAction(state, action, dispatch, options);
 }
 
 const TRIGGER_LABELS: Record<HtmlTableSelectionScope, string> = {

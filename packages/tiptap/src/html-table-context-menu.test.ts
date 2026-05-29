@@ -5,9 +5,12 @@ import { describe, expect, it } from 'vitest';
 import { CellSelection, createHtmlTableNode, createHtmlTableNodeSpecs } from 'prosemirror-html-table';
 
 import {
+  findHtmlTableContextMenuAction,
   getHtmlTableContextMenuState,
   getHtmlTableContextTriggerButtonState,
+  runHtmlTableContextMenuAction,
 } from './html-table-context-menu.js';
+import { htmlTableInteractionPluginKey } from './html-table-interaction.js';
 import type { HtmlTableInteractionState } from './html-table-interaction.js';
 import { createColumnSelectionTransaction, createRowSelectionTransaction } from './table-utils.js';
 
@@ -266,6 +269,59 @@ describe('html table context menu state', () => {
     expect(menu.open).toBe(true);
     expect(trigger.visible).toBe(true);
     expect(trigger.expanded).toBe(true);
+  });
+
+  it('finds and runs menu actions through the aggregated menu state', () => {
+    const table = createHtmlTableNode(schema, { rows: 2, cols: 2 });
+    const doc = schema.nodes.doc!.create(null, [table]);
+    const state = EditorState.create({
+      schema,
+      doc,
+      selection: NodeSelection.create(doc, 0),
+    });
+    const interaction = createInteractionState({
+      activeTable: { tablePos: 0, table },
+      tableSelected: true,
+      contextMenuOpen: true,
+      geometry: createGeometry(),
+      contextTrigger: {
+        visible: true,
+        left: 10,
+        top: 20,
+      },
+    });
+    const menu = getHtmlTableContextMenuState(state, interaction);
+    const toggleHead = findHtmlTableContextMenuAction(menu, 'toggleHeadSection');
+
+    expect(toggleHead?.enabled).toBe(true);
+
+    let nextState = state;
+    const applied = runHtmlTableContextMenuAction(state, interaction, 'toggleHeadSection', (transaction) => {
+      expect(transaction.getMeta(htmlTableInteractionPluginKey)).toEqual({
+        contextMenuOpen: false,
+      });
+      nextState = state.apply(transaction);
+    });
+
+    expect(applied).toBe(true);
+    expect(nextState.doc.firstChild?.firstChild?.type.name).toBe('htmlTableHead');
+  });
+
+  it('refuses to run actions that are missing from the current menu scope', () => {
+    const table = createHtmlTableNode(schema, { rows: 2, cols: 2 });
+    const doc = schema.nodes.doc!.create(null, [table]);
+    const cellPositions = findNodePositions(doc, 'htmlTableCell');
+    const state = EditorState.create({
+      schema,
+      doc,
+      selection: CellSelection.create(doc, cellPositions[0]!),
+    });
+    const interaction = createInteractionState({
+      activeTable: { tablePos: 0, table },
+      geometry: createGeometry(),
+    });
+
+    expect(runHtmlTableContextMenuAction(state, interaction, 'deleteTable')).toBe(false);
   });
 });
 

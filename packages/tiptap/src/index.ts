@@ -7,8 +7,10 @@ export {
   runHtmlTableContextAction,
 } from './html-table-actions.js';
 export {
+  findHtmlTableContextMenuAction,
   getHtmlTableContextMenuState,
   getHtmlTableContextTriggerButtonState,
+  runHtmlTableContextMenuAction,
 } from './html-table-context-menu.js';
 export {
   createHtmlTableHandlePlugin,
