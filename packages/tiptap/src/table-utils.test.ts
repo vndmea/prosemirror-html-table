@@ -1,5 +1,5 @@
 import { Schema } from 'prosemirror-model';
-import { EditorState } from 'prosemirror-state';
+import { EditorState, NodeSelection } from 'prosemirror-state';
 import { describe, expect, it } from 'vitest';
 
 import { CellSelection, createHtmlTableNode, createHtmlTableNodeSpecs } from 'prosemirror-html-table';
@@ -8,11 +8,14 @@ import {
   applyColumnWidths,
   createColumnResizeTransaction,
   createColumnSelectionTransaction,
+  createHtmlTableSelectionPlugin,
   createRowSelectionTransaction,
+  createSelectionDecorations,
   getTableColumnWidths,
   measureRenderedColumnBoundaries,
   measureRenderedRowBoundaries,
 } from './table-utils.js';
+import { defaultHtmlTableTiptapOptions } from './options.js';
 
 const schema = new Schema({
   nodes: {
@@ -172,6 +175,69 @@ describe('table width utilities', () => {
     expect(transaction?.selection).toBeInstanceOf(CellSelection);
     expect((transaction?.selection as CellSelection).anchorCellPos).toBe(cellPositions[1]);
     expect((transaction?.selection as CellSelection).headCellPos).toBe(cellPositions[3]);
+  });
+
+  it('prevents direct table node click selection when allowTableNodeSelection is disabled', () => {
+    const table = createHtmlTableNode(schema, { rows: 1, cols: 1 });
+    const plugin = createHtmlTableSelectionPlugin({
+      ...defaultHtmlTableTiptapOptions,
+      allowTableNodeSelection: false,
+    });
+    const handleClickOn = plugin.props.handleClickOn;
+
+    const result = handleClickOn?.call(
+      plugin,
+      {} as never,
+      0,
+      table,
+      0,
+      {
+        target: {
+          closest: () => null,
+        },
+      } as unknown as MouseEvent,
+      true,
+    );
+
+    expect(result).toBe(true);
+  });
+
+  it('allows direct table node click selection when allowTableNodeSelection is enabled', () => {
+    const table = createHtmlTableNode(schema, { rows: 1, cols: 1 });
+    const plugin = createHtmlTableSelectionPlugin(defaultHtmlTableTiptapOptions);
+    const handleClickOn = plugin.props.handleClickOn;
+
+    const result = handleClickOn?.call(
+      plugin,
+      {} as never,
+      0,
+      table,
+      0,
+      {
+        target: {
+          closest: () => null,
+        },
+      } as unknown as MouseEvent,
+      true,
+    );
+
+    expect(result).toBe(false);
+  });
+
+  it('renders selected table decorations for node selections', () => {
+    const table = createHtmlTableNode(schema, { rows: 1, cols: 1 });
+    const doc = schema.nodes.doc!.create(null, [table]);
+    const state = EditorState.create({
+      schema,
+      doc,
+      selection: NodeSelection.create(doc, 0),
+    });
+
+    const decorations = createSelectionDecorations(state, defaultHtmlTableTiptapOptions);
+    const found = decorations.find(0, doc.content.size);
+
+    expect(found.length).toBeGreaterThan(0);
+    expect(found.some((decoration) => decoration.from === 0 && decoration.to === table.nodeSize)).toBe(true);
   });
 });
 
