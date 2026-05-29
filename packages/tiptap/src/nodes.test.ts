@@ -105,5 +105,14 @@ describe('HtmlTableExtensions', () => {
     expect(cellAttributes.backgroundColor?.renderHTML?.({ backgroundColor: '#ffeeaa' })).toEqual({
       style: 'background-color: #ffeeaa;',
     });
+    expect(cellAttributes.verticalAlign?.parseHTML?.({
+      style: {
+        verticalAlign: 'middle',
+      },
+      getAttribute: () => null,
+    } as unknown as HTMLElement)).toBe('middle');
+    expect(cellAttributes.verticalAlign?.renderHTML?.({ verticalAlign: 'middle' })).toEqual({
+      style: 'vertical-align: middle;',
+    });
   });
 });

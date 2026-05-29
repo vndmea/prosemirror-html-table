@@ -50,6 +50,7 @@ export {
   setCellAttribute,
   setCellBackgroundColor,
   setCellTextAlign,
+  setCellVerticalAlign,
   splitCell,
   sortBodyRowsByColumn,
   toggleHeaderCell,

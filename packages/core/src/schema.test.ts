@@ -107,4 +107,36 @@ describe('createHtmlTableNodeSpecs', () => {
     });
     expect(rendered).toEqual(['td', { style: 'text-align: right; background-color: #ffeeaa;' }, 0]);
   });
+
+  it('includes default vertical align style attrs for cells', () => {
+    const specs = createHtmlTableNodeSpecs();
+    const cellAttrs = specs.htmlTableCell?.attrs as Record<string, { default: unknown }>;
+    const parseRule = specs.htmlTableCell?.parseDOM?.[0];
+    const rendered = specs.htmlTableCell?.toDOM?.({
+      attrs: {
+        colspan: 1,
+        rowspan: 1,
+        colwidth: null,
+        textAlign: null,
+        backgroundColor: null,
+        verticalAlign: 'middle',
+      },
+    } as never);
+    const parsed = parseRule && 'getAttrs' in parseRule
+      ? parseRule.getAttrs?.({
+          getAttribute: () => null,
+          style: {
+            textAlign: '',
+            backgroundColor: '',
+            verticalAlign: 'middle',
+          },
+        } as unknown as HTMLElement)
+      : null;
+
+    expect(cellAttrs.verticalAlign?.default).toBeNull();
+    expect(parsed).toMatchObject({
+      verticalAlign: 'middle',
+    });
+    expect(rendered).toEqual(['td', { style: 'vertical-align: middle;' }, 0]);
+  });
 });

@@ -588,6 +588,13 @@ export function setCellBackgroundColor(
   return setCellsAttribute('backgroundColor', backgroundColor, options);
 }
 
+export function setCellVerticalAlign(
+  verticalAlign: string | null,
+  options: HtmlTableCommandOptions = {},
+): Command {
+  return setCellsAttribute('verticalAlign', verticalAlign, options);
+}
+
 export function setCellAttribute(
   name: string,
   value: unknown,

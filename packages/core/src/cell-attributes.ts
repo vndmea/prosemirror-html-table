@@ -36,6 +36,14 @@ export const defaultHtmlTableCellAttributes: HtmlTableCellAttributes = {
         ? { style: `background-color: ${attrs.backgroundColor};` }
         : {},
   },
+  verticalAlign: {
+    default: null,
+    parseHTML: (element) => normalizeStyleValue(element.style?.verticalAlign),
+    renderHTML: (attrs) =>
+      typeof attrs.verticalAlign === 'string' && attrs.verticalAlign.length > 0
+        ? { style: `vertical-align: ${attrs.verticalAlign};` }
+        : {},
+  },
 };
 
 export function createHtmlTableCellAttributes(

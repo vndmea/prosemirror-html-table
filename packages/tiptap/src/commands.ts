@@ -43,6 +43,7 @@ import {
   setCellAttribute as setCoreCellAttribute,
   setCellBackgroundColor as setCoreCellBackgroundColor,
   setCellTextAlign as setCoreCellTextAlign,
+  setCellVerticalAlign as setCoreCellVerticalAlign,
   splitCell as splitCoreCell,
   sortBodyRowsByColumn as sortCoreBodyRowsByColumn,
   toggleHeaderCell as toggleCoreHeaderCell,
@@ -90,6 +91,7 @@ declare module '@tiptap/core' {
       setHtmlTableColgroup: (widths?: Array<number | null>, options?: HtmlTableCommandOptions) => ReturnType;
       setHtmlTableCellTextAlign: (textAlign: string | null, options?: HtmlTableCommandOptions) => ReturnType;
       setHtmlTableCellBackgroundColor: (backgroundColor: string | null, options?: HtmlTableCommandOptions) => ReturnType;
+      setHtmlTableCellVerticalAlign: (verticalAlign: string | null, options?: HtmlTableCommandOptions) => ReturnType;
       removeHtmlTableCaption: (options?: HtmlTableCommandOptions) => ReturnType;
       removeHtmlTableColgroup: (options?: HtmlTableCommandOptions) => ReturnType;
       mergeHtmlTableCells: (options?: HtmlTableCommandOptions) => ReturnType;
@@ -271,6 +273,11 @@ export function createHtmlTableCommands(): Partial<RawCommands> {
       (backgroundColor: string | null, options?: HtmlTableCommandOptions) =>
       ({ state, dispatch }) =>
         setCoreCellBackgroundColor(backgroundColor, options)(state, dispatch),
+
+    setHtmlTableCellVerticalAlign:
+      (verticalAlign: string | null, options?: HtmlTableCommandOptions) =>
+      ({ state, dispatch }) =>
+        setCoreCellVerticalAlign(verticalAlign, options)(state, dispatch),
 
     removeHtmlTableCaption:
       (options?: HtmlTableCommandOptions) =>

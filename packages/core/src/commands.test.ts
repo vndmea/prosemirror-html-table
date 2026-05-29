@@ -50,6 +50,7 @@ import {
   setCellAttribute,
   setCellBackgroundColor,
   setCellTextAlign,
+  setCellVerticalAlign,
   splitCell,
   sortBodyRowsByColumn,
   toggleHeaderCell,
@@ -319,6 +320,21 @@ describe('html table commands', () => {
     const firstCell = getBody(getTable(nextState.doc)).child(0).child(0);
 
     expect(firstCell.attrs.backgroundColor).toBe('#ffeeaa');
+  });
+
+  it('sets vertical alignment for the current cell selection', () => {
+    const state = createStateWithTable(2, 2);
+    const cellPositions = findNodePositions(state.doc, 'htmlTableHeaderCell');
+    const selectedState = EditorState.create({
+      schema,
+      doc: state.doc,
+      selection: CellSelection.create(state.doc, cellPositions[0]!, cellPositions[1]!),
+    });
+    const nextState = applyCommand(selectedState, setCellVerticalAlign('middle'));
+    const firstRow = getBody(getTable(nextState.doc)).child(0);
+
+    expect(firstRow.child(0).attrs.verticalAlign).toBe('middle');
+    expect(firstRow.child(1).attrs.verticalAlign).toBe('middle');
   });
 
   it('adds or updates a caption on the current table', () => {
