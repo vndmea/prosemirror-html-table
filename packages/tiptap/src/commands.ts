@@ -2,6 +2,9 @@ import type { RawCommands } from '@tiptap/core';
 import {
   addFootSection as addCoreFootSection,
   addHeadSection as addCoreHeadSection,
+  addRowToBody as addCoreRowToBodySection,
+  addRowToFoot as addCoreRowToFootSection,
+  addRowToHead as addCoreRowToHeadSection,
   addColumnAfter as addCoreColumnAfter,
   addColumnBefore as addCoreColumnBefore,
   addRowAfter as addCoreRowAfter,
@@ -46,6 +49,9 @@ declare module '@tiptap/core' {
       removeHtmlTableHeadSection: (options?: HtmlTableCommandOptions) => ReturnType;
       addHtmlTableFootSection: (options?: HtmlTableCommandOptions) => ReturnType;
       removeHtmlTableFootSection: (options?: HtmlTableCommandOptions) => ReturnType;
+      addHtmlTableRowToHead: (options?: HtmlTableCommandOptions) => ReturnType;
+      addHtmlTableRowToBody: (options?: HtmlTableCommandOptions) => ReturnType;
+      addHtmlTableRowToFoot: (options?: HtmlTableCommandOptions) => ReturnType;
       addHtmlTableRowBefore: (options?: HtmlTableCommandOptions) => ReturnType;
       addHtmlTableRowAfter: (options?: HtmlTableCommandOptions) => ReturnType;
       deleteHtmlTableRow: (options?: HtmlTableCommandOptions) => ReturnType;
@@ -104,6 +110,21 @@ export function createHtmlTableCommands(): Partial<RawCommands> {
       (options?: HtmlTableCommandOptions) =>
       ({ state, dispatch }) =>
         removeCoreFootSection(options)(state, dispatch),
+
+    addHtmlTableRowToHead:
+      (options?: HtmlTableCommandOptions) =>
+      ({ state, dispatch }) =>
+        addCoreRowToHeadSection(options)(state, dispatch),
+
+    addHtmlTableRowToBody:
+      (options?: HtmlTableCommandOptions) =>
+      ({ state, dispatch }) =>
+        addCoreRowToBodySection(options)(state, dispatch),
+
+    addHtmlTableRowToFoot:
+      (options?: HtmlTableCommandOptions) =>
+      ({ state, dispatch }) =>
+        addCoreRowToFootSection(options)(state, dispatch),
 
     addHtmlTableRowBefore:
       (options?: HtmlTableCommandOptions) =>

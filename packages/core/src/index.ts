@@ -9,6 +9,9 @@ export {
 export {
   addFootSection,
   addHeadSection,
+  addRowToBody,
+  addRowToFoot,
+  addRowToHead,
   addColumnAfter,
   addColumnBefore,
   addRowAfter,

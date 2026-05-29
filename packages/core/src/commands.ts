@@ -293,6 +293,18 @@ export function removeFootSection(options: HtmlTableCommandOptions = {}): Comman
   return removeSection('foot', options);
 }
 
+export function addRowToHead(options: HtmlTableCommandOptions = {}): Command {
+  return addRowToSection('head', options);
+}
+
+export function addRowToBody(options: HtmlTableCommandOptions = {}): Command {
+  return addRowToSection('body', options);
+}
+
+export function addRowToFoot(options: HtmlTableCommandOptions = {}): Command {
+  return addRowToSection('foot', options);
+}
+
 export function setCellAttribute(
   name: string,
   value: unknown,
@@ -794,6 +806,35 @@ function removeSection(sectionName: Extract<HtmlTableSectionName, 'head' | 'foot
       const bodyType = getNodeType(state.schema, bodyNodeName);
       const insertIndex = findBodyInsertIndex(tableChildren, context.names);
       tableChildren.splice(insertIndex, 0, bodyType.create(null, movedRows));
+    }
+
+    return replaceTable(
+      state,
+      dispatch,
+      context,
+      normalizeHtmlTable(context.table.copy(Fragment.fromArray(tableChildren)), getNormalizeOptions(options)),
+    );
+  };
+}
+
+function addRowToSection(targetSectionName: HtmlTableSectionName, options: HtmlTableCommandOptions): Command {
+  return (state, dispatch) => {
+    const context = findTableContext(state, options);
+    if (!context) return false;
+
+    const tableChildren = getChildren(context.table);
+    const grid = createHtmlTableGrid(context.table, { names: context.names });
+    const row = createEmptyRow(state.schema, context.names, targetSectionName, Math.max(1, grid.width));
+    const targetLocation = findTargetSectionLocation(tableChildren, context.names, targetSectionName);
+
+    if (targetLocation.sectionChildIndex >= 0) {
+      const section = tableChildren[targetLocation.sectionChildIndex]!;
+      const rows = getChildren(section);
+      rows.push(row);
+      tableChildren[targetLocation.sectionChildIndex] = section.copy(Fragment.fromArray(rows));
+    } else {
+      const sectionType = getNodeType(state.schema, getSectionNodeName(context.names, targetSectionName));
+      tableChildren.splice(targetLocation.insertIndex, 0, sectionType.create(null, [row]));
     }
 
     return replaceTable(

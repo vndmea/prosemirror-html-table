@@ -5,6 +5,9 @@ import { describe, expect, it } from 'vitest';
 import {
   addFootSection,
   addHeadSection,
+  addRowToBody,
+  addRowToFoot,
+  addRowToHead,
   addColumnAfter,
   addColumnBefore,
   addRowAfter,
@@ -374,6 +377,33 @@ describe('html table commands', () => {
     expect(getSection(nextTable, 'htmlTableFoot')).toBeUndefined();
     expect(body.childCount).toBe(3);
     expect(body.child(2).child(0).type.name).toBe('htmlTableCell');
+  });
+
+  it('adds a new row directly into the head section', () => {
+    const nextState = applyCommand(createStateWithTable(2, 2), addRowToHead());
+    const nextTable = getTable(nextState.doc);
+    const head = getSection(nextTable, 'htmlTableHead');
+
+    expect(head?.childCount).toBe(1);
+    expect(head?.child(0).child(0).type.name).toBe('htmlTableHeaderCell');
+  });
+
+  it('adds a new row directly into the body section', () => {
+    const nextState = applyCommand(createStateWithTable(2, 2), addRowToBody());
+    const nextTable = getTable(nextState.doc);
+    const body = getBody(nextTable);
+
+    expect(body.childCount).toBe(3);
+    expect(body.child(2).child(0).type.name).toBe('htmlTableCell');
+  });
+
+  it('adds a new row directly into the foot section', () => {
+    const nextState = applyCommand(createStateWithTable(2, 2), addRowToFoot());
+    const nextTable = getTable(nextState.doc);
+    const foot = getSection(nextTable, 'htmlTableFoot');
+
+    expect(foot?.childCount).toBe(1);
+    expect(foot?.child(0).child(0).type.name).toBe('htmlTableCell');
   });
 
   it('toggles the selected cell between header and body cell types', () => {
