@@ -1,10 +1,11 @@
-import { Plugin, PluginKey, type Transaction } from '@tiptap/pm/state';
+import { NodeSelection, Plugin, PluginKey, type Transaction } from '@tiptap/pm/state';
 import type { EditorView } from '@tiptap/pm/view';
 import { addColumnAfter as addCoreColumnAfter, addRowAfter as addCoreRowAfter } from 'prosemirror-html-table';
 
 import type { HtmlTableTiptapOptions } from './options.js';
 import {
   getHtmlTableInteractionState,
+  type HtmlTableInteractionState,
   htmlTableInteractionPluginKey,
 } from './html-table-interaction.js';
 import { getRenderedHtmlTableContext, measureHtmlTableGeometry } from './table-dom.js';
@@ -25,6 +26,10 @@ const HANDLE_MAIN_AXIS_INSET = 8;
 
 export const htmlTableHandlePluginKey = new PluginKey('html-table-handle-overlay');
 
+export function isTableHandleVisible(interaction: HtmlTableInteractionState, tablePos: number): boolean {
+  return interaction.activeTable?.tablePos === tablePos;
+}
+
 export function createHtmlTableHandlePlugin(options: HtmlTableTiptapOptions): Plugin {
   return new Plugin({
     key: htmlTableHandlePluginKey,
@@ -38,6 +43,7 @@ class HtmlTableHandleOverlayView {
   private view: EditorView;
   private readonly options: HtmlTableTiptapOptions;
   private readonly root: HTMLDivElement;
+  private readonly tableHandle: HTMLButtonElement;
   private readonly rowSelectionOverlay: HTMLDivElement;
   private readonly columnSelectionOverlay: HTMLDivElement;
   private readonly cellSelectionHandle: HTMLButtonElement;
@@ -66,6 +72,7 @@ class HtmlTableHandleOverlayView {
     this.root.dataset.htmlTableOverlay = 'true';
     this.root.setAttribute('role', 'presentation');
     this.root.hidden = true;
+    this.tableHandle = this.createTableHandle();
     this.rowSelectionOverlay = this.root.ownerDocument.createElement('div');
     this.rowSelectionOverlay.className = 'html-table-overlay__selection-band html-table-overlay__selection-band--row';
     this.columnSelectionOverlay = this.root.ownerDocument.createElement('div');
@@ -81,6 +88,7 @@ class HtmlTableHandleOverlayView {
     this.addRowButton = this.createExtendButton('row');
     this.addColumnButton = this.createExtendButton('column');
     this.root.append(
+      this.tableHandle,
       this.rowSelectionOverlay,
       this.columnSelectionOverlay,
       this.cellSelectionHandle,
@@ -130,6 +138,7 @@ class HtmlTableHandleOverlayView {
     this.syncHandleCount('row', geometry.rows.length);
     this.syncHandleCount('column', geometry.columns.length);
     this.syncResizeHandleCount(this.options.resizable ? geometry.columns.length : 0);
+    this.syncTableHandle(interaction, activeTable.tablePos, rowHandleLeft, columnHandleTop);
     this.syncSelectionOverlay(interaction, activeTable.tablePos, geometry, tableLeft, tableTop);
     this.syncCellSelectionHandle(activeTable.tablePos, geometry, tableLeft, tableTop);
     this.syncExtendButtons(tableLeft, tableTop, geometry);
@@ -295,6 +304,25 @@ class HtmlTableHandleOverlayView {
     }
   }
 
+  private syncTableHandle(
+    interaction: HtmlTableInteractionState,
+    tablePos: number,
+    left: number,
+    top: number,
+  ): void {
+    const visible = isTableHandleVisible(interaction, tablePos);
+    const isHovered = interaction.hovered?.kind === 'table' && interaction.hovered.tablePos === tablePos;
+    const isSelected = interaction.tableSelected && interaction.activeTable?.tablePos === tablePos;
+
+    this.tableHandle.hidden = !visible;
+    this.tableHandle.style.left = `${left}px`;
+    this.tableHandle.style.top = `${top}px`;
+    this.tableHandle.style.width = `${HANDLE_CROSS_AXIS_SIZE}px`;
+    this.tableHandle.style.height = `${HANDLE_CROSS_AXIS_SIZE}px`;
+    this.tableHandle.classList.toggle('is-hovered', isHovered);
+    this.tableHandle.classList.toggle('is-selected', isSelected);
+  }
+
   private syncCellSelectionHandle(
     tablePos: number,
     geometry: ReturnType<typeof measureHtmlTableGeometry>,
@@ -343,6 +371,18 @@ class HtmlTableHandleOverlayView {
     handle.dataset.axis = axis;
     handle.tabIndex = -1;
     handle.addEventListener('mousedown', (event) => this.handleMouseDown(event));
+    return handle;
+  }
+
+  private createTableHandle(): HTMLButtonElement {
+    const handle = this.root.ownerDocument.createElement('button');
+    handle.type = 'button';
+    handle.className = 'html-table-overlay__handle html-table-overlay__handle--table';
+    handle.tabIndex = -1;
+    handle.hidden = true;
+    handle.setAttribute('aria-label', 'Select table');
+    handle.title = 'Select table';
+    handle.addEventListener('mousedown', (event) => this.handleTableSelectionMouseDown(event));
     return handle;
   }
 
@@ -402,6 +442,23 @@ class HtmlTableHandleOverlayView {
 
     if (!transaction) return;
 
+    this.view.focus();
+    this.view.dispatch(transaction);
+  }
+
+  private handleTableSelectionMouseDown(event: MouseEvent): void {
+    const interaction = getHtmlTableInteractionState(this.view.state);
+    const activeTable = interaction.activeTable;
+    if (!activeTable) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    const transaction = this.view.state.tr.setSelection(
+      NodeSelection.create(this.view.state.doc, activeTable.tablePos),
+    );
     this.view.focus();
     this.view.dispatch(transaction);
   }
