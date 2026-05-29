@@ -313,6 +313,35 @@ export function moveRowDown(options: HtmlTableCommandOptions = {}): Command {
   return moveRowVertically('down', options);
 }
 
+export function duplicateRow(options: HtmlTableCommandOptions = {}): Command {
+  return (state, dispatch) => {
+    const context = findRowContext(state, options);
+    if (!context) return false;
+
+    const grid = createHtmlTableGrid(context.table, { names: context.names });
+    const globalRowIndex = findGlobalRowIndexByNode(grid, context.row);
+    if (!canDuplicateRow(grid, globalRowIndex)) return false;
+
+    const sectionRows = getChildren(context.section);
+    const nextRows = sectionRows.slice();
+    nextRows.splice(context.rowIndexInSection + 1, 0, copyRowNode(context.row));
+
+    const tableChildren = getChildren(context.table);
+    tableChildren[context.sectionChildIndex] = context.section.copy(Fragment.fromArray(nextRows));
+
+    const nextTable = context.table.copy(Fragment.fromArray(tableChildren));
+    return replaceTableAndSelectRow(
+      state,
+      dispatch,
+      context,
+      nextTable,
+      context.sectionName,
+      countPreviousSections(nextTable, context.names, context.sectionName, context.sectionChildIndex),
+      context.rowIndexInSection + 1,
+    );
+  };
+}
+
 export function clearSelectedCells(options: HtmlTableCommandOptions = {}): Command {
   return (state, dispatch) => {
     const selectionInfo = getCellSelectionInfo(state, options);
@@ -1564,6 +1593,20 @@ function replaceTableAndSelectRow(
   return true;
 }
 
+function canDuplicateRow(grid: HtmlTableGrid, rowIndex: number): boolean {
+  const rowSlots = grid.slots[rowIndex];
+  if (!rowSlots || rowSlots.length === 0) return false;
+
+  for (const slot of rowSlots) {
+    const cell = slot?.cell;
+    if (!cell || cell.rowIndex < rowIndex) return false;
+  }
+
+  return grid.cells
+    .filter((cell) => cell.rowIndex === rowIndex)
+    .every((cell) => cell.rowSpan === 1);
+}
+
 function getSectionNodeName(names: HtmlTableNodeNames, sectionName: HtmlTableSectionName): string {
   if (sectionName === 'head') return names.head;
   if (sectionName === 'body') return names.body;
@@ -1660,6 +1703,10 @@ function copyCellWithAttrs(cell: ProseMirrorNode, attrs: Record<string, unknown>
     cell.content,
     cell.marks,
   );
+}
+
+function copyRowNode(row: ProseMirrorNode): ProseMirrorNode {
+  return row.type.create(row.attrs, row.content, row.marks);
 }
 
 function clearCellContent(schema: Schema, cell: ProseMirrorNode): ProseMirrorNode {

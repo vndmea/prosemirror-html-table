@@ -22,6 +22,7 @@ import {
   removeColgroup,
   deleteRow,
   deleteTable,
+  duplicateRow,
   fixTables,
   goToNextCell,
   goToPreviousCell,
@@ -457,6 +458,50 @@ describe('html table commands', () => {
 
     expect(body.child(0).textContent).toBe('B');
     expect(body.child(1).textContent).toBe('A');
+  });
+
+  it('duplicates the current row within the same section', () => {
+    const table = schema.nodes.htmlTable!.create(null, [
+      schema.nodes.htmlTableBody!.create(null, [
+        schema.nodes.htmlTableRow!.create(null, [
+          schema.nodes.htmlTableCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('A'))]),
+        ]),
+        schema.nodes.htmlTableRow!.create(null, [
+          schema.nodes.htmlTableCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('B'))]),
+        ]),
+      ]),
+    ]);
+    const state = createStateForTable(table);
+    const nextState = applyCommand(state, duplicateRow());
+    const body = getBody(getTable(nextState.doc));
+
+    expect(body.childCount).toBe(3);
+    expect(body.child(0).textContent).toBe('A');
+    expect(body.child(1).textContent).toBe('A');
+    expect(body.child(2).textContent).toBe('B');
+  });
+
+  it('does not duplicate a row that contains rowspan cells', () => {
+    const table = schema.nodes.htmlTable!.create(null, [
+      schema.nodes.htmlTableBody!.create(null, [
+        schema.nodes.htmlTableRow!.create(null, [
+          schema.nodes.htmlTableCell!.create({ rowspan: 2 }, [schema.nodes.paragraph!.create(null, schema.text('A'))]),
+          schema.nodes.htmlTableCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('B'))]),
+        ]),
+        schema.nodes.htmlTableRow!.create(null, [
+          schema.nodes.htmlTableCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('C'))]),
+        ]),
+      ]),
+    ]);
+    const state = createStateForTable(table);
+    let dispatched = false;
+
+    const result = duplicateRow()(state, () => {
+      dispatched = true;
+    });
+
+    expect(result).toBe(false);
+    expect(dispatched).toBe(false);
   });
 
   it('clears the currently selected cells without changing table structure', () => {
