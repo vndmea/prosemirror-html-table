@@ -305,6 +305,14 @@ export function addRowToFoot(options: HtmlTableCommandOptions = {}): Command {
   return addRowToSection('foot', options);
 }
 
+export function moveRowUp(options: HtmlTableCommandOptions = {}): Command {
+  return moveRowVertically('up', options);
+}
+
+export function moveRowDown(options: HtmlTableCommandOptions = {}): Command {
+  return moveRowVertically('down', options);
+}
+
 export function setCellAttribute(
   name: string,
   value: unknown,
@@ -842,6 +850,36 @@ function addRowToSection(targetSectionName: HtmlTableSectionName, options: HtmlT
       dispatch,
       context,
       normalizeHtmlTable(context.table.copy(Fragment.fromArray(tableChildren)), getNormalizeOptions(options)),
+    );
+  };
+}
+
+function moveRowVertically(direction: 'up' | 'down', options: HtmlTableCommandOptions): Command {
+  return (state, dispatch) => {
+    const context = findRowContext(state, options);
+    if (!context) return false;
+
+    const sectionRows = getChildren(context.section);
+    const targetIndex = context.rowIndexInSection + (direction === 'up' ? -1 : 1);
+    if (targetIndex < 0 || targetIndex >= sectionRows.length) return false;
+
+    const nextRows = sectionRows.slice();
+    const movedRow = nextRows[context.rowIndexInSection]!;
+    nextRows.splice(context.rowIndexInSection, 1);
+    nextRows.splice(targetIndex, 0, movedRow);
+
+    const tableChildren = getChildren(context.table);
+    tableChildren[context.sectionChildIndex] = context.section.copy(Fragment.fromArray(nextRows));
+
+    const nextTable = context.table.copy(Fragment.fromArray(tableChildren));
+    return replaceTableAndSelectRow(
+      state,
+      dispatch,
+      context,
+      nextTable,
+      context.sectionName,
+      countPreviousSections(nextTable, context.names, context.sectionName, context.sectionChildIndex),
+      targetIndex,
     );
   };
 }

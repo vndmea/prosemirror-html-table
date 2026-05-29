@@ -25,9 +25,11 @@ import {
   insertHtmlTable,
   mergeCells,
   mergeOrSplit,
+  moveRowDown,
   moveRowToBody,
   moveRowToFoot,
   moveRowToHead,
+  moveRowUp,
   removeFootSection,
   removeHeadSection,
   normalizeHtmlTable,
@@ -404,6 +406,54 @@ describe('html table commands', () => {
 
     expect(foot?.childCount).toBe(1);
     expect(foot?.child(0).child(0).type.name).toBe('htmlTableCell');
+  });
+
+  it('moves the current body row upward within the same section', () => {
+    const table = schema.nodes.htmlTable!.create(null, [
+      schema.nodes.htmlTableBody!.create(null, [
+        schema.nodes.htmlTableRow!.create(null, [
+          schema.nodes.htmlTableCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('A'))]),
+        ]),
+        schema.nodes.htmlTableRow!.create(null, [
+          schema.nodes.htmlTableCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('B'))]),
+        ]),
+        schema.nodes.htmlTableRow!.create(null, [
+          schema.nodes.htmlTableCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('C'))]),
+        ]),
+      ]),
+    ]);
+    const doc = schema.nodes.doc!.create(null, [table]);
+    const cellPositions = findNodePositions(doc, 'htmlTableCell');
+    const state = EditorState.create({
+      schema,
+      doc,
+      selection: CellSelection.create(doc, cellPositions[1]!),
+    });
+    const movedState = applyCommand(state, moveRowUp());
+    const body = getBody(getTable(movedState.doc));
+
+    expect(body.child(0).textContent).toBe('B');
+    expect(body.child(1).textContent).toBe('A');
+    expect(body.child(2).textContent).toBe('C');
+  });
+
+  it('moves the current body row downward within the same section', () => {
+    const table = schema.nodes.htmlTable!.create(null, [
+      schema.nodes.htmlTableBody!.create(null, [
+        schema.nodes.htmlTableRow!.create(null, [
+          schema.nodes.htmlTableCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('A'))]),
+        ]),
+        schema.nodes.htmlTableRow!.create(null, [
+          schema.nodes.htmlTableCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('B'))]),
+        ]),
+      ]),
+    ]);
+    const state = createStateForTable(table);
+    const movedState = applyCommand(state, moveRowDown());
+    const body = getBody(getTable(movedState.doc));
+
+    expect(body.child(0).textContent).toBe('B');
+    expect(body.child(1).textContent).toBe('A');
   });
 
   it('toggles the selected cell between header and body cell types', () => {
