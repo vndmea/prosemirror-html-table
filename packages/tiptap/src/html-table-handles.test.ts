@@ -30,7 +30,7 @@ describe('html table handles', () => {
       },
     });
 
-    expect(isTableHandleVisible(interaction, 5)).toBe(true);
+    expect(isTableHandleVisible(true, interaction, 5)).toBe(true);
   });
 
   it('keeps the table handle visible for row and column selections', () => {
@@ -42,7 +42,7 @@ describe('html table handles', () => {
     };
 
     expect(
-      isTableHandleVisible(createInteractionState({
+      isTableHandleVisible(true, createInteractionState({
         ...base,
         selectedAxis: {
           kind: 'row',
@@ -53,7 +53,7 @@ describe('html table handles', () => {
     ).toBe(true);
 
     expect(
-      isTableHandleVisible(createInteractionState({
+      isTableHandleVisible(true, createInteractionState({
         ...base,
         selectedAxis: {
           kind: 'column',
@@ -73,18 +73,30 @@ describe('html table handles', () => {
       tableSelected: true,
     });
 
-    expect(isTableHandleVisible(interaction, 5)).toBe(true);
+    expect(isTableHandleVisible(true, interaction, 5)).toBe(true);
   });
 
   it('hides the table handle when there is no active table or the table differs', () => {
-    expect(isTableHandleVisible(createInteractionState(), 5)).toBe(false);
+    expect(isTableHandleVisible(true, createInteractionState(), 5)).toBe(false);
     expect(
-      isTableHandleVisible(createInteractionState({
+      isTableHandleVisible(true, createInteractionState({
         activeTable: {
           tablePos: 7,
           table: {} as never,
         },
       }), 5),
     ).toBe(false);
+  });
+
+  it('hides the table handle entirely when table node selection is disabled', () => {
+    const interaction = createInteractionState({
+      activeTable: {
+        tablePos: 5,
+        table: {} as never,
+      },
+      tableSelected: true,
+    });
+
+    expect(isTableHandleVisible(false, interaction, 5)).toBe(false);
   });
 });

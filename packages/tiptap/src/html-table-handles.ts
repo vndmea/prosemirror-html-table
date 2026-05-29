@@ -26,8 +26,12 @@ const HANDLE_MAIN_AXIS_INSET = 8;
 
 export const htmlTableHandlePluginKey = new PluginKey('html-table-handle-overlay');
 
-export function isTableHandleVisible(interaction: HtmlTableInteractionState, tablePos: number): boolean {
-  return interaction.activeTable?.tablePos === tablePos;
+export function isTableHandleVisible(
+  allowTableNodeSelection: boolean,
+  interaction: HtmlTableInteractionState,
+  tablePos: number,
+): boolean {
+  return allowTableNodeSelection && interaction.activeTable?.tablePos === tablePos;
 }
 
 export function createHtmlTableHandlePlugin(options: HtmlTableTiptapOptions): Plugin {
@@ -310,7 +314,7 @@ class HtmlTableHandleOverlayView {
     left: number,
     top: number,
   ): void {
-    const visible = isTableHandleVisible(interaction, tablePos);
+    const visible = isTableHandleVisible(this.options.allowTableNodeSelection, interaction, tablePos);
     const isHovered = interaction.hovered?.kind === 'table' && interaction.hovered.tablePos === tablePos;
     const isSelected = interaction.tableSelected && interaction.activeTable?.tablePos === tablePos;
 
@@ -447,6 +451,10 @@ class HtmlTableHandleOverlayView {
   }
 
   private handleTableSelectionMouseDown(event: MouseEvent): void {
+    if (!this.options.allowTableNodeSelection) {
+      return;
+    }
+
     const interaction = getHtmlTableInteractionState(this.view.state);
     const activeTable = interaction.activeTable;
     if (!activeTable) {
