@@ -40,12 +40,14 @@ import {
   setCaption as setCoreCaption,
   setCellAttribute as setCoreCellAttribute,
   splitCell as splitCoreCell,
+  sortBodyRowsByColumn as sortCoreBodyRowsByColumn,
   toggleHeaderCell as toggleCoreHeaderCell,
   toggleHeaderColumn as toggleCoreHeaderColumn,
   toggleHeaderRow as toggleCoreHeaderRow,
   type HtmlTableCellNavigationOptions,
   type HtmlTableCommandOptions,
   type InsertHtmlTableCommandOptions,
+  type HtmlTableSortRowsOptions,
 } from 'prosemirror-html-table';
 
 declare module '@tiptap/core' {
@@ -71,6 +73,7 @@ declare module '@tiptap/core' {
       clearHtmlTableColumnContent: (options?: HtmlTableCommandOptions) => ReturnType;
       duplicateHtmlTableColumn: (options?: HtmlTableCommandOptions) => ReturnType;
       duplicateHtmlTableRow: (options?: HtmlTableCommandOptions) => ReturnType;
+      sortHtmlTableBodyRowsByColumn: (options?: HtmlTableSortRowsOptions) => ReturnType;
       moveHtmlTableRowUp: (options?: HtmlTableCommandOptions) => ReturnType;
       moveHtmlTableRowDown: (options?: HtmlTableCommandOptions) => ReturnType;
       moveHtmlTableRowToHead: (options?: HtmlTableCommandOptions) => ReturnType;
@@ -199,6 +202,11 @@ export function createHtmlTableCommands(): Partial<RawCommands> {
       (options?: HtmlTableCommandOptions) =>
       ({ state, dispatch }) =>
         duplicateCoreRow(options)(state, dispatch),
+
+    sortHtmlTableBodyRowsByColumn:
+      (options?: HtmlTableSortRowsOptions) =>
+      ({ state, dispatch }) =>
+        sortCoreBodyRowsByColumn(options)(state, dispatch),
 
     moveHtmlTableRowUp:
       (options?: HtmlTableCommandOptions) =>

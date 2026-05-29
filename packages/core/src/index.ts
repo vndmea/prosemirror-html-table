@@ -47,6 +47,7 @@ export {
   setCaption,
   setCellAttribute,
   splitCell,
+  sortBodyRowsByColumn,
   toggleHeaderCell,
   toggleHeaderColumn,
   toggleHeaderRow,
@@ -62,6 +63,7 @@ export type {
   HtmlTableCellNavigationOptions,
   HtmlTableCommandOptions,
   InsertHtmlTableCommandOptions,
+  HtmlTableSortRowsOptions,
 } from './commands.js';
 export type { NormalizeHtmlTableOptions } from './normalize.js';
 export type { HtmlTableNodeNameKey } from './names.js';

@@ -16,6 +16,10 @@ export interface HtmlTableCellNavigationOptions extends HtmlTableCommandOptions 
   cycle?: boolean;
 }
 
+export interface HtmlTableSortRowsOptions extends HtmlTableCommandOptions {
+  direction?: 'asc' | 'desc';
+}
+
 export interface InsertHtmlTableCommandOptions extends CreateHtmlTableOptions {
   selectInsertedTable?: boolean;
 }
@@ -214,6 +218,78 @@ export function duplicateColumn(options: HtmlTableCommandOptions = {}): Command 
 
     const nextTable = context.table.copy(Fragment.fromArray(tableChildren));
     return replaceTableAndSelectCell(state, dispatch, context, nextTable, context.cell.rowIndex, targetColumn + 1);
+  };
+}
+
+export function sortBodyRowsByColumn(options: HtmlTableSortRowsOptions = {}): Command {
+  return (state, dispatch) => {
+    const context = findCellContext(state, options);
+    if (!context) return false;
+
+    const tableChildren = getChildren(context.table);
+    const bodySectionChildIndex = resolveSortBodySectionIndex(tableChildren, context);
+    if (bodySectionChildIndex < 0) return false;
+
+    const bodySection = tableChildren[bodySectionChildIndex]!;
+    const bodyRows = getChildren(bodySection);
+    if (bodyRows.length < 2) return false;
+
+    const grid = createHtmlTableGrid(context.table, { names: context.names });
+    const columnIndex = context.cell.columnIndex;
+    const bodySectionIndex = countPreviousSections(context.table, context.names, 'body', bodySectionChildIndex);
+    if (!canSortBodySection(grid, bodySection, bodySectionIndex)) return false;
+
+    const decoratedRows = bodyRows.map((row, rowIndexInSection) => {
+      const globalRow = grid.rows.find(
+        (gridRow) =>
+          gridRow.section === 'body'
+          && gridRow.sectionIndex === bodySectionIndex
+          && gridRow.rowIndexInSection === rowIndexInSection,
+      );
+      if (!globalRow) {
+        return {
+          key: '',
+          row,
+          rowIndexInSection,
+        };
+      }
+
+      return {
+        key: getCellSortValue(grid, globalRow.rowIndex, columnIndex),
+        row,
+        rowIndexInSection,
+      };
+    });
+
+    decoratedRows.sort((left, right) => {
+      const compared = left.key.localeCompare(right.key, undefined, { numeric: true, sensitivity: 'base' });
+      if (compared !== 0) {
+        return options.direction === 'desc' ? -compared : compared;
+      }
+
+      return left.rowIndexInSection - right.rowIndexInSection;
+    });
+
+    const sortedRows = decoratedRows.map((item) => item.row);
+    tableChildren[bodySectionChildIndex] = bodySection.copy(Fragment.fromArray(sortedRows));
+    const nextTable = context.table.copy(Fragment.fromArray(tableChildren));
+
+    if (context.sectionName === 'body' && context.sectionChildIndex === bodySectionChildIndex) {
+      const targetRowIndexInSection = decoratedRows.findIndex((item) => item.row === context.row);
+      if (targetRowIndexInSection < 0) return replaceTable(state, dispatch, context, nextTable);
+
+      return replaceTableAndSelectRow(
+        state,
+        dispatch,
+        context,
+        nextTable,
+        'body',
+        bodySectionIndex,
+        targetRowIndexInSection,
+      );
+    }
+
+    return replaceTableAndSelectCell(state, dispatch, context, nextTable, context.cell.rowIndex, columnIndex);
   };
 }
 
@@ -1700,6 +1776,38 @@ function updateColgroupForDuplicatedColumn(
   const duplicatedWidth = widths[targetColumn] ?? null;
   widths.splice(targetColumn + 1, 0, duplicatedWidth);
   tableChildren[colgroupIndex] = createColgroup(schema, names, nextWidth, widths);
+}
+
+function resolveSortBodySectionIndex(tableChildren: ProseMirrorNode[], context: CellContext): number {
+  if (context.sectionName === 'body') return context.sectionChildIndex;
+  return tableChildren.findIndex((child) => child.type.name === context.names.body);
+}
+
+function canSortBodySection(grid: HtmlTableGrid, bodySection: ProseMirrorNode, bodySectionIndex: number): boolean {
+  const bodyRows = getChildren(bodySection);
+
+  return bodyRows.every((_row, rowIndexInSection) => {
+    const globalRow = grid.rows.find(
+      (gridRow) =>
+        gridRow.section === 'body'
+        && gridRow.sectionIndex === bodySectionIndex
+        && gridRow.rowIndexInSection === rowIndexInSection,
+    );
+    if (!globalRow) return false;
+
+    for (let columnIndex = 0; columnIndex < grid.width; columnIndex += 1) {
+      const cell = grid.slots[globalRow.rowIndex]?.[columnIndex]?.cell;
+      if (!cell) return false;
+      if (cell.rowIndex !== globalRow.rowIndex || cell.columnIndex !== columnIndex) return false;
+      if (cell.rowSpan !== 1 || cell.colSpan !== 1) return false;
+    }
+
+    return true;
+  });
+}
+
+function getCellSortValue(grid: HtmlTableGrid, rowIndex: number, columnIndex: number): string {
+  return getCellAtColumn(grid, rowIndex, columnIndex)?.node.textContent.trim() ?? '';
 }
 
 function getSectionNodeName(names: HtmlTableNodeNames, sectionName: HtmlTableSectionName): string {

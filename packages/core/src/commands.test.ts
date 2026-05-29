@@ -47,6 +47,7 @@ import {
   setCaption,
   setCellAttribute,
   splitCell,
+  sortBodyRowsByColumn,
   toggleHeaderCell,
   toggleHeaderColumn,
   toggleHeaderRow,
@@ -534,6 +535,126 @@ describe('html table commands', () => {
     let dispatched = false;
 
     const result = duplicateColumn()(state, () => {
+      dispatched = true;
+    });
+
+    expect(result).toBe(false);
+    expect(dispatched).toBe(false);
+  });
+
+  it('sorts tbody rows by the selected column in ascending order', () => {
+    const table = schema.nodes.htmlTable!.create(null, [
+      schema.nodes.htmlTableHead!.create(null, [
+        schema.nodes.htmlTableRow!.create(null, [
+          schema.nodes.htmlTableHeaderCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('Name'))]),
+          schema.nodes.htmlTableHeaderCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('Score'))]),
+        ]),
+      ]),
+      schema.nodes.htmlTableBody!.create(null, [
+        schema.nodes.htmlTableRow!.create(null, [
+          schema.nodes.htmlTableCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('c'))]),
+          schema.nodes.htmlTableCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('30'))]),
+        ]),
+        schema.nodes.htmlTableRow!.create(null, [
+          schema.nodes.htmlTableCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('a'))]),
+          schema.nodes.htmlTableCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('10'))]),
+        ]),
+        schema.nodes.htmlTableRow!.create(null, [
+          schema.nodes.htmlTableCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('b'))]),
+          schema.nodes.htmlTableCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('20'))]),
+        ]),
+      ]),
+    ]);
+    const state = createStateForTable(table);
+    const nextState = applyCommand(state, sortBodyRowsByColumn());
+    const body = getBody(getTable(nextState.doc));
+
+    expect(body.child(0).textContent).toBe('a10');
+    expect(body.child(1).textContent).toBe('b20');
+    expect(body.child(2).textContent).toBe('c30');
+  });
+
+  it('sorts only the active tbody section when the selection is inside it', () => {
+    const table = schema.nodes.htmlTable!.create(null, [
+      schema.nodes.htmlTableBody!.create(null, [
+        schema.nodes.htmlTableRow!.create(null, [
+          schema.nodes.htmlTableCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('a'))]),
+        ]),
+      ]),
+      schema.nodes.htmlTableBody!.create(null, [
+        schema.nodes.htmlTableRow!.create(null, [
+          schema.nodes.htmlTableCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('c'))]),
+        ]),
+        schema.nodes.htmlTableRow!.create(null, [
+          schema.nodes.htmlTableCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('b'))]),
+        ]),
+      ]),
+    ]);
+    const doc = schema.nodes.doc!.create(null, [table]);
+    const cellPositions = findNodePositions(doc, 'htmlTableCell');
+    const state = EditorState.create({
+      schema,
+      doc,
+      selection: CellSelection.create(doc, cellPositions[1]!),
+    });
+    const nextState = applyCommand(state, sortBodyRowsByColumn());
+    const nextTable = getTable(nextState.doc);
+    const firstBody = nextTable.child(0);
+    const secondBody = nextTable.child(1);
+
+    expect(firstBody.child(0).textContent).toBe('a');
+    expect(secondBody.child(0).textContent).toBe('b');
+    expect(secondBody.child(1).textContent).toBe('c');
+  });
+
+  it('sorts tbody rows by the selected column in descending order', () => {
+    const table = schema.nodes.htmlTable!.create(null, [
+      schema.nodes.htmlTableBody!.create(null, [
+        schema.nodes.htmlTableRow!.create(null, [
+          schema.nodes.htmlTableCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('a'))]),
+          schema.nodes.htmlTableCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('10'))]),
+        ]),
+        schema.nodes.htmlTableRow!.create(null, [
+          schema.nodes.htmlTableCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('c'))]),
+          schema.nodes.htmlTableCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('30'))]),
+        ]),
+        schema.nodes.htmlTableRow!.create(null, [
+          schema.nodes.htmlTableCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('b'))]),
+          schema.nodes.htmlTableCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('20'))]),
+        ]),
+      ]),
+    ]);
+    const doc = schema.nodes.doc!.create(null, [table]);
+    const cellPositions = findNodePositions(doc, 'htmlTableCell');
+    const state = EditorState.create({
+      schema,
+      doc,
+      selection: CellSelection.create(doc, cellPositions[1]!),
+    });
+    const nextState = applyCommand(state, sortBodyRowsByColumn({ direction: 'desc' }));
+    const body = getBody(getTable(nextState.doc));
+
+    expect(body.child(0).textContent).toBe('c30');
+    expect(body.child(1).textContent).toBe('b20');
+    expect(body.child(2).textContent).toBe('a10');
+  });
+
+  it('does not sort tbody rows when merged cells are present', () => {
+    const table = schema.nodes.htmlTable!.create(null, [
+      schema.nodes.htmlTableBody!.create(null, [
+        schema.nodes.htmlTableRow!.create(null, [
+          schema.nodes.htmlTableCell!.create({ colspan: 2 }, [schema.nodes.paragraph!.create(null, schema.text('A'))]),
+        ]),
+        schema.nodes.htmlTableRow!.create(null, [
+          schema.nodes.htmlTableCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('B'))]),
+          schema.nodes.htmlTableCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('C'))]),
+        ]),
+      ]),
+    ]);
+    const state = createStateForTable(table);
+    let dispatched = false;
+
+    const result = sortBodyRowsByColumn()(state, () => {
       dispatched = true;
     });
 
