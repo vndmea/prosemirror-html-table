@@ -29,7 +29,7 @@ export interface InsertHtmlTableCommandOptions extends CreateHtmlTableOptions {
   selectInsertedTable?: boolean;
 }
 
-export interface HtmlTableCellStyleOptions extends HtmlTableCommandOptions {}
+// export interface HtmlTableCellStyleOptions extends HtmlTableCommandOptions {}
 
 interface TableContext {
   names: HtmlTableNodeNames;
@@ -1089,7 +1089,7 @@ function moveRowToSection(targetSectionName: HtmlTableSectionName, options: Html
       adjustedSectionIndex,
     );
     let targetRowIndexInSection = 0;
-    let targetSectionIndex = targetLocation.sectionIndex;
+    const targetSectionIndex = targetLocation.sectionIndex;
 
     if (targetLocation.sectionChildIndex >= 0) {
       const targetSection = tableChildren[targetLocation.sectionChildIndex]!;
