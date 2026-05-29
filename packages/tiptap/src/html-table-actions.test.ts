@@ -5,8 +5,10 @@ import { describe, expect, it } from 'vitest';
 import { CellSelection, createHtmlTableNode, createHtmlTableNodeSpecs } from 'prosemirror-html-table';
 
 import {
+  getHtmlTableContextActionGroups,
   getHtmlTableContextActionCommand,
   getHtmlTableContextActions,
+  getPrimaryHtmlTableContextAction,
 } from './html-table-actions.js';
 import {
   createHtmlTableInteractionPlugin,
@@ -155,6 +157,78 @@ describe('html table context actions', () => {
 
     expect(applied).toBe(true);
     expect(transactionState.doc.firstChild?.firstChild?.type.name).toBe('htmlTableHead');
+  });
+
+  it('groups actions into stable popover sections', () => {
+    const table = createHtmlTableNode(schema, { rows: 2, cols: 2 });
+    const doc = schema.nodes.doc!.create(null, [table]);
+    const cellPositions = findNodePositions(doc, 'htmlTableCell');
+    const state = EditorState.create({
+      schema,
+      doc,
+      selection: CellSelection.create(doc, cellPositions[0]!),
+      plugins: [createHtmlTableInteractionPlugin()],
+    });
+    const transaction = createRowSelectionTransaction(state, 0, table, 1);
+    const nextState = state.apply(transaction!);
+
+    const groups = getHtmlTableContextActionGroups(
+      getHtmlTableContextActions(nextState, getHtmlTableInteractionState(nextState)),
+    );
+
+    expect(groups.map((group) => group.id)).toEqual([
+      'insert',
+      'structure',
+      'reorder',
+      'section',
+      'content',
+      'danger',
+    ]);
+    expect(groups.find((group) => group.id === 'danger')?.actions.map((action) => action.id)).toEqual([
+      'deleteRow',
+    ]);
+  });
+
+  it('derives a primary action that matches the current scope', () => {
+    const table = createHtmlTableNode(schema, { rows: 2, cols: 2 });
+    const doc = schema.nodes.doc!.create(null, [table]);
+    const state = EditorState.create({
+      schema,
+      doc,
+      selection: NodeSelection.create(doc, 0),
+      plugins: [createHtmlTableInteractionPlugin()],
+    });
+
+    const tablePrimary = getPrimaryHtmlTableContextAction(
+      getHtmlTableContextActions(state, getHtmlTableInteractionState(state)),
+    );
+
+    expect(tablePrimary?.id).toBe('toggleHeadSection');
+
+    const cellPositions = findNodePositions(doc, 'htmlTableCell');
+    const mergedCellState = EditorState.create({
+      schema,
+      doc,
+      selection: CellSelection.create(doc, cellPositions[0]!, cellPositions[3]!),
+      plugins: [createHtmlTableInteractionPlugin()],
+    });
+    const mergedCellPrimary = getPrimaryHtmlTableContextAction(
+      getHtmlTableContextActions(mergedCellState, getHtmlTableInteractionState(mergedCellState)),
+    );
+
+    expect(mergedCellPrimary?.id).toBe('mergeOrSplitCells');
+
+    const singleCellState = EditorState.create({
+      schema,
+      doc,
+      selection: CellSelection.create(doc, cellPositions[0]!),
+      plugins: [createHtmlTableInteractionPlugin()],
+    });
+    const singleCellPrimary = getPrimaryHtmlTableContextAction(
+      getHtmlTableContextActions(singleCellState, getHtmlTableInteractionState(singleCellState)),
+    );
+
+    expect(singleCellPrimary?.id).toBe('clearSelectedCells');
   });
 });
 

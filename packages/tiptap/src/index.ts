@@ -1,7 +1,9 @@
 export { createHtmlTableCommands } from './commands.js';
 export {
+  getHtmlTableContextActionGroups,
   getHtmlTableContextActionCommand,
   getHtmlTableContextActions,
+  getPrimaryHtmlTableContextAction,
 } from './html-table-actions.js';
 export {
   createHtmlTableHandlePlugin,
@@ -38,6 +40,8 @@ export type {
 } from './commands.js';
 export type {
   HtmlTableContextAction,
+  HtmlTableContextActionGroup,
+  HtmlTableContextActionGroupId,
   HtmlTableContextActionId,
 } from './html-table-actions.js';
 export type { HtmlTableTiptapOptions } from './options.js';

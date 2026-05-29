@@ -75,6 +75,21 @@ export interface HtmlTableContextAction {
   destructive?: boolean;
 }
 
+export type HtmlTableContextActionGroupId =
+  | 'table'
+  | 'insert'
+  | 'structure'
+  | 'reorder'
+  | 'section'
+  | 'content'
+  | 'danger';
+
+export interface HtmlTableContextActionGroup {
+  id: HtmlTableContextActionGroupId;
+  label: string;
+  actions: HtmlTableContextAction[];
+}
+
 export function getHtmlTableContextActions(
   state: EditorState,
   interaction: HtmlTableInteractionState,
@@ -216,6 +231,47 @@ export function getHtmlTableContextActionCommand(
   }
 }
 
+export function getHtmlTableContextActionGroups(
+  actions: HtmlTableContextAction[],
+): HtmlTableContextActionGroup[] {
+  const grouped = new Map<HtmlTableContextActionGroupId, HtmlTableContextAction[]>();
+
+  for (const action of actions) {
+    const groupId = ACTION_GROUPS[action.id];
+    const groupActions = grouped.get(groupId) ?? [];
+    groupActions.push(action);
+    grouped.set(groupId, groupActions);
+  }
+
+  return ACTION_GROUP_ORDER
+    .map((id) => {
+      const groupActions = grouped.get(id);
+      if (!groupActions?.length) {
+        return null;
+      }
+
+      return {
+        id,
+        label: ACTION_GROUP_LABELS[id],
+        actions: groupActions,
+      } satisfies HtmlTableContextActionGroup;
+    })
+    .filter((group): group is HtmlTableContextActionGroup => group !== null);
+}
+
+export function getPrimaryHtmlTableContextAction(
+  actions: HtmlTableContextAction[],
+): HtmlTableContextAction | null {
+  for (const id of PRIMARY_ACTION_ORDER) {
+    const action = actions.find((item) => item.id === id && item.enabled);
+    if (action) {
+      return action;
+    }
+  }
+
+  return actions.find((action) => action.enabled) ?? null;
+}
+
 function resolveTableScopeCommand(
   id: Extract<HtmlTableContextActionId, 'deleteTable' | 'toggleColgroup' | 'toggleHeadSection' | 'toggleFootSection'>,
   active: boolean,
@@ -318,3 +374,64 @@ const ACTION_LABELS: Record<HtmlTableContextActionId, string> = {
   mergeOrSplitCells: 'Merge or split cells',
   toggleHeaderCell: 'Toggle header cell',
 };
+
+const ACTION_GROUPS: Record<HtmlTableContextActionId, HtmlTableContextActionGroupId> = {
+  deleteTable: 'danger',
+  toggleColgroup: 'table',
+  toggleHeadSection: 'table',
+  toggleFootSection: 'table',
+  addRowBefore: 'insert',
+  addRowAfter: 'insert',
+  deleteRow: 'danger',
+  moveRowUp: 'reorder',
+  moveRowDown: 'reorder',
+  duplicateRow: 'structure',
+  clearRowContent: 'content',
+  moveRowToHead: 'section',
+  moveRowToBody: 'section',
+  moveRowToFoot: 'section',
+  addColumnBefore: 'insert',
+  addColumnAfter: 'insert',
+  deleteColumn: 'danger',
+  moveColumnLeft: 'reorder',
+  moveColumnRight: 'reorder',
+  duplicateColumn: 'structure',
+  clearColumnContent: 'content',
+  sortBodyRowsAsc: 'structure',
+  sortBodyRowsDesc: 'structure',
+  clearSelectedCells: 'content',
+  mergeOrSplitCells: 'structure',
+  toggleHeaderCell: 'structure',
+};
+
+const ACTION_GROUP_ORDER: HtmlTableContextActionGroupId[] = [
+  'table',
+  'insert',
+  'structure',
+  'reorder',
+  'section',
+  'content',
+  'danger',
+];
+
+const ACTION_GROUP_LABELS: Record<HtmlTableContextActionGroupId, string> = {
+  table: 'Table',
+  insert: 'Insert',
+  structure: 'Structure',
+  reorder: 'Reorder',
+  section: 'Section',
+  content: 'Content',
+  danger: 'Danger',
+};
+
+const PRIMARY_ACTION_ORDER: HtmlTableContextActionId[] = [
+  'toggleHeadSection',
+  'addRowAfter',
+  'addColumnAfter',
+  'mergeOrSplitCells',
+  'toggleColgroup',
+  'toggleFootSection',
+  'duplicateRow',
+  'duplicateColumn',
+  'clearSelectedCells',
+];
