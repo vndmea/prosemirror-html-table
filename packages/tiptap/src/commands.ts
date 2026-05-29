@@ -9,6 +9,9 @@ import {
   addColumnBefore as addCoreColumnBefore,
   addRowAfter as addCoreRowAfter,
   addRowBefore as addCoreRowBefore,
+  clearColumnContent as clearCoreColumnContent,
+  clearRowContent as clearCoreRowContent,
+  clearSelectedCells as clearCoreSelectedCells,
   deleteColumn as deleteCoreColumn,
   removeColgroup as removeCoreColgroup,
   removeCaption as removeCoreCaption,
@@ -61,6 +64,9 @@ declare module '@tiptap/core' {
       addHtmlTableColumnAfter: (options?: HtmlTableCommandOptions) => ReturnType;
       deleteHtmlTableColumn: (options?: HtmlTableCommandOptions) => ReturnType;
       deleteHtmlTable: (options?: HtmlTableCommandOptions) => ReturnType;
+      clearHtmlTableSelectedCells: (options?: HtmlTableCommandOptions) => ReturnType;
+      clearHtmlTableRowContent: (options?: HtmlTableCommandOptions) => ReturnType;
+      clearHtmlTableColumnContent: (options?: HtmlTableCommandOptions) => ReturnType;
       moveHtmlTableRowUp: (options?: HtmlTableCommandOptions) => ReturnType;
       moveHtmlTableRowDown: (options?: HtmlTableCommandOptions) => ReturnType;
       moveHtmlTableRowToHead: (options?: HtmlTableCommandOptions) => ReturnType;
@@ -164,6 +170,21 @@ export function createHtmlTableCommands(): Partial<RawCommands> {
       (options?: HtmlTableCommandOptions) =>
       ({ state, dispatch }) =>
         deleteCoreTable(options)(state, dispatch),
+
+    clearHtmlTableSelectedCells:
+      (options?: HtmlTableCommandOptions) =>
+      ({ state, dispatch }) =>
+        clearCoreSelectedCells(options)(state, dispatch),
+
+    clearHtmlTableRowContent:
+      (options?: HtmlTableCommandOptions) =>
+      ({ state, dispatch }) =>
+        clearCoreRowContent(options)(state, dispatch),
+
+    clearHtmlTableColumnContent:
+      (options?: HtmlTableCommandOptions) =>
+      ({ state, dispatch }) =>
+        clearCoreColumnContent(options)(state, dispatch),
 
     moveHtmlTableRowUp:
       (options?: HtmlTableCommandOptions) =>

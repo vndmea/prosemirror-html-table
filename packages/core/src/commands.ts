@@ -313,6 +313,66 @@ export function moveRowDown(options: HtmlTableCommandOptions = {}): Command {
   return moveRowVertically('down', options);
 }
 
+export function clearSelectedCells(options: HtmlTableCommandOptions = {}): Command {
+  return (state, dispatch) => {
+    const selectionInfo = getCellSelectionInfo(state, options);
+    if (state.selection instanceof CellSelection && !selectionInfo) return false;
+
+    const cellContext = selectionInfo ? undefined : findCellContext(state, options);
+    const context = selectionInfo?.context ?? cellContext;
+    if (!context) return false;
+
+    const grid = selectionInfo?.grid ?? createHtmlTableGrid(context.table, { names: context.names });
+    const cellsToClear = new Set(selectionInfo?.cells ?? (cellContext ? [cellContext.cell] : []));
+    if (cellsToClear.size === 0) return false;
+    const table = updateCellsMatching(
+      context,
+      grid,
+      (cell) => cellsToClear.has(cell),
+      (cell) => clearCellContent(state.schema, cell),
+    );
+
+    return replaceTable(state, dispatch, context, table);
+  };
+}
+
+export function clearRowContent(options: HtmlTableCommandOptions = {}): Command {
+  return (state, dispatch) => {
+    const context = findRowContext(state, options);
+    if (!context) return false;
+
+    const nextRow = context.row.copy(
+      Fragment.fromArray(getChildren(context.row).map((cell) => clearCellContent(state.schema, cell))),
+    );
+    const table = updateRowAt(context, nextRow);
+
+    return replaceTable(state, dispatch, context, table);
+  };
+}
+
+export function clearColumnContent(options: HtmlTableCommandOptions = {}): Command {
+  return (state, dispatch) => {
+    const context = findCellContext(state, options);
+    if (!context) return false;
+
+    const grid = createHtmlTableGrid(context.table, { names: context.names });
+    const targetColumn = context.cell.columnIndex;
+    const cellsToClear = new Set(
+      grid.cells.filter(
+        (cell) => cell.columnIndex <= targetColumn && cell.columnIndex + cell.colSpan > targetColumn,
+      ),
+    );
+    const table = updateCellsMatching(
+      context,
+      grid,
+      (cell) => cellsToClear.has(cell),
+      (cell) => clearCellContent(state.schema, cell),
+    );
+
+    return replaceTable(state, dispatch, context, table);
+  };
+}
+
 export function setCellAttribute(
   name: string,
   value: unknown,
@@ -1171,6 +1231,11 @@ function createEmptyCell(
   return cell;
 }
 
+function createEmptyCellContent(schema: Schema): Fragment {
+  const paragraph = schema.nodes.paragraph?.createAndFill();
+  return paragraph ? Fragment.fromArray([paragraph]) : Fragment.empty;
+}
+
 function updateCellAt(
   context: CellContext,
   cell: HtmlTableCellRef,
@@ -1196,6 +1261,34 @@ function updateRowAt(context: RowContext, row: ProseMirrorNode): ProseMirrorNode
 
   sectionChildren[context.rowIndexInSection] = row;
   tableChildren[context.sectionChildIndex] = context.section.copy(Fragment.fromArray(sectionChildren));
+
+  return context.table.copy(Fragment.fromArray(tableChildren));
+}
+
+function updateCellsMatching(
+  context: TableContext,
+  grid: HtmlTableGrid,
+  predicate: (cell: HtmlTableCellRef) => boolean,
+  updater: (cell: ProseMirrorNode) => ProseMirrorNode,
+): ProseMirrorNode {
+  const tableChildren = getChildren(context.table);
+
+  forEachSection(context.table, context.names, (section, _sectionName, sectionChildIndex) => {
+    const rows = getChildren(section).map((row) => {
+      const globalRowIndex = findGlobalRowIndexByNode(grid, row);
+      const rowChildren = getChildren(row).map((cellNode, cellIndex) => {
+        const cell = grid.cells.find(
+          (item) => item.rowIndex === globalRowIndex && item.cellIndex === cellIndex && item.node === cellNode,
+        );
+
+        return cell && predicate(cell) ? updater(cellNode) : cellNode;
+      });
+
+      return row.copy(Fragment.fromArray(rowChildren));
+    });
+
+    tableChildren[sectionChildIndex] = section.copy(Fragment.fromArray(rows));
+  });
 
   return context.table.copy(Fragment.fromArray(tableChildren));
 }
@@ -1567,6 +1660,10 @@ function copyCellWithAttrs(cell: ProseMirrorNode, attrs: Record<string, unknown>
     cell.content,
     cell.marks,
   );
+}
+
+function clearCellContent(schema: Schema, cell: ProseMirrorNode): ProseMirrorNode {
+  return copyCellNode(cell, {}, createEmptyCellContent(schema));
 }
 
 function copyCellNode(

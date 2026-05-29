@@ -13,6 +13,9 @@ import {
   addRowAfter,
   addRowBefore,
   CellSelection,
+  clearColumnContent,
+  clearRowContent,
+  clearSelectedCells,
   createHtmlTableNode,
   createHtmlTableNodeSpecs,
   deleteColumn,
@@ -454,6 +457,82 @@ describe('html table commands', () => {
 
     expect(body.child(0).textContent).toBe('B');
     expect(body.child(1).textContent).toBe('A');
+  });
+
+  it('clears the currently selected cells without changing table structure', () => {
+    const table = schema.nodes.htmlTable!.create(null, [
+      schema.nodes.htmlTableBody!.create(null, [
+        schema.nodes.htmlTableRow!.create(null, [
+          schema.nodes.htmlTableCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('A'))]),
+          schema.nodes.htmlTableCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('B'))]),
+        ]),
+        schema.nodes.htmlTableRow!.create(null, [
+          schema.nodes.htmlTableCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('C'))]),
+          schema.nodes.htmlTableCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('D'))]),
+        ]),
+      ]),
+    ]);
+    const doc = schema.nodes.doc!.create(null, [table]);
+    const cellPositions = findNodePositions(doc, 'htmlTableCell');
+    const state = EditorState.create({
+      schema,
+      doc,
+      selection: CellSelection.create(doc, cellPositions[0]!, cellPositions[1]!),
+    });
+    const nextState = applyCommand(state, clearSelectedCells());
+    const body = getBody(getTable(nextState.doc));
+
+    expect(body.child(0).child(0).textContent).toBe('');
+    expect(body.child(0).child(1).textContent).toBe('');
+    expect(body.child(1).child(0).textContent).toBe('C');
+    expect(body.child(1).child(1).textContent).toBe('D');
+  });
+
+  it('clears the current row content without deleting cells', () => {
+    const table = schema.nodes.htmlTable!.create(null, [
+      schema.nodes.htmlTableBody!.create(null, [
+        schema.nodes.htmlTableRow!.create(null, [
+          schema.nodes.htmlTableCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('A'))]),
+          schema.nodes.htmlTableCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('B'))]),
+        ]),
+        schema.nodes.htmlTableRow!.create(null, [
+          schema.nodes.htmlTableCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('C'))]),
+          schema.nodes.htmlTableCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('D'))]),
+        ]),
+      ]),
+    ]);
+    const state = createStateForTable(table);
+    const nextState = applyCommand(state, clearRowContent());
+    const body = getBody(getTable(nextState.doc));
+
+    expect(body.child(0).childCount).toBe(2);
+    expect(body.child(0).child(0).textContent).toBe('');
+    expect(body.child(0).child(1).textContent).toBe('');
+    expect(body.child(1).child(0).textContent).toBe('C');
+    expect(body.child(1).child(1).textContent).toBe('D');
+  });
+
+  it('clears the current column content without deleting cells', () => {
+    const table = schema.nodes.htmlTable!.create(null, [
+      schema.nodes.htmlTableBody!.create(null, [
+        schema.nodes.htmlTableRow!.create(null, [
+          schema.nodes.htmlTableCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('A'))]),
+          schema.nodes.htmlTableCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('B'))]),
+        ]),
+        schema.nodes.htmlTableRow!.create(null, [
+          schema.nodes.htmlTableCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('C'))]),
+          schema.nodes.htmlTableCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('D'))]),
+        ]),
+      ]),
+    ]);
+    const state = createStateForTable(table);
+    const nextState = applyCommand(state, clearColumnContent());
+    const body = getBody(getTable(nextState.doc));
+
+    expect(body.child(0).child(0).textContent).toBe('');
+    expect(body.child(0).child(1).textContent).toBe('B');
+    expect(body.child(1).child(0).textContent).toBe('');
+    expect(body.child(1).child(1).textContent).toBe('D');
   });
 
   it('toggles the selected cell between header and body cell types', () => {
