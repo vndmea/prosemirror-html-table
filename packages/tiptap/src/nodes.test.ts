@@ -77,4 +77,33 @@ describe('HtmlTableExtensions', () => {
       'data-align': 'center',
     });
   });
+
+  it('exposes default style-based cell attrs on cell extensions', () => {
+    const cellExtension = HtmlTableCell as unknown as {
+      config: {
+        addAttributes?: () => Record<string, {
+          default: unknown;
+          parseHTML?: (element: HTMLElement) => unknown;
+          renderHTML?: (attrs: Record<string, unknown>) => Record<string, string>;
+        }>;
+      };
+    };
+    const cellAttributes = (cellExtension.config.addAttributes?.() ?? {}) as Record<string, {
+      default: unknown;
+      parseHTML?: (element: HTMLElement) => unknown;
+      renderHTML?: (attrs: Record<string, unknown>) => Record<string, string>;
+    }>;
+
+    expect(cellAttributes.textAlign?.default).toBeNull();
+    expect(cellAttributes.backgroundColor?.default).toBeNull();
+    expect(cellAttributes.textAlign?.parseHTML?.({
+      style: {
+        textAlign: 'right',
+      },
+      getAttribute: () => null,
+    } as unknown as HTMLElement)).toBe('right');
+    expect(cellAttributes.backgroundColor?.renderHTML?.({ backgroundColor: '#ffeeaa' })).toEqual({
+      style: 'background-color: #ffeeaa;',
+    });
+  });
 });

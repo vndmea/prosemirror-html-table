@@ -20,6 +20,22 @@ export const defaultHtmlTableCellAttributes: HtmlTableCellAttributes = {
     renderHTML: (attrs) =>
       Array.isArray(attrs.colwidth) ? { 'data-colwidth': attrs.colwidth.join(',') } : {},
   },
+  textAlign: {
+    default: null,
+    parseHTML: (element) => normalizeStyleValue(element.style?.textAlign || element.getAttribute('align')),
+    renderHTML: (attrs) =>
+      typeof attrs.textAlign === 'string' && attrs.textAlign.length > 0
+        ? { style: `text-align: ${attrs.textAlign};` }
+        : {},
+  },
+  backgroundColor: {
+    default: null,
+    parseHTML: (element) => normalizeStyleValue(element.style?.backgroundColor),
+    renderHTML: (attrs) =>
+      typeof attrs.backgroundColor === 'string' && attrs.backgroundColor.length > 0
+        ? { style: `background-color: ${attrs.backgroundColor};` }
+        : {},
+  },
 };
 
 export function createHtmlTableCellAttributes(
@@ -70,7 +86,14 @@ export function renderHtmlTableCellAttributes(
     const partial = attribute.renderHTML?.(values);
     if (!partial) continue;
 
-    Object.assign(rendered, partial);
+    for (const [name, value] of Object.entries(partial)) {
+      if (name === 'style' && typeof value === 'string' && value.length > 0) {
+        rendered.style = mergeStyleAttribute(rendered.style, value);
+        continue;
+      }
+
+      rendered[name] = value;
+    }
   }
 
   return rendered;
@@ -80,4 +103,21 @@ export function createTiptapHtmlTableCellAttributes(
   attributes: HtmlTableCellAttributes = {},
 ): Record<string, HtmlTableCellAttributeSpec> {
   return createHtmlTableCellAttributes(attributes);
+}
+
+function normalizeStyleValue(value: string | null | undefined): string | null {
+  if (typeof value !== 'string') return null;
+  const normalized = value.trim();
+  return normalized.length > 0 ? normalized : null;
+}
+
+function mergeStyleAttribute(
+  existing: HtmlTableRenderedAttributes['style'] | undefined,
+  next: string,
+): string {
+  const existingValue = typeof existing === 'string' ? existing.trim() : '';
+  const nextValue = next.trim();
+  if (!existingValue) return nextValue;
+  if (!nextValue) return existingValue;
+  return `${existingValue} ${nextValue}`;
 }

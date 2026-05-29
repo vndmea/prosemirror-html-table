@@ -16,6 +16,11 @@ export interface HtmlTableCellNavigationOptions extends HtmlTableCommandOptions 
   cycle?: boolean;
 }
 
+export interface HtmlTableSectionTargetOptions extends HtmlTableCommandOptions {
+  targetSectionIndex?: number;
+  targetRowIndex?: number;
+}
+
 export interface HtmlTableSortRowsOptions extends HtmlTableCommandOptions {
   direction?: 'asc' | 'desc';
 }
@@ -23,6 +28,8 @@ export interface HtmlTableSortRowsOptions extends HtmlTableCommandOptions {
 export interface InsertHtmlTableCommandOptions extends CreateHtmlTableOptions {
   selectInsertedTable?: boolean;
 }
+
+export interface HtmlTableCellStyleOptions extends HtmlTableCommandOptions {}
 
 interface TableContext {
   names: HtmlTableNodeNames;
@@ -172,6 +179,15 @@ export function deleteColumn(options: HtmlTableCommandOptions = {}): Command {
 
       tableChildren[sectionChildIndex] = section.copy(Fragment.fromArray(rows));
     });
+
+    updateColgroupForDeletedColumn(
+      state.schema,
+      tableChildren,
+      context.names,
+      context.table,
+      targetColumn,
+      grid.width - 1,
+    );
 
     return replaceTable(
       state,
@@ -388,15 +404,15 @@ export function removeColgroup(options: HtmlTableCommandOptions = {}): Command {
   };
 }
 
-export function moveRowToHead(options: HtmlTableCommandOptions = {}): Command {
+export function moveRowToHead(options: HtmlTableSectionTargetOptions = {}): Command {
   return moveRowToSection('head', options);
 }
 
-export function moveRowToBody(options: HtmlTableCommandOptions = {}): Command {
+export function moveRowToBody(options: HtmlTableSectionTargetOptions = {}): Command {
   return moveRowToSection('body', options);
 }
 
-export function moveRowToFoot(options: HtmlTableCommandOptions = {}): Command {
+export function moveRowToFoot(options: HtmlTableSectionTargetOptions = {}): Command {
   return moveRowToSection('foot', options);
 }
 
@@ -416,15 +432,15 @@ export function removeFootSection(options: HtmlTableCommandOptions = {}): Comman
   return removeSection('foot', options);
 }
 
-export function addRowToHead(options: HtmlTableCommandOptions = {}): Command {
+export function addRowToHead(options: HtmlTableSectionTargetOptions = {}): Command {
   return addRowToSection('head', options);
 }
 
-export function addRowToBody(options: HtmlTableCommandOptions = {}): Command {
+export function addRowToBody(options: HtmlTableSectionTargetOptions = {}): Command {
   return addRowToSection('body', options);
 }
 
-export function addRowToFoot(options: HtmlTableCommandOptions = {}): Command {
+export function addRowToFoot(options: HtmlTableSectionTargetOptions = {}): Command {
   return addRowToSection('foot', options);
 }
 
@@ -523,6 +539,53 @@ export function clearColumnContent(options: HtmlTableCommandOptions = {}): Comma
 
     return replaceTable(state, dispatch, context, table);
   };
+}
+
+function setCellsAttribute(
+  name: string,
+  value: unknown,
+  options: HtmlTableCommandOptions = {},
+): Command {
+  return (state, dispatch) => {
+    const selectionInfo = getCellSelectionInfo(state, options);
+    if (state.selection instanceof CellSelection && !selectionInfo) return false;
+
+    const cellContext = selectionInfo ? undefined : findCellContext(state, options);
+    const context = selectionInfo?.context ?? cellContext;
+    if (!context) return false;
+
+    if (!selectionInfo && cellContext) {
+      const table = updateCellAt(cellContext, cellContext.cell, (cell) => copyCellWithAttrs(cell, { [name]: value }));
+      return replaceTable(state, dispatch, cellContext, table);
+    }
+
+    const grid = selectionInfo?.grid ?? createHtmlTableGrid(context.table, { names: context.names });
+    const targetCells = new Set(selectionInfo?.cells ?? []);
+    if (targetCells.size === 0) return false;
+
+    const table = updateCellsMatching(
+      context,
+      grid,
+      (cell) => targetCells.has(cell),
+      (cell) => copyCellWithAttrs(cell, { [name]: value }),
+    );
+
+    return replaceTable(state, dispatch, context, table);
+  };
+}
+
+export function setCellTextAlign(
+  textAlign: string | null,
+  options: HtmlTableCommandOptions = {},
+): Command {
+  return setCellsAttribute('textAlign', textAlign, options);
+}
+
+export function setCellBackgroundColor(
+  backgroundColor: string | null,
+  options: HtmlTableCommandOptions = {},
+): Command {
+  return setCellsAttribute('backgroundColor', backgroundColor, options);
 }
 
 export function setCellAttribute(
@@ -911,6 +974,15 @@ function addColumn(direction: 'before' | 'after', options: HtmlTableCommandOptio
       tableChildren[sectionChildIndex] = section.copy(Fragment.fromArray(rows));
     });
 
+    updateColgroupForInsertedColumn(
+      state.schema,
+      tableChildren,
+      context.names,
+      context.table,
+      insertColumn,
+      grid.width + 1,
+    );
+
     return replaceTable(
       state,
       dispatch,
@@ -957,10 +1029,21 @@ function moveColumnHorizontally(direction: 'left' | 'right', options: HtmlTableC
   };
 }
 
-function moveRowToSection(targetSectionName: HtmlTableSectionName, options: HtmlTableCommandOptions): Command {
+function moveRowToSection(targetSectionName: HtmlTableSectionName, options: HtmlTableSectionTargetOptions): Command {
   return (state, dispatch) => {
     const context = findRowContext(state, options);
-    if (!context || context.sectionName === targetSectionName) return false;
+    if (!context) return false;
+
+    const grid = createHtmlTableGrid(context.table, { names: context.names });
+    const currentSectionIndex = countPreviousSections(
+      context.table,
+      context.names,
+      context.sectionName,
+      context.sectionChildIndex,
+    );
+    const preferredSectionIndex = resolveTargetSectionIndex(options, context, targetSectionName);
+    const globalRowIndex = findGlobalRowIndexByNode(grid, context.row);
+    if (!canOperateOnStandaloneRow(grid, globalRowIndex)) return false;
 
     const tableChildren = getChildren(context.table);
     const sourceSectionChildren = getChildren(context.section);
@@ -968,32 +1051,56 @@ function moveRowToSection(targetSectionName: HtmlTableSectionName, options: Html
 
     sourceSectionChildren.splice(context.rowIndexInSection, 1);
 
+    if (context.sectionName === targetSectionName && preferredSectionIndex === currentSectionIndex) {
+      if (options.targetRowIndex === undefined) return false;
+      const targetRowIndex = clampRowInsertIndex(options.targetRowIndex, sourceSectionChildren.length);
+      if (targetRowIndex === context.rowIndexInSection) return false;
+
+      sourceSectionChildren.splice(targetRowIndex, 0, movedRow);
+      tableChildren[context.sectionChildIndex] = context.section.copy(Fragment.fromArray(sourceSectionChildren));
+      const nextTable = context.table.copy(Fragment.fromArray(tableChildren));
+      return replaceTableAndSelectRow(
+        state,
+        dispatch,
+        context,
+        nextTable,
+        targetSectionName,
+        currentSectionIndex,
+        targetRowIndex,
+      );
+    }
+
     if (sourceSectionChildren.length === 0) {
       tableChildren.splice(context.sectionChildIndex, 1);
     } else {
       tableChildren[context.sectionChildIndex] = context.section.copy(Fragment.fromArray(sourceSectionChildren));
     }
 
-    const targetLocation = findTargetSectionLocation(tableChildren, context.names, targetSectionName);
+    const adjustedSectionIndex =
+      context.sectionName === targetSectionName
+      && sourceSectionChildren.length === 0
+      && preferredSectionIndex > currentSectionIndex
+        ? preferredSectionIndex - 1
+        : preferredSectionIndex;
+    const targetLocation = findTargetSectionLocation(
+      tableChildren,
+      context.names,
+      targetSectionName,
+      adjustedSectionIndex,
+    );
     let targetRowIndexInSection = 0;
-    let targetSectionIndex = 0;
+    let targetSectionIndex = targetLocation.sectionIndex;
 
     if (targetLocation.sectionChildIndex >= 0) {
       const targetSection = tableChildren[targetLocation.sectionChildIndex]!;
       const targetRows = getChildren(targetSection);
-      targetRowIndexInSection = targetRows.length;
-      targetSectionIndex = countPreviousSections(context.table.copy(Fragment.fromArray(tableChildren)), context.names, targetSectionName, targetLocation.sectionChildIndex);
-      targetRows.push(movedRow);
+      targetRowIndexInSection = clampRowInsertIndex(options.targetRowIndex, targetRows.length);
+      targetRows.splice(targetRowIndexInSection, 0, movedRow);
       tableChildren[targetLocation.sectionChildIndex] = targetSection.copy(Fragment.fromArray(targetRows));
     } else {
       const sectionType = getNodeType(state.schema, getSectionNodeName(context.names, targetSectionName));
       tableChildren.splice(targetLocation.insertIndex, 0, sectionType.create(null, [movedRow]));
-      targetSectionIndex = countPreviousSections(
-        context.table.copy(Fragment.fromArray(tableChildren)),
-        context.names,
-        targetSectionName,
-        targetLocation.insertIndex,
-      );
+      targetRowIndexInSection = 0;
     }
 
     const nextTable = normalizeHtmlTable(
@@ -1074,7 +1181,7 @@ function removeSection(sectionName: Extract<HtmlTableSectionName, 'head' | 'foot
   };
 }
 
-function addRowToSection(targetSectionName: HtmlTableSectionName, options: HtmlTableCommandOptions): Command {
+function addRowToSection(targetSectionName: HtmlTableSectionName, options: HtmlTableSectionTargetOptions): Command {
   return (state, dispatch) => {
     const context = findTableContext(state, options);
     if (!context) return false;
@@ -1082,12 +1189,18 @@ function addRowToSection(targetSectionName: HtmlTableSectionName, options: HtmlT
     const tableChildren = getChildren(context.table);
     const grid = createHtmlTableGrid(context.table, { names: context.names });
     const row = createEmptyRow(state.schema, context.names, targetSectionName, Math.max(1, grid.width));
-    const targetLocation = findTargetSectionLocation(tableChildren, context.names, targetSectionName);
+    const preferredSectionIndex = resolveTargetSectionIndex(options, findRowContext(state, options), targetSectionName);
+    const targetLocation = findTargetSectionLocation(
+      tableChildren,
+      context.names,
+      targetSectionName,
+      preferredSectionIndex,
+    );
 
     if (targetLocation.sectionChildIndex >= 0) {
       const section = tableChildren[targetLocation.sectionChildIndex]!;
       const rows = getChildren(section);
-      rows.push(row);
+      rows.splice(clampRowInsertIndex(options.targetRowIndex, rows.length), 0, row);
       tableChildren[targetLocation.sectionChildIndex] = section.copy(Fragment.fromArray(rows));
     } else {
       const sectionType = getNodeType(state.schema, getSectionNodeName(context.names, targetSectionName));
@@ -1111,6 +1224,12 @@ function moveRowVertically(direction: 'up' | 'down', options: HtmlTableCommandOp
     const sectionRows = getChildren(context.section);
     const targetIndex = context.rowIndexInSection + (direction === 'up' ? -1 : 1);
     if (targetIndex < 0 || targetIndex >= sectionRows.length) return false;
+
+    const grid = createHtmlTableGrid(context.table, { names: context.names });
+    const sourceRowIndex = findGlobalRowIndexByNode(grid, context.row);
+    const targetRow = sectionRows[targetIndex]!;
+    const targetRowIndex = findGlobalRowIndexByNode(grid, targetRow);
+    if (!canReorderRowPair(grid, sourceRowIndex, targetRowIndex)) return false;
 
     const nextRows = sectionRows.slice();
     const movedRow = nextRows[context.rowIndexInSection]!;
@@ -1620,14 +1739,34 @@ function findTargetSectionLocation(
   children: ProseMirrorNode[],
   names: HtmlTableNodeNames,
   targetSectionName: HtmlTableSectionName,
-): { sectionChildIndex: number; insertIndex: number } {
+  targetSectionIndex = 0,
+): { sectionChildIndex: number; insertIndex: number; sectionIndex: number } {
+  const desiredSectionIndex = Math.max(0, targetSectionIndex);
   const sectionNodeName = getSectionNodeName(names, targetSectionName);
-  const sectionChildIndex = children.findIndex((child) => child.type.name === sectionNodeName);
+  let matchedSectionIndex = 0;
+  let lastMatchingChildIndex = -1;
 
-  if (sectionChildIndex >= 0) {
+  for (let childIndex = 0; childIndex < children.length; childIndex += 1) {
+    const child = children[childIndex]!;
+    if (child.type.name !== sectionNodeName) continue;
+
+    if (matchedSectionIndex === desiredSectionIndex) {
+      return {
+        sectionChildIndex: childIndex,
+        insertIndex: childIndex,
+        sectionIndex: matchedSectionIndex,
+      };
+    }
+
+    lastMatchingChildIndex = childIndex;
+    matchedSectionIndex += 1;
+  }
+
+  if (targetSectionName === 'body' && lastMatchingChildIndex >= 0) {
     return {
-      sectionChildIndex,
-      insertIndex: sectionChildIndex,
+      sectionChildIndex: -1,
+      insertIndex: lastMatchingChildIndex + 1,
+      sectionIndex: matchedSectionIndex,
     };
   }
 
@@ -1635,6 +1774,7 @@ function findTargetSectionLocation(
     return {
       sectionChildIndex: -1,
       insertIndex: findHeadInsertIndex(children, names),
+      sectionIndex: 0,
     };
   }
 
@@ -1642,12 +1782,14 @@ function findTargetSectionLocation(
     return {
       sectionChildIndex: -1,
       insertIndex: findBodyInsertIndex(children, names),
+      sectionIndex: matchedSectionIndex,
     };
   }
 
   return {
     sectionChildIndex: -1,
     insertIndex: children.length,
+    sectionIndex: 0,
   };
 }
 
@@ -1781,7 +1923,31 @@ function replaceTableAndSelectCell(
   return true;
 }
 
-function canDuplicateRow(grid: HtmlTableGrid, rowIndex: number): boolean {
+function resolveTargetSectionIndex(
+  options: HtmlTableSectionTargetOptions,
+  context: RowContext | undefined,
+  targetSectionName: HtmlTableSectionName,
+): number {
+  if (typeof options.targetSectionIndex === 'number' && Number.isFinite(options.targetSectionIndex)) {
+    return Math.max(0, Math.floor(options.targetSectionIndex));
+  }
+
+  if (context && context.sectionName === targetSectionName) {
+    return countPreviousSections(context.table, context.names, targetSectionName, context.sectionChildIndex);
+  }
+
+  return 0;
+}
+
+function clampRowInsertIndex(targetRowIndex: number | undefined, rowCount: number): number {
+  if (typeof targetRowIndex !== 'number' || !Number.isFinite(targetRowIndex)) {
+    return rowCount;
+  }
+
+  return Math.max(0, Math.min(rowCount, Math.floor(targetRowIndex)));
+}
+
+function canOperateOnStandaloneRow(grid: HtmlTableGrid, rowIndex: number): boolean {
   const rowSlots = grid.slots[rowIndex];
   if (!rowSlots || rowSlots.length === 0) return false;
 
@@ -1793,6 +1959,14 @@ function canDuplicateRow(grid: HtmlTableGrid, rowIndex: number): boolean {
   return grid.cells
     .filter((cell) => cell.rowIndex === rowIndex)
     .every((cell) => cell.rowSpan === 1);
+}
+
+function canDuplicateRow(grid: HtmlTableGrid, rowIndex: number): boolean {
+  return canOperateOnStandaloneRow(grid, rowIndex);
+}
+
+function canReorderRowPair(grid: HtmlTableGrid, sourceRowIndex: number, targetRowIndex: number): boolean {
+  return canOperateOnStandaloneRow(grid, sourceRowIndex) && canOperateOnStandaloneRow(grid, targetRowIndex);
 }
 
 function canDuplicateColumn(grid: HtmlTableGrid, columnIndex: number): boolean {
@@ -1818,6 +1992,39 @@ function canReorderColumnPair(grid: HtmlTableGrid, sourceColumn: number, targetC
   }
 
   return true;
+}
+
+function updateColgroupForInsertedColumn(
+  schema: Schema,
+  tableChildren: ProseMirrorNode[],
+  names: HtmlTableNodeNames,
+  table: ProseMirrorNode,
+  targetColumn: number,
+  nextWidth: number,
+): void {
+  const colgroupIndex = findChildIndex(table, names.colgroup);
+  if (colgroupIndex < 0) return;
+
+  const widths = expandColgroupWidths(table.child(colgroupIndex), nextWidth - 1);
+  const referenceWidth = widths[targetColumn] ?? widths[targetColumn - 1] ?? widths[widths.length - 1] ?? null;
+  widths.splice(targetColumn, 0, referenceWidth);
+  tableChildren[colgroupIndex] = createColgroup(schema, names, nextWidth, widths);
+}
+
+function updateColgroupForDeletedColumn(
+  schema: Schema,
+  tableChildren: ProseMirrorNode[],
+  names: HtmlTableNodeNames,
+  table: ProseMirrorNode,
+  targetColumn: number,
+  nextWidth: number,
+): void {
+  const colgroupIndex = findChildIndex(table, names.colgroup);
+  if (colgroupIndex < 0) return;
+
+  const widths = expandColgroupWidths(table.child(colgroupIndex), nextWidth + 1);
+  widths.splice(targetColumn, 1);
+  tableChildren[colgroupIndex] = createColgroup(schema, names, nextWidth, widths);
 }
 
 function updateColgroupForDuplicatedColumn(

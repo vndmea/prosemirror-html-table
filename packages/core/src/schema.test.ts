@@ -75,4 +75,36 @@ describe('createHtmlTableNodeSpecs', () => {
     });
     expect(rendered).toEqual(['td', { 'data-align': 'center' }, 0]);
   });
+
+  it('includes default text and background style attrs for cells', () => {
+    const specs = createHtmlTableNodeSpecs();
+    const cellAttrs = specs.htmlTableCell?.attrs as Record<string, { default: unknown }>;
+    const parseRule = specs.htmlTableCell?.parseDOM?.[0];
+    const rendered = specs.htmlTableCell?.toDOM?.({
+      attrs: {
+        colspan: 1,
+        rowspan: 1,
+        colwidth: null,
+        textAlign: 'right',
+        backgroundColor: '#ffeeaa',
+      },
+    } as never);
+    const parsed = parseRule && 'getAttrs' in parseRule
+      ? parseRule.getAttrs?.({
+          getAttribute: () => null,
+          style: {
+            textAlign: 'right',
+            backgroundColor: 'rgb(255, 238, 170)',
+          },
+        } as unknown as HTMLElement)
+      : null;
+
+    expect(cellAttrs.textAlign?.default).toBeNull();
+    expect(cellAttrs.backgroundColor?.default).toBeNull();
+    expect(parsed).toMatchObject({
+      textAlign: 'right',
+      backgroundColor: 'rgb(255, 238, 170)',
+    });
+    expect(rendered).toEqual(['td', { style: 'text-align: right; background-color: #ffeeaa;' }, 0]);
+  });
 });

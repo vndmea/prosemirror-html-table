@@ -48,6 +48,8 @@ import {
   setColgroup,
   setCaption,
   setCellAttribute,
+  setCellBackgroundColor,
+  setCellTextAlign,
   splitCell,
   sortBodyRowsByColumn,
   toggleHeaderCell,
@@ -201,6 +203,36 @@ describe('html table commands', () => {
     expect(getBody(getTable(beforeState.doc)).child(1).childCount).toBe(3);
   });
 
+  it('keeps colgroup widths in sync when adding columns', () => {
+    const table = schema.nodes.htmlTable!.create(null, [
+      schema.nodes.htmlTableColgroup!.create(null, [
+        schema.nodes.htmlTableCol!.create({ span: null, width: 120 }),
+        schema.nodes.htmlTableCol!.create({ span: null, width: 240 }),
+      ]),
+      schema.nodes.htmlTableBody!.create(null, [
+        schema.nodes.htmlTableRow!.create(null, [
+          schema.nodes.htmlTableCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('A'))]),
+          schema.nodes.htmlTableCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('B'))]),
+        ]),
+      ]),
+    ]);
+    const afterState = applyCommand(createStateForTable(table), addColumnAfter());
+    const afterColgroup = getSection(getTable(afterState.doc), 'htmlTableColgroup');
+
+    expect(afterColgroup?.childCount).toBe(3);
+    expect(afterColgroup?.child(0).attrs.width).toBe(120);
+    expect(afterColgroup?.child(1).attrs.width).toBe(240);
+    expect(afterColgroup?.child(2).attrs.width).toBe(240);
+
+    const beforeState = applyCommand(createStateForTable(table), addColumnBefore());
+    const beforeColgroup = getSection(getTable(beforeState.doc), 'htmlTableColgroup');
+
+    expect(beforeColgroup?.childCount).toBe(3);
+    expect(beforeColgroup?.child(0).attrs.width).toBe(120);
+    expect(beforeColgroup?.child(1).attrs.width).toBe(120);
+    expect(beforeColgroup?.child(2).attrs.width).toBe(240);
+  });
+
   it('deletes the selected column but keeps the last column', () => {
     const nextState = applyCommand(createStateWithTable(2, 2), deleteColumn());
     expect(getBody(getTable(nextState.doc)).child(0).childCount).toBe(1);
@@ -212,6 +244,36 @@ describe('html table commands', () => {
     });
 
     expect(result).toBe(false);
+  });
+
+  it('keeps colgroup widths in sync when deleting columns', () => {
+    const table = schema.nodes.htmlTable!.create(null, [
+      schema.nodes.htmlTableColgroup!.create(null, [
+        schema.nodes.htmlTableCol!.create({ span: null, width: 120 }),
+        schema.nodes.htmlTableCol!.create({ span: null, width: 240 }),
+        schema.nodes.htmlTableCol!.create({ span: null, width: 360 }),
+      ]),
+      schema.nodes.htmlTableBody!.create(null, [
+        schema.nodes.htmlTableRow!.create(null, [
+          schema.nodes.htmlTableCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('A'))]),
+          schema.nodes.htmlTableCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('B'))]),
+          schema.nodes.htmlTableCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('C'))]),
+        ]),
+      ]),
+    ]);
+    const doc = schema.nodes.doc!.create(null, [table]);
+    const cellPositions = findNodePositions(doc, 'htmlTableCell');
+    const state = EditorState.create({
+      schema,
+      doc,
+      selection: CellSelection.create(doc, cellPositions[1]!),
+    });
+    const nextState = applyCommand(state, deleteColumn());
+    const colgroup = getSection(getTable(nextState.doc), 'htmlTableColgroup');
+
+    expect(colgroup?.childCount).toBe(2);
+    expect(colgroup?.child(0).attrs.width).toBe(120);
+    expect(colgroup?.child(1).attrs.width).toBe(360);
   });
 
   it('deletes the selected table', () => {
@@ -235,6 +297,28 @@ describe('html table commands', () => {
     const firstCell = getBody(getTable(nextState.doc)).child(0).child(0);
 
     expect(firstCell.attrs.colspan).toBe(2);
+  });
+
+  it('sets text alignment for the current cell selection', () => {
+    const state = createStateWithTable(2, 2);
+    const cellPositions = findNodePositions(state.doc, 'htmlTableHeaderCell');
+    const selectedState = EditorState.create({
+      schema,
+      doc: state.doc,
+      selection: CellSelection.create(state.doc, cellPositions[0]!, cellPositions[1]!),
+    });
+    const nextState = applyCommand(selectedState, setCellTextAlign('center'));
+    const firstRow = getBody(getTable(nextState.doc)).child(0);
+
+    expect(firstRow.child(0).attrs.textAlign).toBe('center');
+    expect(firstRow.child(1).attrs.textAlign).toBe('center');
+  });
+
+  it('sets background color for the current cell', () => {
+    const nextState = applyCommand(createStateWithTable(2, 2), setCellBackgroundColor('#ffeeaa'));
+    const firstCell = getBody(getTable(nextState.doc)).child(0).child(0);
+
+    expect(firstCell.attrs.backgroundColor).toBe('#ffeeaa');
   });
 
   it('adds or updates a caption on the current table', () => {
@@ -338,6 +422,56 @@ describe('html table commands', () => {
     expect(body.childCount).toBe(1);
   });
 
+  it('does not move a row across sections when rowspan cells are involved', () => {
+    const table = schema.nodes.htmlTable!.create(null, [
+      schema.nodes.htmlTableBody!.create(null, [
+        schema.nodes.htmlTableRow!.create(null, [
+          schema.nodes.htmlTableCell!.create({ rowspan: 2 }, [schema.nodes.paragraph!.create(null, schema.text('A'))]),
+          schema.nodes.htmlTableCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('B'))]),
+        ]),
+        schema.nodes.htmlTableRow!.create(null, [
+          schema.nodes.htmlTableCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('C'))]),
+        ]),
+      ]),
+    ]);
+    const state = createStateForTable(table);
+    let dispatched = false;
+
+    const result = moveRowToHead()(state, () => {
+      dispatched = true;
+    });
+
+    expect(result).toBe(false);
+    expect(dispatched).toBe(false);
+  });
+
+  it('moves the selected row to a specific position inside another tbody section', () => {
+    const table = schema.nodes.htmlTable!.create(null, [
+      schema.nodes.htmlTableBody!.create(null, [
+        schema.nodes.htmlTableRow!.create(null, [
+          schema.nodes.htmlTableCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('A'))]),
+        ]),
+      ]),
+      schema.nodes.htmlTableBody!.create(null, [
+        schema.nodes.htmlTableRow!.create(null, [
+          schema.nodes.htmlTableCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('C'))]),
+        ]),
+        schema.nodes.htmlTableRow!.create(null, [
+          schema.nodes.htmlTableCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('D'))]),
+        ]),
+      ]),
+    ]);
+    const state = createStateForTable(table);
+    const nextState = applyCommand(state, moveRowToBody({ targetSectionIndex: 1, targetRowIndex: 1 }));
+    const nextTable = getTable(nextState.doc);
+    const body = getBody(nextTable);
+
+    expect(body.childCount).toBe(3);
+    expect(body.child(0).textContent).toBe('C');
+    expect(body.child(1).textContent).toBe('A');
+    expect(body.child(2).textContent).toBe('D');
+  });
+
   it('adds an explicit head section in the correct position', () => {
     const nextState = applyCommand(createStateWithTable(2, 2), addHeadSection());
     const nextTable = getTable(nextState.doc);
@@ -407,6 +541,28 @@ describe('html table commands', () => {
     expect(body.child(2).child(0).type.name).toBe('htmlTableCell');
   });
 
+  it('inserts a new row at a specific position inside a targeted tbody section', () => {
+    const table = schema.nodes.htmlTable!.create(null, [
+      schema.nodes.htmlTableBody!.create(null, [
+        schema.nodes.htmlTableRow!.create(null, [
+          schema.nodes.htmlTableCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('A'))]),
+        ]),
+      ]),
+      schema.nodes.htmlTableBody!.create(null, [
+        schema.nodes.htmlTableRow!.create(null, [
+          schema.nodes.htmlTableCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('B'))]),
+        ]),
+      ]),
+    ]);
+    const nextState = applyCommand(createStateForTable(table), addRowToBody({ targetSectionIndex: 1, targetRowIndex: 0 }));
+    const nextTable = getTable(nextState.doc);
+    const secondBody = nextTable.child(1);
+
+    expect(secondBody.childCount).toBe(2);
+    expect(secondBody.child(0).textContent).toBe('');
+    expect(secondBody.child(1).textContent).toBe('B');
+  });
+
   it('adds a new row directly into the foot section', () => {
     const nextState = applyCommand(createStateWithTable(2, 2), addRowToFoot());
     const nextTable = getTable(nextState.doc);
@@ -462,6 +618,29 @@ describe('html table commands', () => {
 
     expect(body.child(0).textContent).toBe('B');
     expect(body.child(1).textContent).toBe('A');
+  });
+
+  it('does not reorder rows when rowspan cells are involved', () => {
+    const table = schema.nodes.htmlTable!.create(null, [
+      schema.nodes.htmlTableBody!.create(null, [
+        schema.nodes.htmlTableRow!.create(null, [
+          schema.nodes.htmlTableCell!.create({ rowspan: 2 }, [schema.nodes.paragraph!.create(null, schema.text('A'))]),
+          schema.nodes.htmlTableCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('B'))]),
+        ]),
+        schema.nodes.htmlTableRow!.create(null, [
+          schema.nodes.htmlTableCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('C'))]),
+        ]),
+      ]),
+    ]);
+    const state = createStateForTable(table);
+    let dispatched = false;
+
+    const result = moveRowDown()(state, () => {
+      dispatched = true;
+    });
+
+    expect(result).toBe(false);
+    expect(dispatched).toBe(false);
   });
 
   it('duplicates the current row within the same section', () => {

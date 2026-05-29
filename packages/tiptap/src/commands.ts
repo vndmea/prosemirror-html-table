@@ -41,6 +41,8 @@ import {
   setColgroup as setCoreColgroup,
   setCaption as setCoreCaption,
   setCellAttribute as setCoreCellAttribute,
+  setCellBackgroundColor as setCoreCellBackgroundColor,
+  setCellTextAlign as setCoreCellTextAlign,
   splitCell as splitCoreCell,
   sortBodyRowsByColumn as sortCoreBodyRowsByColumn,
   toggleHeaderCell as toggleCoreHeaderCell,
@@ -49,6 +51,7 @@ import {
   type HtmlTableCellNavigationOptions,
   type HtmlTableCommandOptions,
   type InsertHtmlTableCommandOptions,
+  type HtmlTableSectionTargetOptions,
   type HtmlTableSortRowsOptions,
 } from 'prosemirror-html-table';
 
@@ -60,9 +63,9 @@ declare module '@tiptap/core' {
       removeHtmlTableHeadSection: (options?: HtmlTableCommandOptions) => ReturnType;
       addHtmlTableFootSection: (options?: HtmlTableCommandOptions) => ReturnType;
       removeHtmlTableFootSection: (options?: HtmlTableCommandOptions) => ReturnType;
-      addHtmlTableRowToHead: (options?: HtmlTableCommandOptions) => ReturnType;
-      addHtmlTableRowToBody: (options?: HtmlTableCommandOptions) => ReturnType;
-      addHtmlTableRowToFoot: (options?: HtmlTableCommandOptions) => ReturnType;
+      addHtmlTableRowToHead: (options?: HtmlTableSectionTargetOptions) => ReturnType;
+      addHtmlTableRowToBody: (options?: HtmlTableSectionTargetOptions) => ReturnType;
+      addHtmlTableRowToFoot: (options?: HtmlTableSectionTargetOptions) => ReturnType;
       addHtmlTableRowBefore: (options?: HtmlTableCommandOptions) => ReturnType;
       addHtmlTableRowAfter: (options?: HtmlTableCommandOptions) => ReturnType;
       deleteHtmlTableRow: (options?: HtmlTableCommandOptions) => ReturnType;
@@ -80,11 +83,13 @@ declare module '@tiptap/core' {
       sortHtmlTableBodyRowsByColumn: (options?: HtmlTableSortRowsOptions) => ReturnType;
       moveHtmlTableRowUp: (options?: HtmlTableCommandOptions) => ReturnType;
       moveHtmlTableRowDown: (options?: HtmlTableCommandOptions) => ReturnType;
-      moveHtmlTableRowToHead: (options?: HtmlTableCommandOptions) => ReturnType;
-      moveHtmlTableRowToBody: (options?: HtmlTableCommandOptions) => ReturnType;
-      moveHtmlTableRowToFoot: (options?: HtmlTableCommandOptions) => ReturnType;
+      moveHtmlTableRowToHead: (options?: HtmlTableSectionTargetOptions) => ReturnType;
+      moveHtmlTableRowToBody: (options?: HtmlTableSectionTargetOptions) => ReturnType;
+      moveHtmlTableRowToFoot: (options?: HtmlTableSectionTargetOptions) => ReturnType;
       setHtmlTableCaption: (text: string, options?: HtmlTableCommandOptions) => ReturnType;
       setHtmlTableColgroup: (widths?: Array<number | null>, options?: HtmlTableCommandOptions) => ReturnType;
+      setHtmlTableCellTextAlign: (textAlign: string | null, options?: HtmlTableCommandOptions) => ReturnType;
+      setHtmlTableCellBackgroundColor: (backgroundColor: string | null, options?: HtmlTableCommandOptions) => ReturnType;
       removeHtmlTableCaption: (options?: HtmlTableCommandOptions) => ReturnType;
       removeHtmlTableColgroup: (options?: HtmlTableCommandOptions) => ReturnType;
       mergeHtmlTableCells: (options?: HtmlTableCommandOptions) => ReturnType;
@@ -133,17 +138,17 @@ export function createHtmlTableCommands(): Partial<RawCommands> {
         removeCoreFootSection(options)(state, dispatch),
 
     addHtmlTableRowToHead:
-      (options?: HtmlTableCommandOptions) =>
+      (options?: HtmlTableSectionTargetOptions) =>
       ({ state, dispatch }) =>
         addCoreRowToHeadSection(options)(state, dispatch),
 
     addHtmlTableRowToBody:
-      (options?: HtmlTableCommandOptions) =>
+      (options?: HtmlTableSectionTargetOptions) =>
       ({ state, dispatch }) =>
         addCoreRowToBodySection(options)(state, dispatch),
 
     addHtmlTableRowToFoot:
-      (options?: HtmlTableCommandOptions) =>
+      (options?: HtmlTableSectionTargetOptions) =>
       ({ state, dispatch }) =>
         addCoreRowToFootSection(options)(state, dispatch),
 
@@ -233,17 +238,17 @@ export function createHtmlTableCommands(): Partial<RawCommands> {
         moveCoreRowDown(options)(state, dispatch),
 
     moveHtmlTableRowToHead:
-      (options?: HtmlTableCommandOptions) =>
+      (options?: HtmlTableSectionTargetOptions) =>
       ({ state, dispatch }) =>
         moveCoreRowToHead(options)(state, dispatch),
 
     moveHtmlTableRowToBody:
-      (options?: HtmlTableCommandOptions) =>
+      (options?: HtmlTableSectionTargetOptions) =>
       ({ state, dispatch }) =>
         moveCoreRowToBody(options)(state, dispatch),
 
     moveHtmlTableRowToFoot:
-      (options?: HtmlTableCommandOptions) =>
+      (options?: HtmlTableSectionTargetOptions) =>
       ({ state, dispatch }) =>
         moveCoreRowToFoot(options)(state, dispatch),
 
@@ -256,6 +261,16 @@ export function createHtmlTableCommands(): Partial<RawCommands> {
       (widths?: Array<number | null>, options?: HtmlTableCommandOptions) =>
       ({ state, dispatch }) =>
         setCoreColgroup(widths, options)(state, dispatch),
+
+    setHtmlTableCellTextAlign:
+      (textAlign: string | null, options?: HtmlTableCommandOptions) =>
+      ({ state, dispatch }) =>
+        setCoreCellTextAlign(textAlign, options)(state, dispatch),
+
+    setHtmlTableCellBackgroundColor:
+      (backgroundColor: string | null, options?: HtmlTableCommandOptions) =>
+      ({ state, dispatch }) =>
+        setCoreCellBackgroundColor(backgroundColor, options)(state, dispatch),
 
     removeHtmlTableCaption:
       (options?: HtmlTableCommandOptions) =>

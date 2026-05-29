@@ -48,6 +48,8 @@ export {
   setColgroup,
   setCaption,
   setCellAttribute,
+  setCellBackgroundColor,
+  setCellTextAlign,
   splitCell,
   sortBodyRowsByColumn,
   toggleHeaderCell,
@@ -64,6 +66,7 @@ export type { CreateHtmlTableOptions } from './builders.js';
 export type {
   HtmlTableCellNavigationOptions,
   HtmlTableCommandOptions,
+  HtmlTableSectionTargetOptions,
   InsertHtmlTableCommandOptions,
   HtmlTableSortRowsOptions,
 } from './commands.js';
