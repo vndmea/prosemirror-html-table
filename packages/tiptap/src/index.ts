@@ -18,6 +18,7 @@ export {
   HtmlTableCell,
   HtmlTableCol,
   HtmlTableColgroup,
+  createHtmlTableExtensions,
   HtmlTableExtensions,
   HtmlTableFoot,
   HtmlTableHead,
@@ -32,6 +33,7 @@ export type {
   InsertHtmlTableCommandOptions,
 } from './commands.js';
 export type { HtmlTableTiptapOptions } from './options.js';
+export type { CreateHtmlTableExtensionsOptions } from './nodes.js';
 export type {
   HtmlTableHoverKind,
   HtmlTableHoverState,

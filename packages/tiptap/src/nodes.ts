@@ -1,5 +1,9 @@
 import { mergeAttributes, Node, type NodeViewRendererProps } from '@tiptap/core';
-import { CellSelection } from 'prosemirror-html-table';
+import {
+  CellSelection,
+  createTiptapHtmlTableCellAttributes,
+  type HtmlTableCellAttributes,
+} from 'prosemirror-html-table';
 
 import { createHtmlTableCommands } from './commands.js';
 import { createHtmlTableHandlePlugin } from './html-table-handles.js';
@@ -7,6 +11,11 @@ import { createHtmlTableInteractionPlugin } from './html-table-interaction.js';
 import { defaultHtmlTableTiptapOptions, type HtmlTableTiptapOptions } from './options.js';
 import { HtmlTableNodeView } from './table-view.js';
 import { createHtmlTableSelectionPlugin, findAdjacentCell, getTableSelectionInfo } from './table-utils.js';
+
+export interface CreateHtmlTableExtensionsOptions {
+  table?: Partial<HtmlTableTiptapOptions>;
+  cellAttributes?: HtmlTableCellAttributes;
+}
 
 export const HtmlTable = Node.create<HtmlTableTiptapOptions>({
   name: 'htmlTable',
@@ -206,77 +215,51 @@ export const HtmlTableRow = Node.create({
   },
 });
 
-const cellAttributes = {
-  colspan: {
-    default: 1,
-    parseHTML: (element: HTMLElement) => Number(element.getAttribute('colspan') || 1),
-    renderHTML: (attrs: Record<string, unknown>) => (attrs.colspan !== 1 ? { colspan: attrs.colspan } : {}),
-  },
-  rowspan: {
-    default: 1,
-    parseHTML: (element: HTMLElement) => Number(element.getAttribute('rowspan') || 1),
-    renderHTML: (attrs: Record<string, unknown>) => (attrs.rowspan !== 1 ? { rowspan: attrs.rowspan } : {}),
-  },
-  colwidth: {
-    default: null,
-    parseHTML: (element: HTMLElement) => {
-      const value = element.getAttribute('data-colwidth');
-      return value ? value.split(',').map((item) => Number(item)) : null;
+export const HtmlTableCell = createHtmlTableCellExtension('htmlTableCell', 'td');
+
+export const HtmlTableHeaderCell = createHtmlTableCellExtension('htmlTableHeaderCell', 'th');
+
+export function createHtmlTableExtensions(options: CreateHtmlTableExtensionsOptions = {}) {
+  const tableExtension = options.table ? HtmlTable.configure(options.table) : HtmlTable;
+
+  return [
+    tableExtension,
+    HtmlTableCaption,
+    HtmlTableColgroup,
+    HtmlTableCol,
+    HtmlTableHead,
+    HtmlTableBody,
+    HtmlTableFoot,
+    HtmlTableRow,
+    createHtmlTableCellExtension('htmlTableHeaderCell', 'th', options.cellAttributes),
+    createHtmlTableCellExtension('htmlTableCell', 'td', options.cellAttributes),
+  ];
+}
+
+export const HtmlTableExtensions = createHtmlTableExtensions();
+
+function createHtmlTableCellExtension(
+  name: 'htmlTableCell' | 'htmlTableHeaderCell',
+  tag: 'td' | 'th',
+  cellAttributes?: HtmlTableCellAttributes,
+) {
+  return Node.create({
+    name,
+
+    content: 'block+',
+
+    isolating: true,
+
+    addAttributes() {
+      return createTiptapHtmlTableCellAttributes(cellAttributes);
     },
-    renderHTML: (attrs: Record<string, unknown>) =>
-      Array.isArray(attrs.colwidth) ? { 'data-colwidth': attrs.colwidth.join(',') } : {},
-  },
-};
 
-export const HtmlTableCell = Node.create({
-  name: 'htmlTableCell',
+    parseHTML() {
+      return [{ tag }];
+    },
 
-  content: 'block+',
-
-  isolating: true,
-
-  addAttributes() {
-    return cellAttributes;
-  },
-
-  parseHTML() {
-    return [{ tag: 'td' }];
-  },
-
-  renderHTML({ HTMLAttributes }) {
-    return ['td', HTMLAttributes, 0];
-  },
-});
-
-export const HtmlTableHeaderCell = Node.create({
-  name: 'htmlTableHeaderCell',
-
-  content: 'block+',
-
-  isolating: true,
-
-  addAttributes() {
-    return cellAttributes;
-  },
-
-  parseHTML() {
-    return [{ tag: 'th' }];
-  },
-
-  renderHTML({ HTMLAttributes }) {
-    return ['th', HTMLAttributes, 0];
-  },
-});
-
-export const HtmlTableExtensions = [
-  HtmlTable,
-  HtmlTableCaption,
-  HtmlTableColgroup,
-  HtmlTableCol,
-  HtmlTableHead,
-  HtmlTableBody,
-  HtmlTableFoot,
-  HtmlTableRow,
-  HtmlTableHeaderCell,
-  HtmlTableCell,
-];
+    renderHTML({ HTMLAttributes }) {
+      return [tag, HTMLAttributes, 0];
+    },
+  });
+}

@@ -191,6 +191,41 @@ export function deleteTable(options: HtmlTableCommandOptions = {}): Command {
   };
 }
 
+export function setCaption(text: string, options: HtmlTableCommandOptions = {}): Command {
+  return (state, dispatch) => {
+    const context = findTableContext(state, options);
+    if (!context) return false;
+
+    const tableChildren = getChildren(context.table);
+    const captionIndex = findChildIndex(context.table, context.names.caption);
+    const captionType = getNodeType(state.schema, context.names.caption);
+    const captionContent = text.length > 0 ? state.schema.text(text) : undefined;
+    const caption = captionType.create(null, captionContent);
+
+    if (captionIndex >= 0) {
+      tableChildren[captionIndex] = caption;
+    } else {
+      tableChildren.splice(0, 0, caption);
+    }
+
+    return replaceTable(state, dispatch, context, context.table.copy(Fragment.fromArray(tableChildren)));
+  };
+}
+
+export function removeCaption(options: HtmlTableCommandOptions = {}): Command {
+  return (state, dispatch) => {
+    const context = findTableContext(state, options);
+    if (!context) return false;
+
+    const tableChildren = getChildren(context.table);
+    const captionIndex = findChildIndex(context.table, context.names.caption);
+    if (captionIndex < 0) return false;
+
+    tableChildren.splice(captionIndex, 1);
+    return replaceTable(state, dispatch, context, context.table.copy(Fragment.fromArray(tableChildren)));
+  };
+}
+
 export function setCellAttribute(
   name: string,
   value: unknown,
@@ -1012,6 +1047,16 @@ function getChildren(node: ProseMirrorNode): ProseMirrorNode[] {
   const children: ProseMirrorNode[] = [];
   node.forEach((child) => children.push(child));
   return children;
+}
+
+function findChildIndex(node: ProseMirrorNode, typeName: string): number {
+  for (let index = 0; index < node.childCount; index += 1) {
+    if (node.child(index).type.name === typeName) {
+      return index;
+    }
+  }
+
+  return -1;
 }
 
 function getNodeType(schema: Schema, name: string) {

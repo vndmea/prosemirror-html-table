@@ -20,10 +20,12 @@ import {
   mergeCells,
   mergeOrSplit,
   normalizeHtmlTable,
+  removeCaption,
   selectCell,
   selectColumn,
   selectRow,
   selectTable,
+  setCaption,
   setCellAttribute,
   splitCell,
   toggleHeaderCell,
@@ -198,6 +200,39 @@ describe('html table commands', () => {
     const firstCell = getBody(getTable(nextState.doc)).child(0).child(0);
 
     expect(firstCell.attrs.colspan).toBe(2);
+  });
+
+  it('adds or updates a caption on the current table', () => {
+    const insertedCaptionState = applyCommand(createStateWithTable(2, 2), setCaption('Summary'));
+    expect(getTable(insertedCaptionState.doc).child(0).type.name).toBe('htmlTableCaption');
+    expect(getTable(insertedCaptionState.doc).child(0).textContent).toBe('Summary');
+
+    const table = createHtmlTableNode(schema, { rows: 2, cols: 2, withCaption: true, captionText: 'Before' });
+    const doc = schema.nodes.doc!.create(null, [table]);
+    const firstCellPos = findNodePositions(doc, 'htmlTableCell')[0] ?? findNodePositions(doc, 'htmlTableHeaderCell')[0];
+    const state = EditorState.create({
+      schema,
+      doc,
+      selection: CellSelection.create(doc, firstCellPos!),
+    });
+    const updatedCaptionState = applyCommand(state, setCaption('After'));
+
+    expect(getTable(updatedCaptionState.doc).child(0).textContent).toBe('After');
+  });
+
+  it('removes an existing caption from the current table', () => {
+    const table = createHtmlTableNode(schema, { rows: 2, cols: 2, withCaption: true, captionText: 'Summary' });
+    const doc = schema.nodes.doc!.create(null, [table]);
+    const firstCellPos = findNodePositions(doc, 'htmlTableCell')[0] ?? findNodePositions(doc, 'htmlTableHeaderCell')[0];
+    const state = EditorState.create({
+      schema,
+      doc,
+      selection: CellSelection.create(doc, firstCellPos!),
+    });
+
+    const nextState = applyCommand(state, removeCaption());
+
+    expect(getTable(nextState.doc).child(0).type.name).toBe('htmlTableBody');
   });
 
   it('toggles the selected cell between header and body cell types', () => {

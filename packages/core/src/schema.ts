@@ -1,5 +1,11 @@
 import type { NodeSpec } from 'prosemirror-model';
 
+import {
+  createHtmlTableCellAttributes,
+  getHtmlTableCellNodeSpecAttributes,
+  parseHtmlTableCellAttributes,
+  renderHtmlTableCellAttributes,
+} from './cell-attributes.js';
 import { htmlTableNodeNames } from './names.js';
 import type { HtmlTableNodeSpecs, HtmlTableSchemaOptions, NormalizedHtmlTableSchemaOptions } from './types.js';
 
@@ -15,6 +21,7 @@ export function normalizeHtmlTableSchemaOptions(
     captionContent: options.captionContent ?? 'inline*',
     tableGroup: options.tableGroup ?? 'block',
     cellGroup: options.cellGroup ?? 'htmlTableCellGroup',
+    cellAttributes: createHtmlTableCellAttributes(options.cellAttributes),
   };
 }
 
@@ -119,32 +126,13 @@ function createCellSpec(tag: 'td' | 'th', config: NormalizedHtmlTableSchemaOptio
     group: config.cellGroup,
     tableRole: tag === 'th' ? 'header_cell' : 'cell',
     isolating: true,
-    attrs: {
-      colspan: { default: 1 },
-      rowspan: { default: 1 },
-      colwidth: { default: null },
-    },
+    attrs: getHtmlTableCellNodeSpecAttributes(config.cellAttributes),
     parseDOM: [
       {
         tag,
-        getAttrs: (dom) => {
-          const element = dom as HTMLElement;
-          return {
-            colspan: Number(element.getAttribute('colspan') || 1),
-            rowspan: Number(element.getAttribute('rowspan') || 1),
-            colwidth: element.getAttribute('data-colwidth')
-              ? element.getAttribute('data-colwidth')?.split(',').map((value) => Number(value))
-              : null,
-          };
-        },
+        getAttrs: (dom) => parseHtmlTableCellAttributes(dom as HTMLElement, config.cellAttributes),
       },
     ],
-    toDOM: (node) => {
-      const attrs: Record<string, string> = {};
-      if (node.attrs.colspan !== 1) attrs.colspan = String(node.attrs.colspan);
-      if (node.attrs.rowspan !== 1) attrs.rowspan = String(node.attrs.rowspan);
-      if (Array.isArray(node.attrs.colwidth)) attrs['data-colwidth'] = node.attrs.colwidth.join(',');
-      return [tag, attrs, 0];
-    },
+    toDOM: (node) => [tag, renderHtmlTableCellAttributes(node.attrs as Record<string, unknown>, config.cellAttributes), 0],
   };
 }

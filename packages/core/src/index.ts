@@ -1,10 +1,18 @@
 export { createHtmlTableNode } from './builders.js';
 export {
+  createHtmlTableCellAttributes,
+  createTiptapHtmlTableCellAttributes,
+  defaultHtmlTableCellAttributes,
+  parseHtmlTableCellAttributes,
+  renderHtmlTableCellAttributes,
+} from './cell-attributes.js';
+export {
   addColumnAfter,
   addColumnBefore,
   addRowAfter,
   addRowBefore,
   deleteColumn,
+  removeCaption,
   deleteRow,
   deleteTable,
   fixTables,
@@ -17,6 +25,7 @@ export {
   selectColumn,
   selectRow,
   selectTable,
+  setCaption,
   setCellAttribute,
   splitCell,
   toggleHeaderCell,
@@ -48,8 +57,11 @@ export type {
 } from './grid.js';
 
 export type {
+  HtmlTableCellAttributeSpec,
+  HtmlTableCellAttributes,
   HtmlTableNodeNames,
   HtmlTableNodeSpecs,
+  HtmlTableRenderedAttributes,
   HtmlTableSchemaOptions,
   NormalizedHtmlTableSchemaOptions,
 } from './types.js';

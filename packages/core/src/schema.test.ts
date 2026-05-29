@@ -34,4 +34,45 @@ describe('createHtmlTableNodeSpecs', () => {
     expect(specs.tableCell?.content).toBe('paragraph+');
     expect(specs.htmlTableCaption?.content).toBe('text*');
   });
+
+  it('extends cell attrs with custom parse and render behavior', () => {
+    const specs = createHtmlTableNodeSpecs({
+      cellAttributes: {
+        textAlign: {
+          default: null,
+          parseHTML: (element) => element.getAttribute('data-align'),
+          renderHTML: (attrs) => (attrs.textAlign ? { 'data-align': String(attrs.textAlign) } : {}),
+        },
+      },
+    });
+
+    const cellAttrs = specs.htmlTableCell?.attrs as Record<string, { default: unknown }>;
+    const parseRule = specs.htmlTableCell?.parseDOM?.[0];
+    const rendered = specs.htmlTableCell?.toDOM?.({
+      attrs: {
+        colspan: 1,
+        rowspan: 1,
+        colwidth: null,
+        textAlign: 'center',
+      },
+    } as never);
+    const parsed = parseRule && 'getAttrs' in parseRule
+      ? parseRule.getAttrs?.({
+          getAttribute: (name: string) => {
+            if (name === 'data-align') return 'center';
+            return null;
+          },
+          style: {},
+        } as HTMLElement)
+      : null;
+
+    expect(cellAttrs.textAlign?.default).toBeNull();
+    expect(parsed).toMatchObject({
+      colspan: 1,
+      rowspan: 1,
+      colwidth: null,
+      textAlign: 'center',
+    });
+    expect(rendered).toEqual(['td', { 'data-align': 'center' }, 0]);
+  });
 });
