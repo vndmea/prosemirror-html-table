@@ -9,6 +9,7 @@ import {
   findSelectedHtmlTable,
   getHtmlTableContextTriggerState,
   getHtmlTableInteractionState,
+  htmlTableInteractionPluginKey,
 } from './html-table-interaction.js';
 import { createHtmlTableSelectionPlugin } from './table-utils.js';
 import { defaultHtmlTableTiptapOptions } from './options.js';
@@ -188,24 +189,7 @@ describe('html table interaction plugin', () => {
       tablePos: 0,
       table: createHtmlTableNode(schema, { rows: 2, cols: 2 }),
     };
-    const geometry = {
-      tableRect: {
-        left: 10,
-        top: 20,
-        right: 210,
-        bottom: 120,
-        width: 200,
-        height: 100,
-      },
-      columns: [
-        { index: 0, left: 0, width: 80 },
-        { index: 1, left: 80, width: 120 },
-      ],
-      rows: [
-        { index: 0, top: 0, height: 40 },
-        { index: 1, top: 40, height: 60 },
-      ],
-    };
+    const geometry = createGeometry();
 
     expect(
       getHtmlTableContextTriggerState(
@@ -246,7 +230,69 @@ describe('html table interaction plugin', () => {
       top: 20,
     });
   });
+
+  it('opens the context menu only while the trigger is visible and closes it on selection changes', () => {
+    const table = createHtmlTableNode(schema, { rows: 2, cols: 2 });
+    const doc = schema.nodes.doc!.create(null, [table]);
+    const cellPositions = findNodePositions(doc, 'htmlTableCell');
+    const baseState = EditorState.create({
+      schema,
+      doc,
+      selection: CellSelection.create(doc, cellPositions[0]!),
+      plugins: [createHtmlTableInteractionPlugin()],
+    });
+    const rowState = baseState.apply(createRowSelectionTransaction(baseState, 0, table, 1)!);
+    const geometryState = rowState.apply(
+      rowState.tr.setMeta(htmlTableInteractionPluginKey, {
+        geometry: createGeometry(),
+      }),
+    );
+    const openState = geometryState.apply(
+      geometryState.tr.setMeta(htmlTableInteractionPluginKey, {
+        contextMenuOpen: true,
+      }),
+    );
+
+    expect(getHtmlTableInteractionState(openState).contextTrigger.visible).toBe(true);
+    expect(getHtmlTableInteractionState(openState).contextMenuOpen).toBe(true);
+
+    const nextCellState = openState.apply(
+      openState.tr.setSelection(TextSelection.near(openState.doc.resolve(cellPositions[1]! + 1))),
+    );
+
+    expect(getHtmlTableInteractionState(nextCellState).contextMenuOpen).toBe(false);
+
+    const hiddenOpenState = baseState.apply(
+      baseState.tr.setMeta(htmlTableInteractionPluginKey, {
+        contextMenuOpen: true,
+      }),
+    );
+
+    expect(getHtmlTableInteractionState(hiddenOpenState).contextTrigger.visible).toBe(false);
+    expect(getHtmlTableInteractionState(hiddenOpenState).contextMenuOpen).toBe(false);
+  });
 });
+
+function createGeometry() {
+  return {
+    tableRect: {
+      left: 10,
+      top: 20,
+      right: 210,
+      bottom: 120,
+      width: 200,
+      height: 100,
+    },
+    columns: [
+      { index: 0, left: 0, width: 80 },
+      { index: 1, left: 80, width: 120 },
+    ],
+    rows: [
+      { index: 0, top: 0, height: 40 },
+      { index: 1, top: 40, height: 60 },
+    ],
+  };
+}
 
 function findNodePositions(doc: import('prosemirror-model').Node, typeName: string): number[] {
   const positions: number[] = [];

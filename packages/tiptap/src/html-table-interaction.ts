@@ -49,6 +49,7 @@ export interface HtmlTableInteractionState {
   hovered: HtmlTableHoverState | null;
   selectedAxis: HtmlTableSelectedAxisState;
   contextTrigger: HtmlTableContextTriggerState;
+  contextMenuOpen: boolean;
   geometry: HtmlTableGeometry | null;
   resizing: HtmlTableResizeState | null;
 }
@@ -59,6 +60,7 @@ interface HtmlTableInteractionMeta {
   geometry?: HtmlTableGeometry | null;
   resizing?: HtmlTableResizeState | null;
   selectedAxis?: HtmlTableSelectedAxisState | null;
+  contextMenuOpen?: boolean | null;
 }
 
 const defaultSelectedAxisState: HtmlTableSelectedAxisState = {
@@ -77,6 +79,7 @@ const defaultInteractionState: HtmlTableInteractionState = {
     left: null,
     top: null,
   },
+  contextMenuOpen: false,
   geometry: null,
   resizing: null,
 };
@@ -142,6 +145,12 @@ function buildInteractionState(
         ? previous.geometry
         : null;
   const contextTrigger = deriveContextTriggerState(activeTable, tableSelected, derivedSelectedAxis, geometry);
+  const contextMenuOpen =
+    meta.contextMenuOpen !== undefined
+      ? Boolean(meta.contextMenuOpen) && contextTrigger.visible
+      : contextTrigger.visible && !selectionChanged
+        ? previous?.contextMenuOpen ?? false
+        : false;
   const resizing =
     activeTable && meta.resizing !== undefined
       ? meta.resizing
@@ -155,6 +164,7 @@ function buildInteractionState(
     hovered,
     selectedAxis,
     contextTrigger,
+    contextMenuOpen,
     geometry,
     resizing,
   };

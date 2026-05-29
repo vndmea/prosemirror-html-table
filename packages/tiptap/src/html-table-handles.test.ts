@@ -27,6 +27,7 @@ function createInteractionState(
       left: null,
       top: null,
     },
+    contextMenuOpen: false,
     geometry: null,
     resizing: null,
     ...overrides,
@@ -226,6 +227,7 @@ describe('html table handles', () => {
   it('derives trigger button render state from trigger button state', () => {
     const trigger: HtmlTableContextTriggerButtonState = {
       visible: true,
+      expanded: true,
       scope: 'row',
       anchor: {
         left: 10,
@@ -246,6 +248,7 @@ describe('html table handles', () => {
       visible: true,
       left: 10,
       top: 90,
+      expanded: true,
       label: 'Row actions',
       title: 'Row actions: Add row after',
       scope: 'row',
@@ -256,17 +259,19 @@ describe('html table handles', () => {
       getHtmlTableContextTriggerRenderState({
         ...trigger,
         visible: false,
+        expanded: false,
         anchor: null,
         label: null,
         title: null,
         primaryAction: null,
       }),
-    ).toEqual({
-      visible: false,
-      left: null,
-      top: null,
-      label: null,
-      title: null,
+      ).toEqual({
+        visible: false,
+        left: null,
+        top: null,
+        expanded: false,
+        label: null,
+        title: null,
       scope: 'row',
       primaryActionId: null,
     });

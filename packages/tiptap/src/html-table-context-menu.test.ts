@@ -33,6 +33,7 @@ describe('html table context menu state', () => {
     const menu = getHtmlTableContextMenuState(state, createInteractionState());
 
     expect(menu.visible).toBe(false);
+    expect(menu.open).toBe(false);
     expect(menu.scope).toBeNull();
     expect(menu.anchor).toBeNull();
     expect(menu.actions).toEqual([]);
@@ -59,6 +60,7 @@ describe('html table context menu state', () => {
     );
 
     expect(menu.visible).toBe(true);
+    expect(menu.open).toBe(false);
     expect(menu.scope).toBe('table');
     expect(menu.anchor).toEqual({ left: 10, top: 20 });
     expect(menu.groups.map((group) => group.id)).toEqual(['table', 'danger']);
@@ -87,6 +89,7 @@ describe('html table context menu state', () => {
     );
 
     expect(menu.visible).toBe(true);
+    expect(menu.open).toBe(false);
     expect(menu.scope).toBe('row');
     expect(menu.anchor).toEqual({ left: 10, top: 90 });
     expect(menu.groups.map((group) => group.id)).toEqual([
@@ -119,6 +122,7 @@ describe('html table context menu state', () => {
     );
 
     expect(menu.visible).toBe(true);
+    expect(menu.open).toBe(false);
     expect(menu.scope).toBe('cell');
     expect(menu.anchor).toEqual({ left: 89, top: 40 });
     expect(menu.groups.map((group) => group.id)).toEqual(['structure', 'content']);
@@ -147,6 +151,7 @@ describe('html table context menu state', () => {
     );
 
     expect(menu.visible).toBe(true);
+    expect(menu.open).toBe(false);
     expect(menu.scope).toBe('column');
     expect(menu.anchor).toEqual({ left: 150, top: 20 });
     expect(menu.primaryAction?.id).toBe('addColumnAfter');
@@ -176,6 +181,7 @@ describe('html table context menu state', () => {
     );
 
     expect(tableTrigger.visible).toBe(true);
+    expect(tableTrigger.expanded).toBe(false);
     expect(tableTrigger.label).toBe('Table actions');
     expect(tableTrigger.title).toBe('Table actions: Toggle header section');
     expect(tableTrigger.anchor).toEqual({ left: 10, top: 20 });
@@ -202,6 +208,7 @@ describe('html table context menu state', () => {
     );
 
     expect(rowTrigger.visible).toBe(true);
+    expect(rowTrigger.expanded).toBe(false);
     expect(rowTrigger.label).toBe('Row actions');
     expect(rowTrigger.title).toBe('Row actions: Add row after');
     expect(rowTrigger.anchor).toEqual({ left: 10, top: 90 });
@@ -226,8 +233,39 @@ describe('html table context menu state', () => {
     );
 
     expect(trigger.visible).toBe(false);
+    expect(trigger.expanded).toBe(false);
     expect(trigger.label).toBe('Cell actions');
     expect(trigger.primaryAction?.id).toBe('clearSelectedCells');
+  });
+
+  it('marks menu and trigger button as expanded when the context menu is open', () => {
+    const table = createHtmlTableNode(schema, { rows: 2, cols: 2 });
+    const doc = schema.nodes.doc!.create(null, [table]);
+    const state = EditorState.create({
+      schema,
+      doc,
+      selection: NodeSelection.create(doc, 0),
+    });
+
+    const interaction = createInteractionState({
+      activeTable: { tablePos: 0, table },
+      tableSelected: true,
+      contextMenuOpen: true,
+      geometry: createGeometry(),
+      contextTrigger: {
+        visible: true,
+        left: 10,
+        top: 20,
+      },
+    });
+
+    const menu = getHtmlTableContextMenuState(state, interaction);
+    const trigger = getHtmlTableContextTriggerButtonState(state, interaction);
+
+    expect(menu.visible).toBe(true);
+    expect(menu.open).toBe(true);
+    expect(trigger.visible).toBe(true);
+    expect(trigger.expanded).toBe(true);
   });
 });
 
@@ -248,6 +286,7 @@ function createInteractionState(
       left: null,
       top: null,
     },
+    contextMenuOpen: false,
     geometry: null,
     resizing: null,
     ...overrides,

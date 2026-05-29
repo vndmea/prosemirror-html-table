@@ -41,6 +41,7 @@ export interface HtmlTableContextTriggerRenderState {
   visible: boolean;
   left: number | null;
   top: number | null;
+  expanded: boolean;
   label: string | null;
   title: string | null;
   scope: HtmlTableSelectionScope | null;
@@ -139,6 +140,7 @@ export function getHtmlTableContextTriggerRenderState(
     visible: trigger.visible,
     left: trigger.anchor?.left ?? null,
     top: trigger.anchor?.top ?? null,
+    expanded: trigger.expanded,
     label: trigger.label,
     title: trigger.title,
     scope: trigger.scope,
@@ -479,9 +481,11 @@ class HtmlTableHandleOverlayView {
     this.contextTriggerButton.hidden = !renderState.visible;
     this.contextTriggerButton.dataset.scope = renderState.scope ?? '';
     this.contextTriggerButton.dataset.primaryAction = renderState.primaryActionId ?? '';
+    this.contextTriggerButton.setAttribute('aria-expanded', renderState.expanded ? 'true' : 'false');
     this.contextTriggerButton.textContent = renderState.label ? '...' : '';
     this.contextTriggerButton.setAttribute('aria-label', renderState.label ?? 'Context actions');
     this.contextTriggerButton.title = renderState.title ?? renderState.label ?? '';
+    this.root.dataset.contextMenuOpen = renderState.expanded ? 'true' : 'false';
 
     if (!renderState.visible || renderState.left === null || renderState.top === null) {
       this.contextTriggerButton.style.removeProperty('left');
@@ -657,6 +661,18 @@ class HtmlTableHandleOverlayView {
   private handleContextTriggerMouseDown(event: MouseEvent): void {
     event.preventDefault();
     event.stopPropagation();
+    const interaction = getHtmlTableInteractionState(this.view.state);
+    const trigger = getHtmlTableContextTriggerButtonState(this.view.state, interaction);
+    if (!trigger.visible) {
+      this.view.focus();
+      return;
+    }
+
+    this.view.dispatch(
+      this.view.state.tr.setMeta(htmlTableInteractionPluginKey, {
+        contextMenuOpen: !interaction.contextMenuOpen,
+      }),
+    );
     this.view.focus();
   }
 

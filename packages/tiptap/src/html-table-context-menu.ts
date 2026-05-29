@@ -19,6 +19,7 @@ import { getTableSelectionInfo } from './table-utils.js';
 
 export interface HtmlTableContextMenuState {
   visible: boolean;
+  open: boolean;
   scope: HtmlTableSelectionScope | null;
   anchor: HtmlTableSelectionAnchor | null;
   actions: HtmlTableContextAction[];
@@ -28,6 +29,7 @@ export interface HtmlTableContextMenuState {
 
 export interface HtmlTableContextTriggerButtonState {
   visible: boolean;
+  expanded: boolean;
   scope: HtmlTableSelectionScope | null;
   anchor: HtmlTableSelectionAnchor | null;
   label: string | null;
@@ -62,6 +64,7 @@ export function getHtmlTableContextMenuState(
 
   return {
     visible: Boolean(scope && anchor && actions.length > 0),
+    open: Boolean(interaction.contextMenuOpen && scope && anchor && actions.length > 0),
     scope,
     anchor,
     actions,
@@ -94,6 +97,7 @@ export function getHtmlTableContextTriggerButtonState(
 
   return {
     visible: Boolean(menu.visible && hasInteractionAnchor && anchor),
+    expanded: Boolean(menu.open && hasInteractionAnchor && anchor),
     scope: menu.scope,
     anchor,
     label,
