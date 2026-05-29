@@ -226,6 +226,45 @@ export function removeCaption(options: HtmlTableCommandOptions = {}): Command {
   };
 }
 
+export function setColgroup(widths?: Array<number | null>, options: HtmlTableCommandOptions = {}): Command {
+  return (state, dispatch) => {
+    const context = findTableContext(state, options);
+    if (!context) return false;
+
+    const tableChildren = getChildren(context.table);
+    const colgroupIndex = findChildIndex(context.table, context.names.colgroup);
+    const nextColgroup = createColgroup(
+      state.schema,
+      context.names,
+      Math.max(1, createHtmlTableGrid(context.table, { names: context.names }).width),
+      widths,
+      colgroupIndex >= 0 ? context.table.child(colgroupIndex) : undefined,
+    );
+
+    if (colgroupIndex >= 0) {
+      tableChildren[colgroupIndex] = nextColgroup;
+    } else {
+      tableChildren.splice(findColgroupInsertIndex(tableChildren, context.names), 0, nextColgroup);
+    }
+
+    return replaceTable(state, dispatch, context, context.table.copy(Fragment.fromArray(tableChildren)));
+  };
+}
+
+export function removeColgroup(options: HtmlTableCommandOptions = {}): Command {
+  return (state, dispatch) => {
+    const context = findTableContext(state, options);
+    if (!context) return false;
+
+    const tableChildren = getChildren(context.table);
+    const colgroupIndex = findChildIndex(context.table, context.names.colgroup);
+    if (colgroupIndex < 0) return false;
+
+    tableChildren.splice(colgroupIndex, 1);
+    return replaceTable(state, dispatch, context, context.table.copy(Fragment.fromArray(tableChildren)));
+  };
+}
+
 export function setCellAttribute(
   name: string,
   value: unknown,
@@ -1057,6 +1096,57 @@ function findChildIndex(node: ProseMirrorNode, typeName: string): number {
   }
 
   return -1;
+}
+
+function findColgroupInsertIndex(children: ProseMirrorNode[], names: HtmlTableNodeNames): number {
+  const captionIndex = children.findIndex((child) => child.type.name === names.caption);
+  if (captionIndex >= 0) {
+    return captionIndex + 1;
+  }
+
+  const sectionIndex = children.findIndex(
+    (child) => child.type.name === names.head || child.type.name === names.body || child.type.name === names.foot,
+  );
+  return sectionIndex >= 0 ? sectionIndex : children.length;
+}
+
+function createColgroup(
+  schema: Schema,
+  names: HtmlTableNodeNames,
+  columnCount: number,
+  widths?: Array<number | null>,
+  existingColgroup?: ProseMirrorNode,
+): ProseMirrorNode {
+  const colgroupType = getNodeType(schema, names.colgroup);
+  const colType = getNodeType(schema, names.col);
+  const existingWidths = existingColgroup ? expandColgroupWidths(existingColgroup, columnCount) : [];
+  const cols = Array.from({ length: columnCount }, (_value, index) =>
+    colType.create({
+      span: null,
+      width: normalizeColumnWidth(widths?.[index] ?? existingWidths[index] ?? null),
+    }),
+  );
+
+  return colgroupType.create(null, cols);
+}
+
+function expandColgroupWidths(colgroup: ProseMirrorNode, targetWidth: number): Array<number | null> {
+  const widths: Array<number | null> = [];
+
+  colgroup.forEach((col) => {
+    const span = Math.max(1, Number(col.attrs.span ?? 1));
+    const width = normalizeColumnWidth(col.attrs.width ?? null);
+    for (let offset = 0; offset < span && widths.length < targetWidth; offset += 1) {
+      widths.push(width);
+    }
+  });
+
+  return widths;
+}
+
+function normalizeColumnWidth(value: unknown): number | null {
+  const width = Number(value);
+  return Number.isFinite(width) && width > 0 ? width : null;
 }
 
 function getNodeType(schema: Schema, name: string) {

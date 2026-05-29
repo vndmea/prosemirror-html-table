@@ -11,6 +11,7 @@ import {
   createHtmlTableNode,
   createHtmlTableNodeSpecs,
   deleteColumn,
+  removeColgroup,
   deleteRow,
   deleteTable,
   fixTables,
@@ -25,6 +26,7 @@ import {
   selectColumn,
   selectRow,
   selectTable,
+  setColgroup,
   setCaption,
   setCellAttribute,
   splitCell,
@@ -49,14 +51,7 @@ const schema = new Schema({
 
 function createStateWithTable(rows = 2, cols = 2): EditorState {
   const table = createHtmlTableNode(schema, { rows, cols, withHeaderRow: true });
-  const doc = schema.nodes.doc!.create(null, [table]);
-  const firstCellPos = findNodePositions(doc, 'htmlTableHeaderCell')[0] ?? findNodePositions(doc, 'htmlTableCell')[0];
-
-  return EditorState.create({
-    schema,
-    doc,
-    selection: CellSelection.create(doc, firstCellPos!),
-  });
+  return createStateForTable(table);
 }
 
 function applyCommand(state: EditorState, command: ReturnType<typeof addRowAfter>): EditorState {
@@ -113,6 +108,17 @@ function findNodePositions(doc: ProseMirrorNode, typeName: string): number[] {
   });
 
   return positions;
+}
+
+function createStateForTable(table: ProseMirrorNode): EditorState {
+  const doc = schema.nodes.doc!.create(null, [table]);
+  const firstCellPos = findNodePositions(doc, 'htmlTableHeaderCell')[0] ?? findNodePositions(doc, 'htmlTableCell')[0];
+
+  return EditorState.create({
+    schema,
+    doc,
+    selection: CellSelection.create(doc, firstCellPos!),
+  });
 }
 
 describe('html table commands', () => {
@@ -222,17 +228,39 @@ describe('html table commands', () => {
 
   it('removes an existing caption from the current table', () => {
     const table = createHtmlTableNode(schema, { rows: 2, cols: 2, withCaption: true, captionText: 'Summary' });
-    const doc = schema.nodes.doc!.create(null, [table]);
-    const firstCellPos = findNodePositions(doc, 'htmlTableCell')[0] ?? findNodePositions(doc, 'htmlTableHeaderCell')[0];
-    const state = EditorState.create({
-      schema,
-      doc,
-      selection: CellSelection.create(doc, firstCellPos!),
-    });
+    const state = createStateForTable(table);
 
     const nextState = applyCommand(state, removeCaption());
 
     expect(getTable(nextState.doc).child(0).type.name).toBe('htmlTableBody');
+  });
+
+  it('adds or updates a colgroup on the current table', () => {
+    const insertedColgroupState = applyCommand(createStateWithTable(2, 2), setColgroup([180, 240]));
+    const insertedTable = getTable(insertedColgroupState.doc);
+
+    expect(insertedTable.child(0).type.name).toBe('htmlTableColgroup');
+    expect(insertedTable.child(0).child(0).attrs.width).toBe(180);
+    expect(insertedTable.child(0).child(1).attrs.width).toBe(240);
+
+    const table = createHtmlTableNode(schema, { rows: 2, cols: 2, withCaption: true, captionText: 'Summary' });
+    const updatedState = applyCommand(createStateForTable(table), setColgroup([160, 220]));
+    const updatedTable = getTable(updatedState.doc);
+
+    expect(updatedTable.child(0).type.name).toBe('htmlTableCaption');
+    expect(updatedTable.child(1).type.name).toBe('htmlTableColgroup');
+    expect(updatedTable.child(1).child(0).attrs.width).toBe(160);
+    expect(updatedTable.child(1).child(1).attrs.width).toBe(220);
+  });
+
+  it('removes an existing colgroup from the current table', () => {
+    const table = createHtmlTableNode(schema, { rows: 2, cols: 2, withCaption: true, captionText: 'Summary' });
+    const stateWithColgroup = applyCommand(createStateForTable(table), setColgroup([180, 240]));
+    const nextState = applyCommand(stateWithColgroup, removeColgroup());
+    const nextTable = getTable(nextState.doc);
+
+    expect(nextTable.child(0).type.name).toBe('htmlTableCaption');
+    expect(nextTable.child(1).type.name).toBe('htmlTableBody');
   });
 
   it('toggles the selected cell between header and body cell types', () => {

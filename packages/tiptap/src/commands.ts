@@ -5,6 +5,7 @@ import {
   addRowAfter as addCoreRowAfter,
   addRowBefore as addCoreRowBefore,
   deleteColumn as deleteCoreColumn,
+  removeColgroup as removeCoreColgroup,
   removeCaption as removeCoreCaption,
   deleteRow as deleteCoreRow,
   deleteTable as deleteCoreTable,
@@ -18,6 +19,7 @@ import {
   selectColumn as selectCoreColumn,
   selectRow as selectCoreRow,
   selectTable as selectCoreTable,
+  setColgroup as setCoreColgroup,
   setCaption as setCoreCaption,
   setCellAttribute as setCoreCellAttribute,
   splitCell as splitCoreCell,
@@ -41,7 +43,9 @@ declare module '@tiptap/core' {
       deleteHtmlTableColumn: (options?: HtmlTableCommandOptions) => ReturnType;
       deleteHtmlTable: (options?: HtmlTableCommandOptions) => ReturnType;
       setHtmlTableCaption: (text: string, options?: HtmlTableCommandOptions) => ReturnType;
+      setHtmlTableColgroup: (widths?: Array<number | null>, options?: HtmlTableCommandOptions) => ReturnType;
       removeHtmlTableCaption: (options?: HtmlTableCommandOptions) => ReturnType;
+      removeHtmlTableColgroup: (options?: HtmlTableCommandOptions) => ReturnType;
       mergeHtmlTableCells: (options?: HtmlTableCommandOptions) => ReturnType;
       splitHtmlTableCell: (options?: HtmlTableCommandOptions) => ReturnType;
       mergeOrSplitHtmlTableCells: (options?: HtmlTableCommandOptions) => ReturnType;
@@ -107,10 +111,20 @@ export function createHtmlTableCommands(): Partial<RawCommands> {
       ({ state, dispatch }) =>
         setCoreCaption(text, options)(state, dispatch),
 
+    setHtmlTableColgroup:
+      (widths?: Array<number | null>, options?: HtmlTableCommandOptions) =>
+      ({ state, dispatch }) =>
+        setCoreColgroup(widths, options)(state, dispatch),
+
     removeHtmlTableCaption:
       (options?: HtmlTableCommandOptions) =>
       ({ state, dispatch }) =>
         removeCoreCaption(options)(state, dispatch),
+
+    removeHtmlTableColgroup:
+      (options?: HtmlTableCommandOptions) =>
+      ({ state, dispatch }) =>
+        removeCoreColgroup(options)(state, dispatch),
 
     mergeHtmlTableCells:
       (options?: HtmlTableCommandOptions) =>
