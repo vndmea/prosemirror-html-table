@@ -31,7 +31,7 @@ import {
   type HtmlTableCommandOptions,
 } from 'prosemirror-html-table';
 
-import type { HtmlTableInteractionState } from './html-table-interaction.js';
+import { htmlTableInteractionPluginKey, type HtmlTableInteractionState } from './html-table-interaction.js';
 import {
   getHtmlTableSelectionScope,
   type HtmlTableSelectionScope,
@@ -229,6 +229,24 @@ export function getHtmlTableContextActionCommand(
     case 'toggleHeaderCell':
       return toggleHeaderCell(options);
   }
+}
+
+export function runHtmlTableContextAction(
+  state: EditorState,
+  action: HtmlTableContextAction,
+  dispatch?: Parameters<Command>[1],
+  options: HtmlTableCommandOptions = {},
+): boolean {
+  const command = getHtmlTableContextActionCommand(action, options);
+  if (!dispatch) {
+    return command(state);
+  }
+
+  return command(state, (transaction) => {
+    dispatch(transaction.setMeta(htmlTableInteractionPluginKey, {
+      contextMenuOpen: false,
+    }));
+  });
 }
 
 export function getHtmlTableContextActionGroups(

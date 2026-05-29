@@ -9,10 +9,12 @@ import {
   getHtmlTableContextActionCommand,
   getHtmlTableContextActions,
   getPrimaryHtmlTableContextAction,
+  runHtmlTableContextAction,
 } from './html-table-actions.js';
 import {
   createHtmlTableInteractionPlugin,
   getHtmlTableInteractionState,
+  htmlTableInteractionPluginKey,
 } from './html-table-interaction.js';
 import {
   createColumnSelectionTransaction,
@@ -159,6 +161,47 @@ describe('html table context actions', () => {
     expect(transactionState.doc.firstChild?.firstChild?.type.name).toBe('htmlTableHead');
   });
 
+  it('runs context actions through a single entry point and closes the context menu on success', () => {
+    const table = createHtmlTableNode(schema, { rows: 2, cols: 2 });
+    const doc = schema.nodes.doc!.create(null, [table]);
+    const cellPositions = findNodePositions(doc, 'htmlTableCell');
+    const baseState = EditorState.create({
+      schema,
+      doc,
+      selection: CellSelection.create(doc, cellPositions[0]!),
+      plugins: [createHtmlTableInteractionPlugin()],
+    });
+    const rowState = baseState.apply(createRowSelectionTransaction(baseState, 0, table, 1)!);
+    const geometryState = rowState.apply(
+      rowState.tr.setMeta(htmlTableInteractionPluginKey, {
+        geometry: createGeometry(),
+      }),
+    );
+    const openState = geometryState.apply(
+      geometryState.tr.setMeta(htmlTableInteractionPluginKey, {
+        contextMenuOpen: true,
+      }),
+    );
+    const action = getHtmlTableContextActions(openState, getHtmlTableInteractionState(openState)).find(
+      (item) => item.id === 'addRowAfter',
+    );
+
+    expect(action?.enabled).toBe(true);
+    expect(getHtmlTableInteractionState(openState).contextMenuOpen).toBe(true);
+
+    let transactionState = openState;
+    const applied = runHtmlTableContextAction(openState, action!, (transaction) => {
+      expect(transaction.getMeta(htmlTableInteractionPluginKey)).toEqual({
+        contextMenuOpen: false,
+      });
+      transactionState = openState.apply(transaction);
+    });
+
+    expect(applied).toBe(true);
+    expect(findNodePositions(transactionState.doc, 'htmlTableRow')).toHaveLength(3);
+    expect(getHtmlTableInteractionState(transactionState).contextMenuOpen).toBe(false);
+  });
+
   it('groups actions into stable popover sections', () => {
     const table = createHtmlTableNode(schema, { rows: 2, cols: 2 });
     const doc = schema.nodes.doc!.create(null, [table]);
@@ -244,4 +287,25 @@ function findNodePositions(doc: import('prosemirror-model').Node, typeName: stri
   });
 
   return positions;
+}
+
+function createGeometry() {
+  return {
+    tableRect: {
+      left: 10,
+      top: 20,
+      right: 210,
+      bottom: 120,
+      width: 200,
+      height: 100,
+    },
+    columns: [
+      { index: 0, left: 0, width: 80 },
+      { index: 1, left: 80, width: 120 },
+    ],
+    rows: [
+      { index: 0, top: 0, height: 40 },
+      { index: 1, top: 40, height: 60 },
+    ],
+  };
 }

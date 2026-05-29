@@ -4,6 +4,7 @@ export {
   getHtmlTableContextActionCommand,
   getHtmlTableContextActions,
   getPrimaryHtmlTableContextAction,
+  runHtmlTableContextAction,
 } from './html-table-actions.js';
 export {
   getHtmlTableContextMenuState,
