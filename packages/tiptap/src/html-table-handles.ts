@@ -4,6 +4,10 @@ import { addColumnAfter as addCoreColumnAfter, addRowAfter as addCoreRowAfter } 
 
 import type { HtmlTableTiptapOptions } from './options.js';
 import {
+  getHtmlTableContextTriggerButtonState,
+  type HtmlTableContextTriggerButtonState,
+} from './html-table-context-menu.js';
+import {
   getHtmlTableInteractionState,
   type HtmlTableInteractionState,
   htmlTableInteractionPluginKey,
@@ -31,6 +35,16 @@ export type HtmlTableSelectionScope = 'table' | 'row' | 'column' | 'cell';
 export interface HtmlTableSelectionAnchor {
   left: number;
   top: number;
+}
+
+export interface HtmlTableContextTriggerRenderState {
+  visible: boolean;
+  left: number | null;
+  top: number | null;
+  label: string | null;
+  title: string | null;
+  scope: HtmlTableSelectionScope | null;
+  primaryActionId: string | null;
 }
 
 export function isTableHandleVisible(
@@ -118,6 +132,20 @@ export function getHtmlTableSelectionAnchor(
   return null;
 }
 
+export function getHtmlTableContextTriggerRenderState(
+  trigger: HtmlTableContextTriggerButtonState,
+): HtmlTableContextTriggerRenderState {
+  return {
+    visible: trigger.visible,
+    left: trigger.anchor?.left ?? null,
+    top: trigger.anchor?.top ?? null,
+    label: trigger.label,
+    title: trigger.title,
+    scope: trigger.scope,
+    primaryActionId: trigger.primaryAction?.id ?? null,
+  };
+}
+
 export function createHtmlTableHandlePlugin(options: HtmlTableTiptapOptions): Plugin {
   return new Plugin({
     key: htmlTableHandlePluginKey,
@@ -131,6 +159,7 @@ class HtmlTableHandleOverlayView {
   private view: EditorView;
   private readonly options: HtmlTableTiptapOptions;
   private readonly root: HTMLDivElement;
+  private readonly contextTriggerButton: HTMLButtonElement;
   private readonly tableHandle: HTMLButtonElement;
   private readonly rowSelectionOverlay: HTMLDivElement;
   private readonly columnSelectionOverlay: HTMLDivElement;
@@ -160,6 +189,7 @@ class HtmlTableHandleOverlayView {
     this.root.dataset.htmlTableOverlay = 'true';
     this.root.setAttribute('role', 'presentation');
     this.root.hidden = true;
+    this.contextTriggerButton = this.createContextTriggerButton();
     this.tableHandle = this.createTableHandle();
     this.rowSelectionOverlay = this.root.ownerDocument.createElement('div');
     this.rowSelectionOverlay.className = 'html-table-overlay__selection-band html-table-overlay__selection-band--row';
@@ -176,6 +206,7 @@ class HtmlTableHandleOverlayView {
     this.addRowButton = this.createExtendButton('row');
     this.addColumnButton = this.createExtendButton('column');
     this.root.append(
+      this.contextTriggerButton,
       this.tableHandle,
       this.rowSelectionOverlay,
       this.columnSelectionOverlay,
@@ -223,11 +254,13 @@ class HtmlTableHandleOverlayView {
     const rowHandleLeft = Math.max(MIN_HANDLE_INSET, tableLeft - ROW_HANDLE_OFFSET);
     const columnHandleTop = Math.max(MIN_HANDLE_INSET, tableTop - COLUMN_HANDLE_OFFSET);
     const selectionInfo = getTableSelectionInfo(this.view.state.doc, this.view.state.selection);
+    const contextTrigger = getHtmlTableContextTriggerButtonState(this.view.state, interaction);
 
     this.syncHandleCount('row', geometry.rows.length);
     this.syncHandleCount('column', geometry.columns.length);
     this.syncResizeHandleCount(this.options.resizable ? geometry.columns.length : 0);
     this.syncSelectionContextState(interaction, activeTable.tablePos, geometry, tableLeft, tableTop, selectionInfo);
+    this.syncContextTriggerButton(contextTrigger, context.wrapper, wrapperRect);
     this.syncTableHandle(interaction, activeTable.tablePos, rowHandleLeft, columnHandleTop);
     this.syncSelectionOverlay(interaction, activeTable.tablePos, geometry, tableLeft, tableTop);
     this.syncCellSelectionHandle(activeTable.tablePos, geometry, tableLeft, tableTop, selectionInfo);
@@ -436,6 +469,36 @@ class HtmlTableHandleOverlayView {
     this.root.style.setProperty('--pmht-selection-anchor-top', `${anchor.top}px`);
   }
 
+  private syncContextTriggerButton(
+    trigger: HtmlTableContextTriggerButtonState,
+    wrapper: HTMLElement,
+    wrapperRect: DOMRect,
+  ): void {
+    const renderState = getHtmlTableContextTriggerRenderState(trigger);
+
+    this.contextTriggerButton.hidden = !renderState.visible;
+    this.contextTriggerButton.dataset.scope = renderState.scope ?? '';
+    this.contextTriggerButton.dataset.primaryAction = renderState.primaryActionId ?? '';
+    this.contextTriggerButton.textContent = renderState.label ? '...' : '';
+    this.contextTriggerButton.setAttribute('aria-label', renderState.label ?? 'Context actions');
+    this.contextTriggerButton.title = renderState.title ?? renderState.label ?? '';
+
+    if (!renderState.visible || renderState.left === null || renderState.top === null) {
+      this.contextTriggerButton.style.removeProperty('left');
+      this.contextTriggerButton.style.removeProperty('top');
+      return;
+    }
+
+    this.contextTriggerButton.style.left = `${Math.max(
+      MIN_HANDLE_INSET,
+      wrapper.scrollLeft + renderState.left - wrapperRect.left,
+    )}px`;
+    this.contextTriggerButton.style.top = `${Math.max(
+      MIN_HANDLE_INSET,
+      wrapper.scrollTop + renderState.top - wrapperRect.top,
+    )}px`;
+  }
+
   private syncCellSelectionHandle(
     tablePos: number,
     geometry: ReturnType<typeof measureHtmlTableGeometry>,
@@ -497,6 +560,17 @@ class HtmlTableHandleOverlayView {
     handle.title = 'Select table';
     handle.addEventListener('mousedown', (event) => this.handleTableSelectionMouseDown(event));
     return handle;
+  }
+
+  private createContextTriggerButton(): HTMLButtonElement {
+    const button = this.root.ownerDocument.createElement('button');
+    button.type = 'button';
+    button.className = 'html-table-overlay__context-trigger';
+    button.tabIndex = -1;
+    button.hidden = true;
+    button.setAttribute('aria-label', 'Context actions');
+    button.addEventListener('mousedown', (event) => this.handleContextTriggerMouseDown(event));
+    return button;
   }
 
   private createResizeHandle(): HTMLButtonElement {
@@ -578,6 +652,12 @@ class HtmlTableHandleOverlayView {
     );
     this.view.focus();
     this.view.dispatch(transaction);
+  }
+
+  private handleContextTriggerMouseDown(event: MouseEvent): void {
+    event.preventDefault();
+    event.stopPropagation();
+    this.view.focus();
   }
 
   private handleResizeStart(event: MouseEvent): void {

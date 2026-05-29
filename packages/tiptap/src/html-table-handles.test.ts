@@ -2,10 +2,12 @@ import { describe, expect, it } from 'vitest';
 
 import type { HtmlTableInteractionState } from './html-table-interaction.js';
 import {
+  getHtmlTableContextTriggerRenderState,
   getHtmlTableSelectionAnchor,
   getHtmlTableSelectionScope,
   isTableHandleVisible,
 } from './html-table-handles.js';
+import type { HtmlTableContextTriggerButtonState } from './html-table-context-menu.js';
 import type { HtmlTableGeometry } from './table-dom.js';
 
 function createInteractionState(
@@ -218,6 +220,55 @@ describe('html table handles', () => {
     ).toEqual({
       left: 259,
       top: 50,
+    });
+  });
+
+  it('derives trigger button render state from trigger button state', () => {
+    const trigger: HtmlTableContextTriggerButtonState = {
+      visible: true,
+      scope: 'row',
+      anchor: {
+        left: 10,
+        top: 90,
+      },
+      label: 'Row actions',
+      title: 'Row actions: Add row after',
+      primaryAction: {
+        id: 'addRowAfter',
+        label: 'Add row after',
+        scope: 'row',
+        enabled: true,
+      },
+      groups: [],
+    };
+
+    expect(getHtmlTableContextTriggerRenderState(trigger)).toEqual({
+      visible: true,
+      left: 10,
+      top: 90,
+      label: 'Row actions',
+      title: 'Row actions: Add row after',
+      scope: 'row',
+      primaryActionId: 'addRowAfter',
+    });
+
+    expect(
+      getHtmlTableContextTriggerRenderState({
+        ...trigger,
+        visible: false,
+        anchor: null,
+        label: null,
+        title: null,
+        primaryAction: null,
+      }),
+    ).toEqual({
+      visible: false,
+      left: null,
+      top: null,
+      label: null,
+      title: null,
+      scope: 'row',
+      primaryActionId: null,
     });
   });
 });
