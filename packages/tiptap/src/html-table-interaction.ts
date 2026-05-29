@@ -39,6 +39,7 @@ export interface HtmlTableResizeState {
 
 export interface HtmlTableInteractionState {
   activeTable: HtmlTableReference | null;
+  tableSelected: boolean;
   hovered: HtmlTableHoverState | null;
   selectedAxis: HtmlTableSelectedAxisState;
   geometry: HtmlTableGeometry | null;
@@ -61,6 +62,7 @@ const defaultSelectedAxisState: HtmlTableSelectedAxisState = {
 
 const defaultInteractionState: HtmlTableInteractionState = {
   activeTable: null,
+  tableSelected: false,
   hovered: null,
   selectedAxis: defaultSelectedAxisState,
   geometry: null,
@@ -103,6 +105,7 @@ function buildInteractionState(
 ): HtmlTableInteractionState {
   const selectionTable = getSelectionTableReference(state.selection);
   const activeTable = selectionTable ?? meta.hoveredTable ?? null;
+  const tableSelected = isTableNodeSelection(state.selection);
   const derivedSelectedAxis = selectionTable ? getSelectedAxisState(state.selection, selectionTable) : defaultSelectedAxisState;
   const selectedAxis =
     meta.selectedAxis !== undefined
@@ -126,6 +129,7 @@ function buildInteractionState(
 
   return {
     activeTable,
+    tableSelected,
     hovered,
     selectedAxis,
     geometry,
@@ -134,7 +138,7 @@ function buildInteractionState(
 }
 
 function getSelectionTableReference(selection: Selection): HtmlTableReference | null {
-  if (selection instanceof NodeSelection && selection.node.type.name === 'htmlTable') {
+  if (isTableNodeSelection(selection)) {
     return {
       tablePos: selection.from,
       table: selection.node,
@@ -153,6 +157,10 @@ function getSelectionTableReference(selection: Selection): HtmlTableReference | 
   }
 
   return null;
+}
+
+function isTableNodeSelection(selection: Selection): selection is NodeSelection {
+  return selection instanceof NodeSelection && selection.node.type.name === 'htmlTable';
 }
 
 function getSelectedAxisState(selection: Selection, tableReference: HtmlTableReference): HtmlTableSelectedAxisState {

@@ -153,7 +153,7 @@ class HtmlTableHandleOverlayView {
         interaction.selectedAxis.kind === 'row' &&
         interaction.selectedAxis.index === row.index &&
         interaction.selectedAxis.tablePos === activeTable.tablePos;
-      handle.hidden = !isRowHovered && !isRowSelected;
+      handle.hidden = interaction.tableSelected || (!isRowHovered && !isRowSelected);
       handle.classList.toggle(
         'is-hovered',
         isRowHovered,
@@ -183,7 +183,7 @@ class HtmlTableHandleOverlayView {
         interaction.selectedAxis.kind === 'column' &&
         interaction.selectedAxis.index === column.index &&
         interaction.selectedAxis.tablePos === activeTable.tablePos;
-      handle.hidden = !isColumnHovered && !isColumnSelected;
+      handle.hidden = interaction.tableSelected || (!isColumnHovered && !isColumnSelected);
       handle.classList.toggle(
         'is-hovered',
         isColumnHovered,
@@ -262,6 +262,12 @@ class HtmlTableHandleOverlayView {
     tableLeft: number,
     tableTop: number,
   ): void {
+    if (interaction.tableSelected) {
+      this.rowSelectionOverlay.hidden = true;
+      this.columnSelectionOverlay.hidden = true;
+      return;
+    }
+
     const selectedAxis = interaction.selectedAxis.tablePos === tablePos ? interaction.selectedAxis : null;
     const selectedRow =
       selectedAxis?.kind === 'row' && selectedAxis.index !== null ? geometry.rows[selectedAxis.index] : null;
@@ -295,13 +301,18 @@ class HtmlTableHandleOverlayView {
     tableLeft: number,
     tableTop: number,
   ): void {
+    const interaction = getHtmlTableInteractionState(this.view.state);
+    if (interaction.tableSelected) {
+      this.cellSelectionHandle.hidden = true;
+      return;
+    }
+
     const selectionInfo = getTableSelectionInfo(this.view.state.doc, this.view.state.selection);
     if (!selectionInfo || selectionInfo.tablePos !== tablePos) {
       this.cellSelectionHandle.hidden = true;
       return;
     }
 
-    const interaction = getHtmlTableInteractionState(this.view.state);
     if (interaction.selectedAxis.kind) {
       this.cellSelectionHandle.hidden = true;
       return;

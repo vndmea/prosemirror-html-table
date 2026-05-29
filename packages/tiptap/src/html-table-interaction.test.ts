@@ -9,6 +9,8 @@ import {
   findSelectedHtmlTable,
   getHtmlTableInteractionState,
 } from './html-table-interaction.js';
+import { createHtmlTableSelectionPlugin } from './table-utils.js';
+import { defaultHtmlTableTiptapOptions } from './options.js';
 import {
   createColumnSelectionTransaction,
   createRowSelectionTransaction,
@@ -44,6 +46,7 @@ describe('html table interaction plugin', () => {
 
     expect(interaction.activeTable?.tablePos).toBe(0);
     expect(interaction.activeTable?.table).toBe(table);
+    expect(interaction.tableSelected).toBe(false);
     expect(interaction.selectedAxis.kind).toBeNull();
     expect(interaction.geometry).toBeNull();
     expect(findSelectedHtmlTable(state.selection)?.tablePos).toBe(0);
@@ -62,6 +65,65 @@ describe('html table interaction plugin', () => {
     const interaction = getHtmlTableInteractionState(state);
 
     expect(interaction.activeTable?.tablePos).toBe(0);
+    expect(interaction.tableSelected).toBe(true);
+    expect(interaction.selectedAxis.kind).toBeNull();
+  });
+
+  it('does not mark tableSelected for cell selections inside a table', () => {
+    const table = createHtmlTableNode(schema, { rows: 1, cols: 1 });
+    const doc = schema.nodes.doc!.create(null, [table]);
+    const cellPositions = findNodePositions(doc, 'htmlTableCell');
+    const state = EditorState.create({
+      schema,
+      doc,
+      selection: TextSelection.near(doc.resolve(cellPositions[0]! + 1)),
+      plugins: [createHtmlTableInteractionPlugin()],
+    });
+
+    const interaction = getHtmlTableInteractionState(state);
+
+    expect(interaction.activeTable?.tablePos).toBe(0);
+    expect(interaction.tableSelected).toBe(false);
+  });
+
+  it('keeps the table active after running the table node selection command path', () => {
+    const table = createHtmlTableNode(schema, { rows: 1, cols: 2 });
+    const doc = schema.nodes.doc!.create(null, [table]);
+    const cellPositions = findNodePositions(doc, 'htmlTableCell');
+    const state = EditorState.create({
+      schema,
+      doc,
+      selection: TextSelection.near(doc.resolve(cellPositions[0]! + 1)),
+      plugins: [createHtmlTableInteractionPlugin()],
+    });
+
+    const nextState = state.apply(state.tr.setSelection(NodeSelection.create(doc, 0)));
+    const interaction = getHtmlTableInteractionState(nextState);
+
+    expect(nextState.selection).toBeInstanceOf(NodeSelection);
+    expect(interaction.activeTable?.tablePos).toBe(0);
+    expect(interaction.tableSelected).toBe(true);
+    expect(findSelectedHtmlTable(nextState.selection)?.tablePos).toBe(0);
+    expect(interaction.selectedAxis.kind).toBeNull();
+  });
+
+  it('allows selection decorations to coexist with table node selections', () => {
+    const table = createHtmlTableNode(schema, { rows: 1, cols: 1 });
+    const doc = schema.nodes.doc!.create(null, [table]);
+    const state = EditorState.create({
+      schema,
+      doc,
+      selection: NodeSelection.create(doc, 0),
+      plugins: [
+        createHtmlTableInteractionPlugin(),
+        createHtmlTableSelectionPlugin(defaultHtmlTableTiptapOptions),
+      ],
+    });
+
+    const interaction = getHtmlTableInteractionState(state);
+
+    expect(interaction.activeTable?.tablePos).toBe(0);
+    expect(interaction.tableSelected).toBe(true);
     expect(interaction.selectedAxis.kind).toBeNull();
   });
 
@@ -83,6 +145,7 @@ describe('html table interaction plugin', () => {
     const interaction = getHtmlTableInteractionState(nextState);
 
     expect(interaction.activeTable?.tablePos).toBe(0);
+    expect(interaction.tableSelected).toBe(false);
     expect(interaction.selectedAxis.kind).toBe('row');
     expect(interaction.selectedAxis.index).toBe(1);
     expect(interaction.selectedAxis.tablePos).toBe(0);
@@ -106,6 +169,7 @@ describe('html table interaction plugin', () => {
     const interaction = getHtmlTableInteractionState(nextState);
 
     expect(interaction.activeTable?.tablePos).toBe(0);
+    expect(interaction.tableSelected).toBe(false);
     expect(interaction.selectedAxis.kind).toBe('column');
     expect(interaction.selectedAxis.index).toBe(1);
     expect(interaction.selectedAxis.tablePos).toBe(0);
