@@ -6,6 +6,10 @@ export {
   getPrimaryHtmlTableContextAction,
 } from './html-table-actions.js';
 export {
+  getHtmlTableContextMenuState,
+  getHtmlTableContextTriggerButtonState,
+} from './html-table-context-menu.js';
+export {
   createHtmlTableHandlePlugin,
   htmlTableHandlePluginKey,
 } from './html-table-handles.js';
@@ -45,6 +49,10 @@ export type {
   HtmlTableContextActionGroupId,
   HtmlTableContextActionId,
 } from './html-table-actions.js';
+export type {
+  HtmlTableContextMenuState,
+  HtmlTableContextTriggerButtonState,
+} from './html-table-context-menu.js';
 export type { HtmlTableTiptapOptions } from './options.js';
 export type { CreateHtmlTableExtensionsOptions } from './nodes.js';
 export type {
