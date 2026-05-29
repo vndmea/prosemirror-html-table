@@ -101,6 +101,26 @@ const toolbarButtons: ToolbarButton[] = [
     action: () => editor.value?.commands.deleteHtmlTableColumn() ?? false,
   },
   {
+    label: 'Set caption',
+    title: 'Set table caption',
+    action: () => editor.value?.commands.setHtmlTableCaption('Updated table caption') ?? false,
+  },
+  {
+    label: 'Remove caption',
+    title: 'Remove table caption',
+    action: () => editor.value?.commands.removeHtmlTableCaption() ?? false,
+  },
+  {
+    label: 'Set colgroup',
+    title: 'Set colgroup widths',
+    action: () => editor.value?.commands.setHtmlTableColgroup([180, 260, 220]) ?? false,
+  },
+  {
+    label: 'Remove colgroup',
+    title: 'Remove colgroup',
+    action: () => editor.value?.commands.removeHtmlTableColgroup() ?? false,
+  },
+  {
     label: 'Merge cells',
     title: 'Merge cells',
     action: () => editor.value?.commands.mergeHtmlTableCells() ?? false,
@@ -134,6 +154,41 @@ const toolbarButtons: ToolbarButton[] = [
     label: 'Toggle header column',
     title: 'Toggle header column',
     action: () => editor.value?.commands.toggleHtmlTableHeaderColumn() ?? false,
+  },
+  {
+    label: 'Add thead',
+    title: 'Add head section',
+    action: () => editor.value?.commands.addHtmlTableHeadSection() ?? false,
+  },
+  {
+    label: 'Remove thead',
+    title: 'Remove head section',
+    action: () => editor.value?.commands.removeHtmlTableHeadSection() ?? false,
+  },
+  {
+    label: 'Add tfoot',
+    title: 'Add foot section',
+    action: () => editor.value?.commands.addHtmlTableFootSection() ?? false,
+  },
+  {
+    label: 'Remove tfoot',
+    title: 'Remove foot section',
+    action: () => editor.value?.commands.removeHtmlTableFootSection() ?? false,
+  },
+  {
+    label: 'Row -> thead',
+    title: 'Move row to head',
+    action: () => editor.value?.commands.moveHtmlTableRowToHead() ?? false,
+  },
+  {
+    label: 'Row -> tbody',
+    title: 'Move row to body',
+    action: () => editor.value?.commands.moveHtmlTableRowToBody() ?? false,
+  },
+  {
+    label: 'Row -> tfoot',
+    title: 'Move row to foot',
+    action: () => editor.value?.commands.moveHtmlTableRowToFoot() ?? false,
   },
   {
     label: 'Previous cell',
@@ -188,7 +243,9 @@ onBeforeUnmount(() => {
         <code>tbody</code>, and <code>tfoot</code>. Drag column edges to resize,
         click the row and column handles to select full axes, use
         <code>Tab</code>/<code>Shift+Tab</code> to move, and use
-        <code>Shift+Arrow</code> to extend cell selection. Use the toolbar to edit the full HTML table structure.
+        <code>Shift+Arrow</code> to extend cell selection. Use the toolbar to edit
+        captions, colgroups, and explicit head/body/foot sections in addition to
+        the logical table grid.
       </p>
     </section>
 
