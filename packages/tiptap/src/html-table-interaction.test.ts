@@ -7,6 +7,7 @@ import { CellSelection, createHtmlTableNode, createHtmlTableNodeSpecs } from 'pr
 import {
   createHtmlTableInteractionPlugin,
   findSelectedHtmlTable,
+  getHtmlTableContextTriggerState,
   getHtmlTableInteractionState,
 } from './html-table-interaction.js';
 import { createHtmlTableSelectionPlugin } from './table-utils.js';
@@ -48,6 +49,7 @@ describe('html table interaction plugin', () => {
     expect(interaction.activeTable?.table).toBe(table);
     expect(interaction.tableSelected).toBe(false);
     expect(interaction.selectedAxis.kind).toBeNull();
+    expect(interaction.contextTrigger.visible).toBe(false);
     expect(interaction.geometry).toBeNull();
     expect(findSelectedHtmlTable(state.selection)?.tablePos).toBe(0);
   });
@@ -67,6 +69,7 @@ describe('html table interaction plugin', () => {
     expect(interaction.activeTable?.tablePos).toBe(0);
     expect(interaction.tableSelected).toBe(true);
     expect(interaction.selectedAxis.kind).toBeNull();
+    expect(interaction.contextTrigger.visible).toBe(false);
   });
 
   it('does not mark tableSelected for cell selections inside a table', () => {
@@ -84,6 +87,7 @@ describe('html table interaction plugin', () => {
 
     expect(interaction.activeTable?.tablePos).toBe(0);
     expect(interaction.tableSelected).toBe(false);
+    expect(interaction.contextTrigger.visible).toBe(false);
   });
 
   it('keeps the table active after running the table node selection command path', () => {
@@ -105,6 +109,7 @@ describe('html table interaction plugin', () => {
     expect(interaction.tableSelected).toBe(true);
     expect(findSelectedHtmlTable(nextState.selection)?.tablePos).toBe(0);
     expect(interaction.selectedAxis.kind).toBeNull();
+    expect(interaction.contextTrigger.visible).toBe(false);
   });
 
   it('allows selection decorations to coexist with table node selections', () => {
@@ -125,6 +130,7 @@ describe('html table interaction plugin', () => {
     expect(interaction.activeTable?.tablePos).toBe(0);
     expect(interaction.tableSelected).toBe(true);
     expect(interaction.selectedAxis.kind).toBeNull();
+    expect(interaction.contextTrigger.visible).toBe(false);
   });
 
   it('identifies row selections as an axis selection', () => {
@@ -149,6 +155,7 @@ describe('html table interaction plugin', () => {
     expect(interaction.selectedAxis.kind).toBe('row');
     expect(interaction.selectedAxis.index).toBe(1);
     expect(interaction.selectedAxis.tablePos).toBe(0);
+    expect(interaction.contextTrigger.visible).toBe(false);
   });
 
   it('identifies column selections as an axis selection', () => {
@@ -173,6 +180,71 @@ describe('html table interaction plugin', () => {
     expect(interaction.selectedAxis.kind).toBe('column');
     expect(interaction.selectedAxis.index).toBe(1);
     expect(interaction.selectedAxis.tablePos).toBe(0);
+    expect(interaction.contextTrigger.visible).toBe(false);
+  });
+
+  it('derives context trigger anchors for table, row, and column scopes when geometry exists', () => {
+    const tableReference = {
+      tablePos: 0,
+      table: createHtmlTableNode(schema, { rows: 2, cols: 2 }),
+    };
+    const geometry = {
+      tableRect: {
+        left: 10,
+        top: 20,
+        right: 210,
+        bottom: 120,
+        width: 200,
+        height: 100,
+      },
+      columns: [
+        { index: 0, left: 0, width: 80 },
+        { index: 1, left: 80, width: 120 },
+      ],
+      rows: [
+        { index: 0, top: 0, height: 40 },
+        { index: 1, top: 40, height: 60 },
+      ],
+    };
+
+    expect(
+      getHtmlTableContextTriggerState(
+        tableReference,
+        true,
+        { kind: null, index: null, tablePos: null },
+        geometry,
+      ),
+    ).toEqual({
+      visible: true,
+      left: 10,
+      top: 20,
+    });
+
+    expect(
+      getHtmlTableContextTriggerState(
+        tableReference,
+        false,
+        { kind: 'row', index: 1, tablePos: 0 },
+        geometry,
+      ),
+    ).toEqual({
+      visible: true,
+      left: 10,
+      top: 90,
+    });
+
+    expect(
+      getHtmlTableContextTriggerState(
+        tableReference,
+        false,
+        { kind: 'column', index: 1, tablePos: 0 },
+        geometry,
+      ),
+    ).toEqual({
+      visible: true,
+      left: 150,
+      top: 20,
+    });
   });
 });
 

@@ -12,6 +12,7 @@ export {
 export {
   createHtmlTableInteractionPlugin,
   findSelectedHtmlTable,
+  getHtmlTableContextTriggerState,
   getHtmlTableInteractionState,
   htmlTableInteractionPluginKey,
 } from './html-table-interaction.js';

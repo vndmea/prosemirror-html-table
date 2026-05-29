@@ -37,11 +37,18 @@ export interface HtmlTableResizeState {
   columnIndex: number;
 }
 
+export interface HtmlTableContextTriggerState {
+  visible: boolean;
+  left: number | null;
+  top: number | null;
+}
+
 export interface HtmlTableInteractionState {
   activeTable: HtmlTableReference | null;
   tableSelected: boolean;
   hovered: HtmlTableHoverState | null;
   selectedAxis: HtmlTableSelectedAxisState;
+  contextTrigger: HtmlTableContextTriggerState;
   geometry: HtmlTableGeometry | null;
   resizing: HtmlTableResizeState | null;
 }
@@ -65,6 +72,11 @@ const defaultInteractionState: HtmlTableInteractionState = {
   tableSelected: false,
   hovered: null,
   selectedAxis: defaultSelectedAxisState,
+  contextTrigger: {
+    visible: false,
+    left: null,
+    top: null,
+  },
   geometry: null,
   resizing: null,
 };
@@ -97,6 +109,15 @@ export function findSelectedHtmlTable(selection: Selection): HtmlTableReference 
   return getSelectionTableReference(selection);
 }
 
+export function getHtmlTableContextTriggerState(
+  activeTable: HtmlTableReference | null,
+  tableSelected: boolean,
+  selectedAxis: HtmlTableSelectedAxisState,
+  geometry: HtmlTableGeometry | null,
+): HtmlTableContextTriggerState {
+  return deriveContextTriggerState(activeTable, tableSelected, selectedAxis, geometry);
+}
+
 function buildInteractionState(
   state: EditorState,
   previous: HtmlTableInteractionState | undefined,
@@ -120,6 +141,7 @@ function buildInteractionState(
       : previous && previous.activeTable?.tablePos === activeTable?.tablePos
         ? previous.geometry
         : null;
+  const contextTrigger = deriveContextTriggerState(activeTable, tableSelected, derivedSelectedAxis, geometry);
   const resizing =
     activeTable && meta.resizing !== undefined
       ? meta.resizing
@@ -132,6 +154,7 @@ function buildInteractionState(
     tableSelected,
     hovered,
     selectedAxis,
+    contextTrigger,
     geometry,
     resizing,
   };
@@ -199,6 +222,73 @@ function getSelectedAxisState(selection: Selection, tableReference: HtmlTableRef
   }
 
   return defaultSelectedAxisState;
+}
+
+function deriveContextTriggerState(
+  activeTable: HtmlTableReference | null,
+  tableSelected: boolean,
+  selectedAxis: HtmlTableSelectedAxisState,
+  geometry: HtmlTableGeometry | null,
+): HtmlTableContextTriggerState {
+  if (!activeTable || !geometry) {
+    return {
+      visible: false,
+      left: null,
+      top: null,
+    };
+  }
+
+  if (tableSelected) {
+    return {
+      visible: true,
+      left: geometry.tableRect.left,
+      top: geometry.tableRect.top,
+    };
+  }
+
+  if (selectedAxis.tablePos !== activeTable.tablePos) {
+    return {
+      visible: false,
+      left: null,
+      top: null,
+    };
+  }
+
+  if (selectedAxis.kind === 'row' && selectedAxis.index !== null) {
+    const row = geometry.rows[selectedAxis.index];
+    return row
+      ? {
+          visible: true,
+          left: geometry.tableRect.left,
+          top: geometry.tableRect.top + row.top + row.height / 2,
+        }
+      : {
+          visible: false,
+          left: null,
+          top: null,
+        };
+  }
+
+  if (selectedAxis.kind === 'column' && selectedAxis.index !== null) {
+    const column = geometry.columns[selectedAxis.index];
+    return column
+      ? {
+          visible: true,
+          left: geometry.tableRect.left + column.left + column.width / 2,
+          top: geometry.tableRect.top,
+        }
+      : {
+          visible: false,
+          left: null,
+          top: null,
+        };
+  }
+
+  return {
+    visible: false,
+    left: null,
+    top: null,
+  };
 }
 
 class HtmlTableInteractionView {

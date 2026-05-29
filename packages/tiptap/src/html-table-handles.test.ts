@@ -20,6 +20,11 @@ function createInteractionState(
       index: null,
       tablePos: null,
     },
+    contextTrigger: {
+      visible: false,
+      left: null,
+      top: null,
+    },
     geometry: null,
     resizing: null,
     ...overrides,
