@@ -20,6 +20,9 @@ import {
   insertHtmlTable,
   mergeCells,
   mergeOrSplit,
+  moveRowToBody,
+  moveRowToFoot,
+  moveRowToHead,
   normalizeHtmlTable,
   removeCaption,
   selectCell,
@@ -81,6 +84,15 @@ function getBody(table: ProseMirrorNode): ProseMirrorNode {
   }
 
   throw new Error('Expected htmlTableBody child.');
+}
+
+function getSection(table: ProseMirrorNode, typeName: string): ProseMirrorNode | undefined {
+  for (let index = 0; index < table.childCount; index += 1) {
+    const child = table.child(index);
+    if (child.type.name === typeName) return child;
+  }
+
+  return undefined;
 }
 
 function getSelectedCellType(state: EditorState): string | undefined {
@@ -261,6 +273,52 @@ describe('html table commands', () => {
 
     expect(nextTable.child(0).type.name).toBe('htmlTableCaption');
     expect(nextTable.child(1).type.name).toBe('htmlTableBody');
+  });
+
+  it('moves the selected row into the table head and converts cells to headers', () => {
+    const nextState = applyCommand(createStateWithTable(2, 2), moveRowToHead());
+    const nextTable = getTable(nextState.doc);
+    const head = getSection(nextTable, 'htmlTableHead');
+    const body = getBody(nextTable);
+
+    expect(head?.childCount).toBe(1);
+    expect(head?.child(0).child(0).type.name).toBe('htmlTableHeaderCell');
+    expect(body.childCount).toBe(1);
+  });
+
+  it('moves a head row back into the body and converts cells to body cells', () => {
+    const table = schema.nodes.htmlTable!.create(null, [
+      schema.nodes.htmlTableHead!.create(null, [
+        schema.nodes.htmlTableRow!.create(null, [
+          schema.nodes.htmlTableHeaderCell!.create(null, [schema.nodes.paragraph!.create()]),
+          schema.nodes.htmlTableHeaderCell!.create(null, [schema.nodes.paragraph!.create()]),
+        ]),
+      ]),
+      schema.nodes.htmlTableBody!.create(null, [
+        schema.nodes.htmlTableRow!.create(null, [
+          schema.nodes.htmlTableCell!.create(null, [schema.nodes.paragraph!.create()]),
+          schema.nodes.htmlTableCell!.create(null, [schema.nodes.paragraph!.create()]),
+        ]),
+      ]),
+    ]);
+    const nextState = applyCommand(createStateForTable(table), moveRowToBody());
+    const nextTable = getTable(nextState.doc);
+    const body = getBody(nextTable);
+
+    expect(getSection(nextTable, 'htmlTableHead')).toBeUndefined();
+    expect(body.childCount).toBe(2);
+    expect(body.child(1).child(0).type.name).toBe('htmlTableCell');
+  });
+
+  it('moves the selected row into the table foot', () => {
+    const nextState = applyCommand(createStateWithTable(2, 2), moveRowToFoot());
+    const nextTable = getTable(nextState.doc);
+    const foot = getSection(nextTable, 'htmlTableFoot');
+    const body = getBody(nextTable);
+
+    expect(foot?.childCount).toBe(1);
+    expect(foot?.child(0).child(0).type.name).toBe('htmlTableCell');
+    expect(body.childCount).toBe(1);
   });
 
   it('toggles the selected cell between header and body cell types', () => {

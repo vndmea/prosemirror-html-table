@@ -265,6 +265,18 @@ export function removeColgroup(options: HtmlTableCommandOptions = {}): Command {
   };
 }
 
+export function moveRowToHead(options: HtmlTableCommandOptions = {}): Command {
+  return moveRowToSection('head', options);
+}
+
+export function moveRowToBody(options: HtmlTableCommandOptions = {}): Command {
+  return moveRowToSection('body', options);
+}
+
+export function moveRowToFoot(options: HtmlTableCommandOptions = {}): Command {
+  return moveRowToSection('foot', options);
+}
+
 export function setCellAttribute(
   name: string,
   value: unknown,
@@ -657,6 +669,54 @@ function addColumn(direction: 'before' | 'after', options: HtmlTableCommandOptio
       context,
       normalizeHtmlTable(context.table.copy(Fragment.fromArray(tableChildren)), getNormalizeOptions(options)),
     );
+  };
+}
+
+function moveRowToSection(targetSectionName: HtmlTableSectionName, options: HtmlTableCommandOptions): Command {
+  return (state, dispatch) => {
+    const context = findRowContext(state, options);
+    if (!context || context.sectionName === targetSectionName) return false;
+
+    const tableChildren = getChildren(context.table);
+    const sourceSectionChildren = getChildren(context.section);
+    const movedRow = convertRowForSection(state.schema, context.names, context.row, targetSectionName);
+
+    sourceSectionChildren.splice(context.rowIndexInSection, 1);
+
+    if (sourceSectionChildren.length === 0) {
+      tableChildren.splice(context.sectionChildIndex, 1);
+    } else {
+      tableChildren[context.sectionChildIndex] = context.section.copy(Fragment.fromArray(sourceSectionChildren));
+    }
+
+    const targetLocation = findTargetSectionLocation(tableChildren, context.names, targetSectionName);
+    let targetRowIndexInSection = 0;
+    let targetSectionIndex = 0;
+
+    if (targetLocation.sectionChildIndex >= 0) {
+      const targetSection = tableChildren[targetLocation.sectionChildIndex]!;
+      const targetRows = getChildren(targetSection);
+      targetRowIndexInSection = targetRows.length;
+      targetSectionIndex = countPreviousSections(context.table.copy(Fragment.fromArray(tableChildren)), context.names, targetSectionName, targetLocation.sectionChildIndex);
+      targetRows.push(movedRow);
+      tableChildren[targetLocation.sectionChildIndex] = targetSection.copy(Fragment.fromArray(targetRows));
+    } else {
+      const sectionType = getNodeType(state.schema, getSectionNodeName(context.names, targetSectionName));
+      tableChildren.splice(targetLocation.insertIndex, 0, sectionType.create(null, [movedRow]));
+      targetSectionIndex = countPreviousSections(
+        context.table.copy(Fragment.fromArray(tableChildren)),
+        context.names,
+        targetSectionName,
+        targetLocation.insertIndex,
+      );
+    }
+
+    const nextTable = normalizeHtmlTable(
+      context.table.copy(Fragment.fromArray(tableChildren)),
+      getNormalizeOptions(options),
+    );
+
+    return replaceTableAndSelectRow(state, dispatch, context, nextTable, targetSectionName, targetSectionIndex, targetRowIndexInSection);
   };
 }
 
@@ -1110,6 +1170,67 @@ function findColgroupInsertIndex(children: ProseMirrorNode[], names: HtmlTableNo
   return sectionIndex >= 0 ? sectionIndex : children.length;
 }
 
+function findTargetSectionLocation(
+  children: ProseMirrorNode[],
+  names: HtmlTableNodeNames,
+  targetSectionName: HtmlTableSectionName,
+): { sectionChildIndex: number; insertIndex: number } {
+  const sectionNodeName = getSectionNodeName(names, targetSectionName);
+  const sectionChildIndex = children.findIndex((child) => child.type.name === sectionNodeName);
+
+  if (sectionChildIndex >= 0) {
+    return {
+      sectionChildIndex,
+      insertIndex: sectionChildIndex,
+    };
+  }
+
+  if (targetSectionName === 'head') {
+    return {
+      sectionChildIndex: -1,
+      insertIndex: findHeadInsertIndex(children, names),
+    };
+  }
+
+  if (targetSectionName === 'body') {
+    return {
+      sectionChildIndex: -1,
+      insertIndex: findBodyInsertIndex(children, names),
+    };
+  }
+
+  return {
+    sectionChildIndex: -1,
+    insertIndex: children.length,
+  };
+}
+
+function findHeadInsertIndex(children: ProseMirrorNode[], names: HtmlTableNodeNames): number {
+  const colgroupIndex = children.findIndex((child) => child.type.name === names.colgroup);
+  if (colgroupIndex >= 0) {
+    return colgroupIndex + 1;
+  }
+
+  const captionIndex = children.findIndex((child) => child.type.name === names.caption);
+  if (captionIndex >= 0) {
+    return captionIndex + 1;
+  }
+
+  const sectionIndex = children.findIndex(
+    (child) => child.type.name === names.body || child.type.name === names.foot,
+  );
+  return sectionIndex >= 0 ? sectionIndex : children.length;
+}
+
+function findBodyInsertIndex(children: ProseMirrorNode[], names: HtmlTableNodeNames): number {
+  const footIndex = children.findIndex((child) => child.type.name === names.foot);
+  if (footIndex >= 0) {
+    return footIndex;
+  }
+
+  return children.length;
+}
+
 function createColgroup(
   schema: Schema,
   names: HtmlTableNodeNames,
@@ -1147,6 +1268,63 @@ function expandColgroupWidths(colgroup: ProseMirrorNode, targetWidth: number): A
 function normalizeColumnWidth(value: unknown): number | null {
   const width = Number(value);
   return Number.isFinite(width) && width > 0 ? width : null;
+}
+
+function replaceTableAndSelectRow(
+  state: EditorState,
+  dispatch: Parameters<Command>[1],
+  context: TableContext,
+  table: ProseMirrorNode,
+  targetSectionName: HtmlTableSectionName,
+  targetSectionIndex: number,
+  targetRowIndexInSection: number,
+): boolean {
+  if (dispatch) {
+    const transaction = state.tr.replaceWith(context.tablePos, context.tablePos + context.table.nodeSize, table);
+    const nextContext: TableContext = {
+      ...context,
+      table,
+    };
+    const grid = createHtmlTableGrid(table, { names: context.names });
+    const targetRow = grid.rows.find(
+      (row) =>
+        row.section === targetSectionName &&
+        row.sectionIndex === targetSectionIndex &&
+        row.rowIndexInSection === targetRowIndexInSection,
+    );
+    const targetCell = targetRow
+      ? grid.cells.find((cell) => cell.rowIndex === targetRow.rowIndex && cell.cellIndex === 0)
+      : undefined;
+    const targetCellPos = targetCell ? findCellPosition(nextContext, targetCell) : undefined;
+
+    if (targetCellPos !== undefined) {
+      transaction.setSelection(TextSelection.near(transaction.doc.resolve(targetCellPos + 1), 1));
+    }
+
+    dispatch(transaction.scrollIntoView());
+  }
+
+  return true;
+}
+
+function getSectionNodeName(names: HtmlTableNodeNames, sectionName: HtmlTableSectionName): string {
+  if (sectionName === 'head') return names.head;
+  if (sectionName === 'body') return names.body;
+  return names.foot;
+}
+
+function convertRowForSection(
+  schema: Schema,
+  names: HtmlTableNodeNames,
+  row: ProseMirrorNode,
+  targetSectionName: HtmlTableSectionName,
+): ProseMirrorNode {
+  const shouldUseHeaderCells = targetSectionName === 'head';
+  const rowChildren = getChildren(row).map((cell) =>
+    convertCellType(schema, names, cell, shouldUseHeaderCells ? 'header' : 'body'),
+  );
+
+  return row.copy(Fragment.fromArray(rowChildren));
 }
 
 function getNodeType(schema: Schema, name: string) {
