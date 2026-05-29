@@ -7,6 +7,8 @@ export {
   renderHtmlTableCellAttributes,
 } from './cell-attributes.js';
 export {
+  addFootSection,
+  addHeadSection,
   addColumnAfter,
   addColumnBefore,
   addRowAfter,
@@ -15,6 +17,8 @@ export {
   moveRowToBody,
   moveRowToFoot,
   moveRowToHead,
+  removeFootSection,
+  removeHeadSection,
   removeColgroup,
   removeCaption,
   deleteRow,

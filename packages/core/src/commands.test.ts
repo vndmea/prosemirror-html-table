@@ -3,6 +3,8 @@ import { EditorState, NodeSelection } from 'prosemirror-state';
 import { describe, expect, it } from 'vitest';
 
 import {
+  addFootSection,
+  addHeadSection,
   addColumnAfter,
   addColumnBefore,
   addRowAfter,
@@ -23,6 +25,8 @@ import {
   moveRowToBody,
   moveRowToFoot,
   moveRowToHead,
+  removeFootSection,
+  removeHeadSection,
   normalizeHtmlTable,
   removeCaption,
   selectCell,
@@ -319,6 +323,57 @@ describe('html table commands', () => {
     expect(foot?.childCount).toBe(1);
     expect(foot?.child(0).child(0).type.name).toBe('htmlTableCell');
     expect(body.childCount).toBe(1);
+  });
+
+  it('adds an explicit head section in the correct position', () => {
+    const nextState = applyCommand(createStateWithTable(2, 2), addHeadSection());
+    const nextTable = getTable(nextState.doc);
+    const head = getSection(nextTable, 'htmlTableHead');
+
+    expect(nextTable.child(0).type.name).toBe('htmlTableHead');
+    expect(head?.childCount).toBe(1);
+    expect(head?.child(0).child(0).type.name).toBe('htmlTableHeaderCell');
+  });
+
+  it('removes the head section and merges its rows into the body', () => {
+    const table = schema.nodes.htmlTable!.create(null, [
+      schema.nodes.htmlTableHead!.create(null, [
+        schema.nodes.htmlTableRow!.create(null, [
+          schema.nodes.htmlTableHeaderCell!.create(null, [schema.nodes.paragraph!.create()]),
+          schema.nodes.htmlTableHeaderCell!.create(null, [schema.nodes.paragraph!.create()]),
+        ]),
+      ]),
+      schema.nodes.htmlTableBody!.create(null, [
+        schema.nodes.htmlTableRow!.create(null, [
+          schema.nodes.htmlTableCell!.create(null, [schema.nodes.paragraph!.create()]),
+          schema.nodes.htmlTableCell!.create(null, [schema.nodes.paragraph!.create()]),
+        ]),
+      ]),
+    ]);
+    const nextState = applyCommand(createStateForTable(table), removeHeadSection());
+    const nextTable = getTable(nextState.doc);
+    const body = getBody(nextTable);
+
+    expect(getSection(nextTable, 'htmlTableHead')).toBeUndefined();
+    expect(body.childCount).toBe(2);
+    expect(body.child(0).child(0).type.name).toBe('htmlTableCell');
+  });
+
+  it('adds and removes an explicit foot section while preserving rows', () => {
+    const stateWithFoot = applyCommand(createStateWithTable(2, 2), addFootSection());
+    const tableWithFoot = getTable(stateWithFoot.doc);
+    const foot = getSection(tableWithFoot, 'htmlTableFoot');
+
+    expect(foot?.childCount).toBe(1);
+    expect(foot?.child(0).child(0).type.name).toBe('htmlTableCell');
+
+    const nextState = applyCommand(stateWithFoot, removeFootSection());
+    const nextTable = getTable(nextState.doc);
+    const body = getBody(nextTable);
+
+    expect(getSection(nextTable, 'htmlTableFoot')).toBeUndefined();
+    expect(body.childCount).toBe(3);
+    expect(body.child(2).child(0).type.name).toBe('htmlTableCell');
   });
 
   it('toggles the selected cell between header and body cell types', () => {

@@ -277,6 +277,22 @@ export function moveRowToFoot(options: HtmlTableCommandOptions = {}): Command {
   return moveRowToSection('foot', options);
 }
 
+export function addHeadSection(options: HtmlTableCommandOptions = {}): Command {
+  return addSection('head', options);
+}
+
+export function removeHeadSection(options: HtmlTableCommandOptions = {}): Command {
+  return removeSection('head', options);
+}
+
+export function addFootSection(options: HtmlTableCommandOptions = {}): Command {
+  return addSection('foot', options);
+}
+
+export function removeFootSection(options: HtmlTableCommandOptions = {}): Command {
+  return removeSection('foot', options);
+}
+
 export function setCellAttribute(
   name: string,
   value: unknown,
@@ -717,6 +733,75 @@ function moveRowToSection(targetSectionName: HtmlTableSectionName, options: Html
     );
 
     return replaceTableAndSelectRow(state, dispatch, context, nextTable, targetSectionName, targetSectionIndex, targetRowIndexInSection);
+  };
+}
+
+function addSection(sectionName: Extract<HtmlTableSectionName, 'head' | 'foot'>, options: HtmlTableCommandOptions): Command {
+  return (state, dispatch) => {
+    const context = findTableContext(state, options);
+    if (!context) return false;
+
+    const tableChildren = getChildren(context.table);
+    const sectionNodeName = getSectionNodeName(context.names, sectionName);
+    if (tableChildren.some((child) => child.type.name === sectionNodeName)) {
+      return false;
+    }
+
+    const grid = createHtmlTableGrid(context.table, { names: context.names });
+    const sectionType = getNodeType(state.schema, sectionNodeName);
+    const row = createEmptyRow(state.schema, context.names, sectionName, Math.max(1, grid.width));
+    const insertIndex = sectionName === 'head'
+      ? findHeadInsertIndex(tableChildren, context.names)
+      : tableChildren.length;
+
+    tableChildren.splice(insertIndex, 0, sectionType.create(null, [row]));
+
+    return replaceTable(
+      state,
+      dispatch,
+      context,
+      normalizeHtmlTable(context.table.copy(Fragment.fromArray(tableChildren)), getNormalizeOptions(options)),
+    );
+  };
+}
+
+function removeSection(sectionName: Extract<HtmlTableSectionName, 'head' | 'foot'>, options: HtmlTableCommandOptions): Command {
+  return (state, dispatch) => {
+    const context = findTableContext(state, options);
+    if (!context) return false;
+
+    const tableChildren = getChildren(context.table);
+    const sectionNodeName = getSectionNodeName(context.names, sectionName);
+    const sectionChildIndex = tableChildren.findIndex((child) => child.type.name === sectionNodeName);
+    if (sectionChildIndex < 0) return false;
+
+    const section = tableChildren[sectionChildIndex]!;
+    const movedRows = getChildren(section).map((row) => convertRowForSection(state.schema, context.names, row, 'body'));
+    tableChildren.splice(sectionChildIndex, 1);
+
+    const bodyNodeName = context.names.body;
+    const bodyChildIndex = tableChildren.findIndex((child) => child.type.name === bodyNodeName);
+    if (bodyChildIndex >= 0) {
+      const body = tableChildren[bodyChildIndex]!;
+      const bodyRows = getChildren(body);
+      if (sectionName === 'head') {
+        bodyRows.unshift(...movedRows);
+      } else {
+        bodyRows.push(...movedRows);
+      }
+      tableChildren[bodyChildIndex] = body.copy(Fragment.fromArray(bodyRows));
+    } else {
+      const bodyType = getNodeType(state.schema, bodyNodeName);
+      const insertIndex = findBodyInsertIndex(tableChildren, context.names);
+      tableChildren.splice(insertIndex, 0, bodyType.create(null, movedRows));
+    }
+
+    return replaceTable(
+      state,
+      dispatch,
+      context,
+      normalizeHtmlTable(context.table.copy(Fragment.fromArray(tableChildren)), getNormalizeOptions(options)),
+    );
   };
 }
 
