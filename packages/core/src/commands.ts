@@ -178,6 +178,45 @@ export function deleteColumn(options: HtmlTableCommandOptions = {}): Command {
   };
 }
 
+export function duplicateColumn(options: HtmlTableCommandOptions = {}): Command {
+  return (state, dispatch) => {
+    const context = findCellContext(state, options);
+    if (!context) return false;
+
+    const grid = createHtmlTableGrid(context.table, { names: context.names });
+    const targetColumn = context.cell.columnIndex;
+    if (!canDuplicateColumn(grid, targetColumn)) return false;
+
+    const tableChildren = getChildren(context.table);
+
+    forEachSection(context.table, context.names, (section, _sectionName, sectionChildIndex) => {
+      const rows = getChildren(section).map((row) => {
+        const globalRowIndex = findGlobalRowIndexByNode(grid, row);
+        const rowChildren = getChildren(row);
+        const cell = getCellAtColumn(grid, globalRowIndex, targetColumn);
+        if (!cell) return row;
+
+        rowChildren.splice(cell.cellIndex + 1, 0, copyCellNode(cell.node, {}, cell.node.content));
+        return row.copy(Fragment.fromArray(rowChildren));
+      });
+
+      tableChildren[sectionChildIndex] = section.copy(Fragment.fromArray(rows));
+    });
+
+    updateColgroupForDuplicatedColumn(
+      state.schema,
+      tableChildren,
+      context.names,
+      context.table,
+      targetColumn,
+      grid.width + 1,
+    );
+
+    const nextTable = context.table.copy(Fragment.fromArray(tableChildren));
+    return replaceTableAndSelectCell(state, dispatch, context, nextTable, context.cell.rowIndex, targetColumn + 1);
+  };
+}
+
 export function deleteTable(options: HtmlTableCommandOptions = {}): Command {
   return (state, dispatch) => {
     const context = findTableContext(state, options);
@@ -1593,6 +1632,34 @@ function replaceTableAndSelectRow(
   return true;
 }
 
+function replaceTableAndSelectCell(
+  state: EditorState,
+  dispatch: Parameters<Command>[1],
+  context: TableContext,
+  table: ProseMirrorNode,
+  targetRowIndex: number,
+  targetColumnIndex: number,
+): boolean {
+  if (dispatch) {
+    const transaction = state.tr.replaceWith(context.tablePos, context.tablePos + context.table.nodeSize, table);
+    const nextContext: TableContext = {
+      ...context,
+      table,
+    };
+    const grid = createHtmlTableGrid(table, { names: context.names });
+    const targetCell = getCellAtColumn(grid, targetRowIndex, targetColumnIndex);
+    const targetCellPos = targetCell ? findCellPosition(nextContext, targetCell) : undefined;
+
+    if (targetCellPos !== undefined) {
+      transaction.setSelection(TextSelection.near(transaction.doc.resolve(targetCellPos + 1), 1));
+    }
+
+    dispatch(transaction.scrollIntoView());
+  }
+
+  return true;
+}
+
 function canDuplicateRow(grid: HtmlTableGrid, rowIndex: number): boolean {
   const rowSlots = grid.slots[rowIndex];
   if (!rowSlots || rowSlots.length === 0) return false;
@@ -1605,6 +1672,34 @@ function canDuplicateRow(grid: HtmlTableGrid, rowIndex: number): boolean {
   return grid.cells
     .filter((cell) => cell.rowIndex === rowIndex)
     .every((cell) => cell.rowSpan === 1);
+}
+
+function canDuplicateColumn(grid: HtmlTableGrid, columnIndex: number): boolean {
+  for (let rowIndex = 0; rowIndex < grid.height; rowIndex += 1) {
+    const cell = grid.slots[rowIndex]?.[columnIndex]?.cell;
+    if (!cell) return false;
+    if (cell.rowIndex !== rowIndex || cell.columnIndex !== columnIndex) return false;
+    if (cell.rowSpan !== 1 || cell.colSpan !== 1) return false;
+  }
+
+  return true;
+}
+
+function updateColgroupForDuplicatedColumn(
+  schema: Schema,
+  tableChildren: ProseMirrorNode[],
+  names: HtmlTableNodeNames,
+  table: ProseMirrorNode,
+  targetColumn: number,
+  nextWidth: number,
+): void {
+  const colgroupIndex = findChildIndex(table, names.colgroup);
+  if (colgroupIndex < 0) return;
+
+  const widths = expandColgroupWidths(table.child(colgroupIndex), nextWidth - 1);
+  const duplicatedWidth = widths[targetColumn] ?? null;
+  widths.splice(targetColumn + 1, 0, duplicatedWidth);
+  tableChildren[colgroupIndex] = createColgroup(schema, names, nextWidth, widths);
 }
 
 function getSectionNodeName(names: HtmlTableNodeNames, sectionName: HtmlTableSectionName): string {

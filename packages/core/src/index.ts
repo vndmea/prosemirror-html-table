@@ -20,6 +20,7 @@ export {
   clearRowContent,
   clearSelectedCells,
   deleteColumn,
+  duplicateColumn,
   moveRowDown,
   duplicateRow,
   moveRowToBody,

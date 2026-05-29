@@ -22,6 +22,7 @@ import {
   removeColgroup,
   deleteRow,
   deleteTable,
+  duplicateColumn,
   duplicateRow,
   fixTables,
   goToNextCell,
@@ -479,6 +480,65 @@ describe('html table commands', () => {
     expect(body.child(0).textContent).toBe('A');
     expect(body.child(1).textContent).toBe('A');
     expect(body.child(2).textContent).toBe('B');
+  });
+
+  it('duplicates the current column and preserves colgroup widths', () => {
+    const table = schema.nodes.htmlTable!.create(null, [
+      schema.nodes.htmlTableColgroup!.create(null, [
+        schema.nodes.htmlTableCol!.create({ span: null, width: 120 }),
+        schema.nodes.htmlTableCol!.create({ span: null, width: 240 }),
+      ]),
+      schema.nodes.htmlTableBody!.create(null, [
+        schema.nodes.htmlTableRow!.create(null, [
+          schema.nodes.htmlTableCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('A'))]),
+          schema.nodes.htmlTableCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('B'))]),
+        ]),
+        schema.nodes.htmlTableRow!.create(null, [
+          schema.nodes.htmlTableCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('C'))]),
+          schema.nodes.htmlTableCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('D'))]),
+        ]),
+      ]),
+    ]);
+    const state = createStateForTable(table);
+    const nextState = applyCommand(state, duplicateColumn());
+    const nextTable = getTable(nextState.doc);
+    const body = getBody(nextTable);
+    const colgroup = getSection(nextTable, 'htmlTableColgroup');
+
+    expect(body.child(0).childCount).toBe(3);
+    expect(body.child(0).child(0).textContent).toBe('A');
+    expect(body.child(0).child(1).textContent).toBe('A');
+    expect(body.child(0).child(2).textContent).toBe('B');
+    expect(body.child(1).child(0).textContent).toBe('C');
+    expect(body.child(1).child(1).textContent).toBe('C');
+    expect(body.child(1).child(2).textContent).toBe('D');
+    expect(colgroup?.childCount).toBe(3);
+    expect(colgroup?.child(0).attrs.width).toBe(120);
+    expect(colgroup?.child(1).attrs.width).toBe(120);
+    expect(colgroup?.child(2).attrs.width).toBe(240);
+  });
+
+  it('does not duplicate a column that is covered by merged cells', () => {
+    const table = schema.nodes.htmlTable!.create(null, [
+      schema.nodes.htmlTableBody!.create(null, [
+        schema.nodes.htmlTableRow!.create(null, [
+          schema.nodes.htmlTableCell!.create({ colspan: 2 }, [schema.nodes.paragraph!.create(null, schema.text('A'))]),
+        ]),
+        schema.nodes.htmlTableRow!.create(null, [
+          schema.nodes.htmlTableCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('B'))]),
+          schema.nodes.htmlTableCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('C'))]),
+        ]),
+      ]),
+    ]);
+    const state = createStateForTable(table);
+    let dispatched = false;
+
+    const result = duplicateColumn()(state, () => {
+      dispatched = true;
+    });
+
+    expect(result).toBe(false);
+    expect(dispatched).toBe(false);
   });
 
   it('does not duplicate a row that contains rowspan cells', () => {

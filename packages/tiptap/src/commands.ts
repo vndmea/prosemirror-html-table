@@ -13,6 +13,7 @@ import {
   clearRowContent as clearCoreRowContent,
   clearSelectedCells as clearCoreSelectedCells,
   deleteColumn as deleteCoreColumn,
+  duplicateColumn as duplicateCoreColumn,
   duplicateRow as duplicateCoreRow,
   removeColgroup as removeCoreColgroup,
   removeCaption as removeCoreCaption,
@@ -68,6 +69,7 @@ declare module '@tiptap/core' {
       clearHtmlTableSelectedCells: (options?: HtmlTableCommandOptions) => ReturnType;
       clearHtmlTableRowContent: (options?: HtmlTableCommandOptions) => ReturnType;
       clearHtmlTableColumnContent: (options?: HtmlTableCommandOptions) => ReturnType;
+      duplicateHtmlTableColumn: (options?: HtmlTableCommandOptions) => ReturnType;
       duplicateHtmlTableRow: (options?: HtmlTableCommandOptions) => ReturnType;
       moveHtmlTableRowUp: (options?: HtmlTableCommandOptions) => ReturnType;
       moveHtmlTableRowDown: (options?: HtmlTableCommandOptions) => ReturnType;
@@ -187,6 +189,11 @@ export function createHtmlTableCommands(): Partial<RawCommands> {
       (options?: HtmlTableCommandOptions) =>
       ({ state, dispatch }) =>
         clearCoreColumnContent(options)(state, dispatch),
+
+    duplicateHtmlTableColumn:
+      (options?: HtmlTableCommandOptions) =>
+      ({ state, dispatch }) =>
+        duplicateCoreColumn(options)(state, dispatch),
 
     duplicateHtmlTableRow:
       (options?: HtmlTableCommandOptions) =>
