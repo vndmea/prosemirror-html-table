@@ -20,8 +20,8 @@ export class HtmlTableNodeView {
     this.htmlAttributes = mergeAttributes(this.options.HTMLAttributes, props.HTMLAttributes);
 
     this.wrapper = document.createElement('div');
-    this.wrapper.className = this.options.wrapperClassName;
     this.wrapper.dataset.htmlTableWrapper = 'true';
+    this.wrapper.style.position = 'relative';
 
     this.table = document.createElement('table');
     this.table.className = 'html-table-node__table';
@@ -32,6 +32,7 @@ export class HtmlTableNodeView {
     this.contentDOM = this.table;
 
     this.applyAttributes();
+    this.syncWrapperState();
     this.syncViewState();
   }
 
@@ -40,6 +41,7 @@ export class HtmlTableNodeView {
 
     this.node = node;
     this.applyAttributes();
+    this.syncWrapperState();
     this.syncViewState();
     return true;
   }
@@ -68,6 +70,8 @@ export class HtmlTableNodeView {
   }
 
   private applyAttributes(): void {
+    const isSelected = this.table.classList.contains(this.options.selectedTableClassName);
+
     for (const attributeName of this.table.getAttributeNames()) {
       this.table.removeAttribute(attributeName);
     }
@@ -79,6 +83,8 @@ export class HtmlTableNodeView {
       if (value === null || value === undefined || value === false) continue;
       this.table.setAttribute(name, String(value));
     }
+
+    this.table.classList.toggle(this.options.selectedTableClassName, isSelected);
   }
 
   private syncViewState(): void {
@@ -97,5 +103,11 @@ export class HtmlTableNodeView {
       col.setAttribute('width', String(width));
       (col as HTMLElement).style.width = `${width}px`;
     });
+  }
+
+  private syncWrapperState(): void {
+    const isSelected = this.wrapper.classList.contains(this.options.selectedTableClassName);
+    this.wrapper.className = this.options.renderWrapper ? this.options.wrapperClassName : '';
+    this.wrapper.classList.toggle(this.options.selectedTableClassName, isSelected);
   }
 }

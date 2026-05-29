@@ -199,9 +199,11 @@ class HtmlTableHandleOverlayView {
       resizeHandle.dataset.index = String(column.index);
       resizeHandle.setAttribute('aria-label', `Resize column ${column.index + 1}`);
       resizeHandle.title = `Resize column ${column.index + 1}`;
+      resizeHandle.style.width = `${Math.max(4, this.options.handleWidth)}px`;
       resizeHandle.style.left = `${tableLeft + column.left + column.width}px`;
       resizeHandle.style.top = `${tableTop}px`;
       resizeHandle.style.height = `${geometry.tableRect.height}px`;
+      resizeHandle.hidden = !this.isColumnResizable(column.index, geometry.columns.length);
       resizeHandle.classList.toggle(
         'is-active',
         interaction.resizing?.tablePos === activeTable.tablePos && interaction.resizing.columnIndex === column.index,
@@ -398,7 +400,14 @@ class HtmlTableHandleOverlayView {
     const index = Number(handle?.dataset.index);
     const interaction = getHtmlTableInteractionState(this.view.state);
     const activeTable = interaction.activeTable;
-    if (!handle || !activeTable || !Number.isInteger(index) || !this.options.resizable) {
+    const totalColumns = interaction.geometry?.columns.length ?? 0;
+    if (
+      !handle ||
+      !activeTable ||
+      !Number.isInteger(index) ||
+      !this.options.resizable ||
+      !this.isColumnResizable(index, totalColumns)
+    ) {
       return;
     }
 
@@ -599,5 +608,12 @@ class HtmlTableHandleOverlayView {
     this.root.hidden = true;
     this.root.remove();
     this.currentWrapper = null;
+  }
+
+  private isColumnResizable(index: number, totalColumns: number): boolean {
+    if (!this.options.resizable) return false;
+    if (index < 0 || index >= totalColumns) return false;
+    if (this.options.lastColumnResizable) return true;
+    return index < totalColumns - 1;
   }
 }
