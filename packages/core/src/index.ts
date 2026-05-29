@@ -21,6 +21,8 @@ export {
   clearSelectedCells,
   deleteColumn,
   duplicateColumn,
+  moveColumnLeft,
+  moveColumnRight,
   moveRowDown,
   duplicateRow,
   moveRowToBody,

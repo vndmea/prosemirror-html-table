@@ -26,6 +26,8 @@ import {
   mergeCells as mergeCoreCells,
   mergeOrSplit as mergeOrSplitCoreCells,
   moveRowDown as moveCoreRowDown,
+  moveColumnLeft as moveCoreColumnLeft,
+  moveColumnRight as moveCoreColumnRight,
   moveRowToBody as moveCoreRowToBody,
   moveRowToFoot as moveCoreRowToFoot,
   moveRowToHead as moveCoreRowToHead,
@@ -73,6 +75,8 @@ declare module '@tiptap/core' {
       clearHtmlTableColumnContent: (options?: HtmlTableCommandOptions) => ReturnType;
       duplicateHtmlTableColumn: (options?: HtmlTableCommandOptions) => ReturnType;
       duplicateHtmlTableRow: (options?: HtmlTableCommandOptions) => ReturnType;
+      moveHtmlTableColumnLeft: (options?: HtmlTableCommandOptions) => ReturnType;
+      moveHtmlTableColumnRight: (options?: HtmlTableCommandOptions) => ReturnType;
       sortHtmlTableBodyRowsByColumn: (options?: HtmlTableSortRowsOptions) => ReturnType;
       moveHtmlTableRowUp: (options?: HtmlTableCommandOptions) => ReturnType;
       moveHtmlTableRowDown: (options?: HtmlTableCommandOptions) => ReturnType;
@@ -202,6 +206,16 @@ export function createHtmlTableCommands(): Partial<RawCommands> {
       (options?: HtmlTableCommandOptions) =>
       ({ state, dispatch }) =>
         duplicateCoreRow(options)(state, dispatch),
+
+    moveHtmlTableColumnLeft:
+      (options?: HtmlTableCommandOptions) =>
+      ({ state, dispatch }) =>
+        moveCoreColumnLeft(options)(state, dispatch),
+
+    moveHtmlTableColumnRight:
+      (options?: HtmlTableCommandOptions) =>
+      ({ state, dispatch }) =>
+        moveCoreColumnRight(options)(state, dispatch),
 
     sortHtmlTableBodyRowsByColumn:
       (options?: HtmlTableSortRowsOptions) =>

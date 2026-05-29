@@ -221,6 +221,14 @@ export function duplicateColumn(options: HtmlTableCommandOptions = {}): Command 
   };
 }
 
+export function moveColumnLeft(options: HtmlTableCommandOptions = {}): Command {
+  return moveColumnHorizontally('left', options);
+}
+
+export function moveColumnRight(options: HtmlTableCommandOptions = {}): Command {
+  return moveColumnHorizontally('right', options);
+}
+
 export function sortBodyRowsByColumn(options: HtmlTableSortRowsOptions = {}): Command {
   return (state, dispatch) => {
     const context = findCellContext(state, options);
@@ -909,6 +917,43 @@ function addColumn(direction: 'before' | 'after', options: HtmlTableCommandOptio
       context,
       normalizeHtmlTable(context.table.copy(Fragment.fromArray(tableChildren)), getNormalizeOptions(options)),
     );
+  };
+}
+
+function moveColumnHorizontally(direction: 'left' | 'right', options: HtmlTableCommandOptions): Command {
+  return (state, dispatch) => {
+    const context = findCellContext(state, options);
+    if (!context) return false;
+
+    const grid = createHtmlTableGrid(context.table, { names: context.names });
+    const sourceColumn = context.cell.columnIndex;
+    const targetColumn = sourceColumn + (direction === 'left' ? -1 : 1);
+    if (targetColumn < 0 || targetColumn >= grid.width) return false;
+    if (!canReorderColumnPair(grid, sourceColumn, targetColumn)) return false;
+
+    const tableChildren = getChildren(context.table);
+
+    forEachSection(context.table, context.names, (section, _sectionName, sectionChildIndex) => {
+      const rows = getChildren(section).map((row) => {
+        const globalRowIndex = findGlobalRowIndexByNode(grid, row);
+        const sourceCell = getCellAtColumn(grid, globalRowIndex, sourceColumn);
+        const targetCell = getCellAtColumn(grid, globalRowIndex, targetColumn);
+        if (!sourceCell || !targetCell) return row;
+
+        const rowChildren = getChildren(row);
+        const nextRowChildren = rowChildren.slice();
+        nextRowChildren[sourceCell.cellIndex] = rowChildren[targetCell.cellIndex]!;
+        nextRowChildren[targetCell.cellIndex] = rowChildren[sourceCell.cellIndex]!;
+        return row.copy(Fragment.fromArray(nextRowChildren));
+      });
+
+      tableChildren[sectionChildIndex] = section.copy(Fragment.fromArray(rows));
+    });
+
+    swapColgroupColumns(state.schema, tableChildren, context.names, context.table, sourceColumn, targetColumn, grid.width);
+
+    const nextTable = context.table.copy(Fragment.fromArray(tableChildren));
+    return replaceTableAndSelectCell(state, dispatch, context, nextTable, context.cell.rowIndex, targetColumn);
   };
 }
 
@@ -1761,6 +1806,20 @@ function canDuplicateColumn(grid: HtmlTableGrid, columnIndex: number): boolean {
   return true;
 }
 
+function canReorderColumnPair(grid: HtmlTableGrid, sourceColumn: number, targetColumn: number): boolean {
+  for (let rowIndex = 0; rowIndex < grid.height; rowIndex += 1) {
+    const sourceCell = grid.slots[rowIndex]?.[sourceColumn]?.cell;
+    const targetCell = grid.slots[rowIndex]?.[targetColumn]?.cell;
+    if (!sourceCell || !targetCell) return false;
+    if (sourceCell.rowIndex !== rowIndex || sourceCell.columnIndex !== sourceColumn) return false;
+    if (targetCell.rowIndex !== rowIndex || targetCell.columnIndex !== targetColumn) return false;
+    if (sourceCell.rowSpan !== 1 || sourceCell.colSpan !== 1) return false;
+    if (targetCell.rowSpan !== 1 || targetCell.colSpan !== 1) return false;
+  }
+
+  return true;
+}
+
 function updateColgroupForDuplicatedColumn(
   schema: Schema,
   tableChildren: ProseMirrorNode[],
@@ -1776,6 +1835,25 @@ function updateColgroupForDuplicatedColumn(
   const duplicatedWidth = widths[targetColumn] ?? null;
   widths.splice(targetColumn + 1, 0, duplicatedWidth);
   tableChildren[colgroupIndex] = createColgroup(schema, names, nextWidth, widths);
+}
+
+function swapColgroupColumns(
+  schema: Schema,
+  tableChildren: ProseMirrorNode[],
+  names: HtmlTableNodeNames,
+  table: ProseMirrorNode,
+  sourceColumn: number,
+  targetColumn: number,
+  width: number,
+): void {
+  const colgroupIndex = findChildIndex(table, names.colgroup);
+  if (colgroupIndex < 0) return;
+
+  const widths = expandColgroupWidths(table.child(colgroupIndex), width);
+  const sourceWidth = widths[sourceColumn] ?? null;
+  widths[sourceColumn] = widths[targetColumn] ?? null;
+  widths[targetColumn] = sourceWidth;
+  tableChildren[colgroupIndex] = createColgroup(schema, names, width, widths);
 }
 
 function resolveSortBodySectionIndex(tableChildren: ProseMirrorNode[], context: CellContext): number {

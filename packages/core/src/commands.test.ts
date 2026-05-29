@@ -31,6 +31,8 @@ import {
   mergeCells,
   mergeOrSplit,
   moveRowDown,
+  moveColumnLeft,
+  moveColumnRight,
   moveRowToBody,
   moveRowToFoot,
   moveRowToHead,
@@ -637,6 +639,87 @@ describe('html table commands', () => {
     expect(body.child(0).textContent).toBe('c30');
     expect(body.child(1).textContent).toBe('b20');
     expect(body.child(2).textContent).toBe('a10');
+  });
+
+  it('moves the current column left and preserves colgroup widths', () => {
+    const table = schema.nodes.htmlTable!.create(null, [
+      schema.nodes.htmlTableColgroup!.create(null, [
+        schema.nodes.htmlTableCol!.create({ span: null, width: 120 }),
+        schema.nodes.htmlTableCol!.create({ span: null, width: 240 }),
+        schema.nodes.htmlTableCol!.create({ span: null, width: 360 }),
+      ]),
+      schema.nodes.htmlTableBody!.create(null, [
+        schema.nodes.htmlTableRow!.create(null, [
+          schema.nodes.htmlTableCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('A'))]),
+          schema.nodes.htmlTableCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('B'))]),
+          schema.nodes.htmlTableCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('C'))]),
+        ]),
+        schema.nodes.htmlTableRow!.create(null, [
+          schema.nodes.htmlTableCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('D'))]),
+          schema.nodes.htmlTableCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('E'))]),
+          schema.nodes.htmlTableCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('F'))]),
+        ]),
+      ]),
+    ]);
+    const doc = schema.nodes.doc!.create(null, [table]);
+    const cellPositions = findNodePositions(doc, 'htmlTableCell');
+    const state = EditorState.create({
+      schema,
+      doc,
+      selection: CellSelection.create(doc, cellPositions[1]!),
+    });
+    const nextState = applyCommand(state, moveColumnLeft());
+    const nextTable = getTable(nextState.doc);
+    const body = getBody(nextTable);
+    const colgroup = getSection(nextTable, 'htmlTableColgroup');
+
+    expect(body.child(0).textContent).toBe('BAC');
+    expect(body.child(1).textContent).toBe('EDF');
+    expect(colgroup?.child(0).attrs.width).toBe(240);
+    expect(colgroup?.child(1).attrs.width).toBe(120);
+    expect(colgroup?.child(2).attrs.width).toBe(360);
+  });
+
+  it('moves the current column right', () => {
+    const table = schema.nodes.htmlTable!.create(null, [
+      schema.nodes.htmlTableBody!.create(null, [
+        schema.nodes.htmlTableRow!.create(null, [
+          schema.nodes.htmlTableCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('A'))]),
+          schema.nodes.htmlTableCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('B'))]),
+          schema.nodes.htmlTableCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('C'))]),
+        ]),
+      ]),
+    ]);
+    const state = createStateForTable(table);
+    const nextState = applyCommand(state, moveColumnRight());
+    const body = getBody(getTable(nextState.doc));
+
+    expect(body.child(0).textContent).toBe('BAC');
+  });
+
+  it('does not move a column when merged cells are present', () => {
+    const table = schema.nodes.htmlTable!.create(null, [
+      schema.nodes.htmlTableBody!.create(null, [
+        schema.nodes.htmlTableRow!.create(null, [
+          schema.nodes.htmlTableCell!.create({ colspan: 2 }, [schema.nodes.paragraph!.create(null, schema.text('A'))]),
+          schema.nodes.htmlTableCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('B'))]),
+        ]),
+        schema.nodes.htmlTableRow!.create(null, [
+          schema.nodes.htmlTableCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('C'))]),
+          schema.nodes.htmlTableCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('D'))]),
+          schema.nodes.htmlTableCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('E'))]),
+        ]),
+      ]),
+    ]);
+    const state = createStateForTable(table);
+    let dispatched = false;
+
+    const result = moveColumnRight()(state, () => {
+      dispatched = true;
+    });
+
+    expect(result).toBe(false);
+    expect(dispatched).toBe(false);
   });
 
   it('does not sort tbody rows when merged cells are present', () => {
