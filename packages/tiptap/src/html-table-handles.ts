@@ -26,12 +26,96 @@ const HANDLE_MAIN_AXIS_INSET = 8;
 
 export const htmlTableHandlePluginKey = new PluginKey('html-table-handle-overlay');
 
+export type HtmlTableSelectionScope = 'table' | 'row' | 'column' | 'cell';
+
+export interface HtmlTableSelectionAnchor {
+  left: number;
+  top: number;
+}
+
 export function isTableHandleVisible(
   allowTableNodeSelection: boolean,
   interaction: HtmlTableInteractionState,
   tablePos: number,
 ): boolean {
   return allowTableNodeSelection && interaction.activeTable?.tablePos === tablePos;
+}
+
+export function getHtmlTableSelectionScope(
+  interaction: HtmlTableInteractionState,
+  tablePos: number,
+  selectionInfo: ReturnType<typeof getTableSelectionInfo> | null,
+): HtmlTableSelectionScope | null {
+  if (interaction.tableSelected && interaction.activeTable?.tablePos === tablePos) {
+    return 'table';
+  }
+
+  if (interaction.selectedAxis.tablePos === tablePos) {
+    if (interaction.selectedAxis.kind === 'row') return 'row';
+    if (interaction.selectedAxis.kind === 'column') return 'column';
+  }
+
+  if (selectionInfo?.tablePos === tablePos) {
+    return 'cell';
+  }
+
+  return null;
+}
+
+export function getHtmlTableSelectionAnchor(
+  interaction: HtmlTableInteractionState,
+  tablePos: number,
+  geometry: ReturnType<typeof measureHtmlTableGeometry>,
+  tableLeft: number,
+  tableTop: number,
+  selectionInfo: ReturnType<typeof getTableSelectionInfo> | null,
+): HtmlTableSelectionAnchor | null {
+  const scope = getHtmlTableSelectionScope(interaction, tablePos, selectionInfo);
+  if (scope === 'table') {
+    return {
+      left: tableLeft,
+      top: tableTop,
+    };
+  }
+
+  if (scope === 'row' && interaction.selectedAxis.index !== null) {
+    const row = geometry.rows[interaction.selectedAxis.index];
+    if (!row) return null;
+    return {
+      left: tableLeft,
+      top: tableTop + row.top + row.height / 2,
+    };
+  }
+
+  if (scope === 'column' && interaction.selectedAxis.index !== null) {
+    const column = geometry.columns[interaction.selectedAxis.index];
+    if (!column) return null;
+    return {
+      left: tableLeft + column.left + column.width / 2,
+      top: tableTop,
+    };
+  }
+
+  if (scope === 'cell' && selectionInfo) {
+    const leftColumn = geometry.columns[selectionInfo.left];
+    const rightColumn = geometry.columns[selectionInfo.right];
+    const topRow = geometry.rows[selectionInfo.top];
+    const bottomRow = geometry.rows[selectionInfo.bottom];
+    if (!leftColumn || !rightColumn || !topRow || !bottomRow) {
+      return null;
+    }
+
+    const selectionTop = tableTop + topRow.top;
+    const selectionBottom = tableTop + bottomRow.top + bottomRow.height;
+    const selectionRight = tableLeft + rightColumn.left + rightColumn.width;
+
+    return {
+      left: selectionRight - 1,
+      top: selectionTop + (selectionBottom - selectionTop) / 2,
+    };
+  }
+
+  return null;
 }
 
 export function createHtmlTableHandlePlugin(options: HtmlTableTiptapOptions): Plugin {
@@ -138,13 +222,15 @@ class HtmlTableHandleOverlayView {
     const tableTop = context.wrapper.scrollTop + geometry.tableRect.top - wrapperRect.top;
     const rowHandleLeft = Math.max(MIN_HANDLE_INSET, tableLeft - ROW_HANDLE_OFFSET);
     const columnHandleTop = Math.max(MIN_HANDLE_INSET, tableTop - COLUMN_HANDLE_OFFSET);
+    const selectionInfo = getTableSelectionInfo(this.view.state.doc, this.view.state.selection);
 
     this.syncHandleCount('row', geometry.rows.length);
     this.syncHandleCount('column', geometry.columns.length);
     this.syncResizeHandleCount(this.options.resizable ? geometry.columns.length : 0);
+    this.syncSelectionContextState(interaction, activeTable.tablePos, geometry, tableLeft, tableTop, selectionInfo);
     this.syncTableHandle(interaction, activeTable.tablePos, rowHandleLeft, columnHandleTop);
     this.syncSelectionOverlay(interaction, activeTable.tablePos, geometry, tableLeft, tableTop);
-    this.syncCellSelectionHandle(activeTable.tablePos, geometry, tableLeft, tableTop);
+    this.syncCellSelectionHandle(activeTable.tablePos, geometry, tableLeft, tableTop, selectionInfo);
     this.syncExtendButtons(tableLeft, tableTop, geometry);
 
     for (const row of geometry.rows) {
@@ -327,11 +413,35 @@ class HtmlTableHandleOverlayView {
     this.tableHandle.classList.toggle('is-selected', isSelected);
   }
 
+  private syncSelectionContextState(
+    interaction: HtmlTableInteractionState,
+    tablePos: number,
+    geometry: ReturnType<typeof measureHtmlTableGeometry>,
+    tableLeft: number,
+    tableTop: number,
+    selectionInfo: ReturnType<typeof getTableSelectionInfo> | null,
+  ): void {
+    const scope = getHtmlTableSelectionScope(interaction, tablePos, selectionInfo);
+    const anchor = getHtmlTableSelectionAnchor(interaction, tablePos, geometry, tableLeft, tableTop, selectionInfo);
+
+    this.root.dataset.selectionScope = scope ?? 'none';
+
+    if (!anchor) {
+      this.root.style.removeProperty('--pmht-selection-anchor-left');
+      this.root.style.removeProperty('--pmht-selection-anchor-top');
+      return;
+    }
+
+    this.root.style.setProperty('--pmht-selection-anchor-left', `${anchor.left}px`);
+    this.root.style.setProperty('--pmht-selection-anchor-top', `${anchor.top}px`);
+  }
+
   private syncCellSelectionHandle(
     tablePos: number,
     geometry: ReturnType<typeof measureHtmlTableGeometry>,
     tableLeft: number,
     tableTop: number,
+    selectionInfo: ReturnType<typeof getTableSelectionInfo> | null,
   ): void {
     const interaction = getHtmlTableInteractionState(this.view.state);
     if (interaction.tableSelected) {
@@ -339,7 +449,6 @@ class HtmlTableHandleOverlayView {
       return;
     }
 
-    const selectionInfo = getTableSelectionInfo(this.view.state.doc, this.view.state.selection);
     if (!selectionInfo || selectionInfo.tablePos !== tablePos) {
       this.cellSelectionHandle.hidden = true;
       return;

@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
 import type { HtmlTableInteractionState } from './html-table-interaction.js';
-import { isTableHandleVisible } from './html-table-handles.js';
+import {
+  getHtmlTableSelectionAnchor,
+  getHtmlTableSelectionScope,
+  isTableHandleVisible,
+} from './html-table-handles.js';
+import type { HtmlTableGeometry } from './table-dom.js';
 
 function createInteractionState(
   overrides: Partial<HtmlTableInteractionState> = {},
@@ -98,5 +103,116 @@ describe('html table handles', () => {
     });
 
     expect(isTableHandleVisible(false, interaction, 5)).toBe(false);
+  });
+
+  it('derives table, row, column, and cell selection scopes for the overlay', () => {
+    const base = createInteractionState({
+      activeTable: {
+        tablePos: 5,
+        table: {} as never,
+      },
+    });
+
+    expect(getHtmlTableSelectionScope({ ...base, tableSelected: true }, 5, null)).toBe('table');
+    expect(
+      getHtmlTableSelectionScope({
+        ...base,
+        selectedAxis: {
+          kind: 'row',
+          index: 1,
+          tablePos: 5,
+        },
+      }, 5, null),
+    ).toBe('row');
+    expect(
+      getHtmlTableSelectionScope({
+        ...base,
+        selectedAxis: {
+          kind: 'column',
+          index: 1,
+          tablePos: 5,
+        },
+      }, 5, null),
+    ).toBe('column');
+    expect(
+      getHtmlTableSelectionScope(base, 5, {
+        tablePos: 5,
+        left: 0,
+        right: 0,
+        top: 0,
+        bottom: 0,
+      } as never),
+    ).toBe('cell');
+    expect(getHtmlTableSelectionScope(base, 5, null)).toBeNull();
+  });
+
+  it('derives selection anchors for table, row, column, and cell scopes', () => {
+    const geometry: HtmlTableGeometry = {
+      tableRect: {
+        left: 0,
+        top: 0,
+        right: 240,
+        bottom: 80,
+        width: 240,
+        height: 80,
+      },
+      columns: [
+        { index: 0, left: 0, width: 100 },
+        { index: 1, left: 100, width: 140 },
+      ],
+      rows: [
+        { index: 0, top: 0, height: 30 },
+        { index: 1, top: 30, height: 50 },
+      ],
+    };
+    const base = createInteractionState({
+      activeTable: {
+        tablePos: 5,
+        table: {} as never,
+      },
+    });
+
+    expect(getHtmlTableSelectionAnchor({ ...base, tableSelected: true }, 5, geometry, 20, 10, null)).toEqual({
+      left: 20,
+      top: 10,
+    });
+    expect(
+      getHtmlTableSelectionAnchor({
+        ...base,
+        selectedAxis: {
+          kind: 'row',
+          index: 1,
+          tablePos: 5,
+        },
+      }, 5, geometry, 20, 10, null),
+    ).toEqual({
+      left: 20,
+      top: 65,
+    });
+    expect(
+      getHtmlTableSelectionAnchor({
+        ...base,
+        selectedAxis: {
+          kind: 'column',
+          index: 1,
+          tablePos: 5,
+        },
+      }, 5, geometry, 20, 10, null),
+    ).toEqual({
+      left: 190,
+      top: 10,
+    });
+    expect(
+      getHtmlTableSelectionAnchor(base, 5, geometry, 20, 10, {
+        tablePos: 5,
+        left: 0,
+        right: 1,
+        top: 0,
+        bottom: 1,
+      } as never),
+    ).toEqual({
+      left: 259,
+      top: 50,
+    });
   });
 });
