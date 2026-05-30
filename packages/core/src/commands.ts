@@ -788,11 +788,13 @@ export function mergeCells(options: HtmlTableCommandOptions = {}): Command {
     }
 
     tableChildren[anchorContext.sectionChildIndex] = anchorContext.section.copy(Fragment.fromArray(sectionChildren));
-    return replaceTable(
+    return replaceTableAndSelectCell(
       state,
       dispatch,
       anchorContext,
       normalizeHtmlTable(anchorContext.table.copy(Fragment.fromArray(tableChildren)), getNormalizeOptions(options)),
+      selectionInfo.anchorCell.rowIndex,
+      selectionInfo.anchorCell.columnIndex,
     );
   };
 }
@@ -841,11 +843,13 @@ export function splitCell(options: HtmlTableCommandOptions = {}): Command {
     }
 
     tableChildren[context.sectionChildIndex] = context.section.copy(Fragment.fromArray(sectionChildren));
-    return replaceTable(
+    return replaceTableAndSelectCell(
       state,
       dispatch,
       context,
       normalizeHtmlTable(context.table.copy(Fragment.fromArray(tableChildren)), getNormalizeOptions(options)),
+      context.cell.rowIndex,
+      context.cell.columnIndex,
     );
   };
 }
@@ -1311,10 +1315,7 @@ function findCellContext(state: EditorState, options: HtmlTableCommandOptions): 
       ?? findCellByPosition(rowContext, grid, state.selection.anchorCellPos);
 
     if (selectionCell) {
-      return {
-        ...rowContext,
-        cell: selectionCell,
-      };
+      return findCellContextByCell(rowContext, selectionCell);
     }
   }
 

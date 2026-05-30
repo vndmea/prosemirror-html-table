@@ -71,8 +71,7 @@ describe('html table context actions', () => {
       selection: CellSelection.create(doc, cellPositions[0]!),
       plugins: [createHtmlTableInteractionPlugin()],
     });
-    const transaction = createRowSelectionTransaction(state, 0, table, 1);
-    const nextState = state.apply(transaction!);
+    const nextState = applyExplicitRowSelection(state, table, 1);
 
     const actions = getHtmlTableContextActions(nextState, getHtmlTableInteractionState(nextState));
 
@@ -102,8 +101,7 @@ describe('html table context actions', () => {
       selection: CellSelection.create(doc, cellPositions[0]!),
       plugins: [createHtmlTableInteractionPlugin()],
     });
-    const transaction = createColumnSelectionTransaction(state, 0, table, 1);
-    const nextState = state.apply(transaction!);
+    const nextState = applyExplicitColumnSelection(state, table, 1);
 
     const actions = getHtmlTableContextActions(nextState, getHtmlTableInteractionState(nextState));
 
@@ -280,7 +278,7 @@ describe('html table context actions', () => {
       plugins: [createHtmlTableInteractionPlugin()],
     });
 
-    let rowHeaderState = state.apply(createRowSelectionTransaction(state, 0, table, 0)!);
+    let rowHeaderState = applyExplicitRowSelection(state, table, 0);
     const toggledRow = getHtmlTableContextActionCommand({
       id: 'toggleHeaderRow',
       label: 'Toggle header row',
@@ -293,19 +291,16 @@ describe('html table context actions', () => {
     rowHeaderState = rowHeaderState.apply(
       rowHeaderState.tr.setSelection(CellSelection.create(rowHeaderState.doc, cellPositions[0]!)),
     );
-    rowHeaderState = rowHeaderState.apply(
-      createRowSelectionTransaction(
-        rowHeaderState,
-        0,
-        rowHeaderState.doc.firstChild as typeof table,
-        0,
-      )!,
+    rowHeaderState = applyExplicitRowSelection(
+      rowHeaderState,
+      rowHeaderState.doc.firstChild as typeof table,
+      0,
     );
     const rowActions = getHtmlTableContextActions(rowHeaderState, getHtmlTableInteractionState(rowHeaderState));
     expect(rowActions.find((action) => action.id === 'toggleHeaderRow')?.active).toBe(true);
     expect(rowActions.find((action) => action.id === 'toggleHeaderRow')?.label).toBe('Unset header row');
 
-    let columnHeaderState = state.apply(createColumnSelectionTransaction(state, 0, table, 0)!);
+    let columnHeaderState = applyExplicitColumnSelection(state, table, 0);
     const toggledColumn = getHtmlTableContextActionCommand({
       id: 'toggleHeaderColumn',
       label: 'Toggle header column',
@@ -318,13 +313,10 @@ describe('html table context actions', () => {
     columnHeaderState = columnHeaderState.apply(
       columnHeaderState.tr.setSelection(CellSelection.create(columnHeaderState.doc, cellPositions[0]!)),
     );
-    columnHeaderState = columnHeaderState.apply(
-      createColumnSelectionTransaction(
-        columnHeaderState,
-        0,
-        columnHeaderState.doc.firstChild as typeof table,
-        0,
-      )!,
+    columnHeaderState = applyExplicitColumnSelection(
+      columnHeaderState,
+      columnHeaderState.doc.firstChild as typeof table,
+      0,
     );
     const columnActions = getHtmlTableContextActions(columnHeaderState, getHtmlTableInteractionState(columnHeaderState));
     expect(columnActions.find((action) => action.id === 'toggleHeaderColumn')?.active).toBe(true);
@@ -468,7 +460,7 @@ describe('html table context actions', () => {
       selection: CellSelection.create(doc, cellPositions[0]!),
       plugins: [createHtmlTableInteractionPlugin()],
     });
-    const rowState = baseState.apply(createRowSelectionTransaction(baseState, 0, table, 1)!);
+    const rowState = applyExplicitRowSelection(baseState, table, 1);
     const geometryState = rowState.apply(
       rowState.tr.setMeta(htmlTableInteractionPluginKey, {
         geometry: createGeometry(),
@@ -516,6 +508,7 @@ describe('html table context actions', () => {
           index: 0,
           tablePos: 0,
         },
+        selectedAxisExplicit: true,
         geometry: createGeometry(),
         contextMenuOpen: true,
       }),
@@ -537,6 +530,64 @@ describe('html table context actions', () => {
     ).toBe(2);
   });
 
+  it('runs column actions against the selected axis even when the editor selection sits in another cell', () => {
+    const table = schema.nodes.htmlTable!.create(null, [
+      schema.nodes.htmlTableHead!.create(null, [
+        schema.nodes.htmlTableRow!.create(null, [
+          schema.nodes.htmlTableHeaderCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('Task'))]),
+          schema.nodes.htmlTableHeaderCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('Notes'))]),
+          schema.nodes.htmlTableHeaderCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('Status'))]),
+        ]),
+      ]),
+      schema.nodes.htmlTableBody!.create(null, [
+        schema.nodes.htmlTableRow!.create(null, [
+          schema.nodes.htmlTableCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('Open panel'))]),
+          schema.nodes.htmlTableCell!.create(null, [schema.nodes.paragraph!.create()]),
+          schema.nodes.htmlTableCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('Done'))]),
+        ]),
+      ]),
+      schema.nodes.htmlTableFoot!.create(null, [
+        schema.nodes.htmlTableRow!.create(null, [
+          schema.nodes.htmlTableCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('Total'))]),
+          schema.nodes.htmlTableCell!.create(null, [schema.nodes.paragraph!.create()]),
+          schema.nodes.htmlTableCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('2 tasks'))]),
+        ]),
+      ]),
+    ]);
+    const doc = schema.nodes.doc!.create(null, [table]);
+    const cellPositions = findNodePositions(doc, 'htmlTableCell');
+    const baseState = EditorState.create({
+      schema,
+      doc,
+      selection: TextSelection.near(doc.resolve(cellPositions[cellPositions.length - 1]! + 1)),
+      plugins: [createHtmlTableInteractionPlugin()],
+    });
+    const interactionState = baseState.apply(
+      baseState.tr.setMeta(htmlTableInteractionPluginKey, {
+        selectedAxis: {
+          kind: 'column',
+          index: 0,
+          tablePos: 0,
+        },
+        selectedAxisExplicit: true,
+        geometry: createGeometry(),
+        contextMenuOpen: true,
+      }),
+    );
+    const interaction = getHtmlTableInteractionState(interactionState);
+    const action = getHtmlTableContextActions(interactionState, interaction).find((item) => item.id === 'deleteColumn');
+
+    let nextState = interactionState;
+    const applied = runHtmlTableContextAction(interactionState, action!, (transaction) => {
+      nextState = interactionState.apply(transaction);
+    }, {}, interaction);
+
+    expect(applied).toBe(true);
+    expect(nextState.doc.textContent).not.toContain('Task');
+    expect(nextState.doc.textContent).toContain('Status');
+    expect(getTableCellCount(nextState.doc)).toBe(6);
+  });
+
   it('groups actions into stable popover sections', () => {
     const table = createHtmlTableNode(schema, { rows: 2, cols: 2 });
     const doc = schema.nodes.doc!.create(null, [table]);
@@ -547,8 +598,7 @@ describe('html table context actions', () => {
       selection: CellSelection.create(doc, cellPositions[0]!),
       plugins: [createHtmlTableInteractionPlugin()],
     });
-    const transaction = createRowSelectionTransaction(state, 0, table, 1);
-    const nextState = state.apply(transaction!);
+    const nextState = applyExplicitRowSelection(state, table, 1);
 
     const groups = getHtmlTableContextActionGroups(
       getHtmlTableContextActions(nextState, getHtmlTableInteractionState(nextState)),
@@ -622,6 +672,44 @@ function findNodePositions(doc: import('prosemirror-model').Node, typeName: stri
   });
 
   return positions;
+}
+
+function applyExplicitRowSelection(
+  state: EditorState,
+  table: import('prosemirror-model').Node,
+  rowIndex: number,
+) {
+  return state.apply(
+    createRowSelectionTransaction(state, 0, table, rowIndex)!.setMeta(htmlTableInteractionPluginKey, {
+      selectedAxis: {
+        kind: 'row',
+        index: rowIndex,
+        tablePos: 0,
+      },
+      selectedAxisExplicit: true,
+    }),
+  );
+}
+
+function applyExplicitColumnSelection(
+  state: EditorState,
+  table: import('prosemirror-model').Node,
+  columnIndex: number,
+) {
+  return state.apply(
+    createColumnSelectionTransaction(state, 0, table, columnIndex)!.setMeta(htmlTableInteractionPluginKey, {
+      selectedAxis: {
+        kind: 'column',
+        index: columnIndex,
+        tablePos: 0,
+      },
+      selectedAxisExplicit: true,
+    }),
+  );
+}
+
+function getTableCellCount(doc: import('prosemirror-model').Node): number {
+  return findNodePositions(doc, 'htmlTableHeaderCell').length + findNodePositions(doc, 'htmlTableCell').length;
 }
 
 function createGeometry() {

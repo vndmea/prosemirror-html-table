@@ -88,6 +88,7 @@ describe('html table context menu state', () => {
       createInteractionState({
         activeTable: { tablePos: 0, table },
         selectedAxis: { kind: 'row', index: 1, tablePos: 0 },
+        selectedAxisExplicit: true,
         geometry: createGeometry(),
       }),
     );
@@ -150,6 +151,7 @@ describe('html table context menu state', () => {
       createInteractionState({
         activeTable: { tablePos: 0, table },
         selectedAxis: { kind: 'column', index: 1, tablePos: 0 },
+        selectedAxisExplicit: true,
         geometry: createGeometry(),
       }),
     );
@@ -202,6 +204,7 @@ describe('html table context menu state', () => {
       createInteractionState({
         activeTable: { tablePos: 0, table },
         selectedAxis: { kind: 'row', index: 1, tablePos: 0 },
+        selectedAxisExplicit: true,
         geometry: createGeometry(),
         contextTrigger: {
           visible: true,
@@ -329,16 +332,17 @@ describe('html table context menu state', () => {
 function createInteractionState(
   overrides: Partial<HtmlTableInteractionState> = {},
 ): HtmlTableInteractionState {
-  return {
-    activeTable: null,
-    tableSelected: false,
-    hovered: null,
-    selectedAxis: {
-      kind: null,
-      index: null,
-      tablePos: null,
-    },
-    contextTrigger: {
+    return {
+      activeTable: null,
+      tableSelected: false,
+      hovered: null,
+      selectedAxis: {
+        kind: null,
+        index: null,
+        tablePos: null,
+      },
+      selectedAxisExplicit: false,
+      contextTrigger: {
       visible: false,
       left: null,
       top: null,

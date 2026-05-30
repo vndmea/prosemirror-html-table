@@ -103,6 +103,10 @@
   overflow: hidden;
 }
 
+.pmht-demo .panel.editor-panel {
+  overflow: visible;
+}
+
 .pmht-demo .editor-panel .tiptap {
   min-height: 380px;
   padding: 0.85rem 1rem;
@@ -376,6 +380,7 @@
   border-radius: 0.9rem;
   background: rgba(255, 255, 255, 0.98);
   box-shadow: 0 16px 36px rgba(15, 23, 42, 0.18);
+  overflow-y: auto;
   pointer-events: auto;
 }
 

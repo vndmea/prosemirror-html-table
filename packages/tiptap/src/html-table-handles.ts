@@ -140,7 +140,7 @@ export function getHtmlTableSelectionScope(
     return 'table';
   }
 
-  if (interaction.selectedAxis.tablePos === tablePos) {
+  if (Boolean(interaction.selectedAxisExplicit) && interaction.selectedAxis.tablePos === tablePos) {
     if (interaction.selectedAxis.kind === 'row') return 'row';
     if (interaction.selectedAxis.kind === 'column') return 'column';
   }
@@ -524,10 +524,10 @@ export function canRestoreHtmlTableContextMenuFocus(target: HTMLButtonElement | 
 export function getHtmlTableCellContextTriggerRenderState(
   menu: HtmlTableContextMenuState,
 ): HtmlTableCellContextTriggerRenderState {
-  const visible = menu.visible && menu.scope === 'cell';
+  const visible = menu.scope === 'cell';
   return {
     visible,
-    expanded: visible && menu.open,
+    expanded: visible && menu.visible && menu.open,
     label: visible ? 'Cell actions' : null,
     title: visible && menu.primaryAction ? `Cell actions: ${menu.primaryAction.label}` : visible ? 'Cell actions' : null,
     primaryActionId: visible ? menu.primaryAction?.id ?? null : null,
@@ -541,6 +541,7 @@ export function shouldToggleHtmlTableContextMenuFromAxisHandle(
   tablePos: number,
 ): boolean {
   return (
+    Boolean(interaction.selectedAxisExplicit) &&
     interaction.selectedAxis.kind === axis &&
     interaction.selectedAxis.index === index &&
     interaction.selectedAxis.tablePos === tablePos
@@ -622,6 +623,7 @@ class HtmlTableHandleOverlayView {
         columnIndex: number;
         startX: number;
         startWidths: number[];
+        currentWidths: number[];
       }
     | null = null;
   private lastContextMenuOpen = false;
@@ -746,6 +748,7 @@ class HtmlTableHandleOverlayView {
       handle.style.height = `${Math.max(HANDLE_CROSS_AXIS_SIZE, row.height - HANDLE_MAIN_AXIS_INSET)}px`;
       const isRowHovered = isHtmlTableAxisHandleHovered(interaction, 'row', activeTable.tablePos, row.index);
       const isRowSelected =
+        Boolean(interaction.selectedAxisExplicit) &&
         interaction.selectedAxis.kind === 'row' &&
         interaction.selectedAxis.index === row.index &&
         interaction.selectedAxis.tablePos === activeTable.tablePos;
@@ -791,6 +794,7 @@ class HtmlTableHandleOverlayView {
       handle.style.height = `${HANDLE_CROSS_AXIS_SIZE}px`;
       const isColumnHovered = isHtmlTableAxisHandleHovered(interaction, 'column', activeTable.tablePos, column.index);
       const isColumnSelected =
+        Boolean(interaction.selectedAxisExplicit) &&
         interaction.selectedAxis.kind === 'column' &&
         interaction.selectedAxis.index === column.index &&
         interaction.selectedAxis.tablePos === activeTable.tablePos;
@@ -899,7 +903,10 @@ class HtmlTableHandleOverlayView {
       return;
     }
 
-    const selectedAxis = interaction.selectedAxis.tablePos === tablePos ? interaction.selectedAxis : null;
+    const selectedAxis =
+      Boolean(interaction.selectedAxisExplicit) && interaction.selectedAxis.tablePos === tablePos
+        ? interaction.selectedAxis
+        : null;
     const selectedRow =
       selectedAxis?.kind === 'row' && selectedAxis.index !== null ? geometry.rows[selectedAxis.index] : null;
     const selectedColumn =
@@ -1076,6 +1083,7 @@ class HtmlTableHandleOverlayView {
     const viewportTop = wrapper.scrollTop + MIN_HANDLE_INSET;
     const viewportRight = wrapper.scrollLeft + wrapper.clientWidth - MIN_HANDLE_INSET;
     const viewportBottom = wrapper.scrollTop + wrapper.clientHeight - MIN_HANDLE_INSET;
+    const availableHeight = Math.max(160, viewportBottom - viewportTop);
     const position = getHtmlTableContextMenuPosition(
       renderState.scope ?? 'table',
       wrapper.scrollLeft + renderState.left - wrapperRect.left,
@@ -1090,6 +1098,7 @@ class HtmlTableHandleOverlayView {
 
     this.contextMenu.style.left = `${position.left}px`;
     this.contextMenu.style.top = `${position.top}px`;
+    this.contextMenu.style.maxHeight = `${availableHeight}px`;
     this.contextMenu.dataset.placement = position.placement;
     this.contextMenu.style.transformOrigin = getHtmlTableContextMenuTransformOrigin(position.placement);
     this.restoreContextMenuFocus(menu, focusedActionId);
@@ -1132,7 +1141,7 @@ class HtmlTableHandleOverlayView {
       return;
     }
 
-    if (interaction.selectedAxis.kind) {
+    if (Boolean(interaction.selectedAxisExplicit) && interaction.selectedAxis.kind) {
       this.cellSelectionHandle.hidden = true;
       this.cellSelectionHandle.tabIndex = -1;
       return;
@@ -1307,7 +1316,17 @@ class HtmlTableHandleOverlayView {
 
     const transaction =
       axis === 'row'
-        ? createRowSelectionTransaction(this.view.state, tablePos, table, index)
+        ? createRowSelectionTransaction(this.view.state, tablePos, table, index)?.setMeta(
+            htmlTableInteractionPluginKey,
+            {
+              selectedAxis: {
+                kind: 'row',
+                index,
+                tablePos,
+              },
+              selectedAxisExplicit: true,
+            },
+          )
         : createAxisFocusTransaction(this.view.state, tablePos, table, 'column', index)?.setMeta(
             htmlTableInteractionPluginKey,
             {
@@ -1316,6 +1335,7 @@ class HtmlTableHandleOverlayView {
                 index,
                 tablePos,
               },
+              selectedAxisExplicit: true,
             },
           );
 
@@ -1569,6 +1589,7 @@ class HtmlTableHandleOverlayView {
       columnIndex: index,
       startX: event.clientX,
       startWidths: getTableColumnWidths(table, this.options.cellMinWidth),
+      currentWidths: getTableColumnWidths(table, this.options.cellMinWidth),
     };
 
     this.root.ownerDocument.addEventListener('mousemove', this.onDocumentMouseMove);
@@ -1646,6 +1667,7 @@ class HtmlTableHandleOverlayView {
               index: Math.max(0, geometry.columns.length - 1),
               tablePos,
             },
+            selectedAxisExplicit: true,
           });
     if (!selectionTransaction) return;
 
@@ -1679,6 +1701,7 @@ class HtmlTableHandleOverlayView {
       (nextWidths[activeResize.columnIndex] ?? this.options.cellMinWidth) + delta,
     );
 
+    activeResize.currentWidths = nextWidths;
     this.applyPreviewWidths(context.dom, nextWidths);
     const geometry = measureHtmlTableGeometry(context.dom);
     this.dispatchInteractionMeta({
@@ -1702,7 +1725,7 @@ class HtmlTableHandleOverlayView {
     }
 
     const resizedGeometry = measureHtmlTableGeometry(context.dom);
-    const widths = resizedGeometry.columns.map((column) => Math.max(this.options.cellMinWidth, Math.round(column.width)));
+    const widths = activeResize.currentWidths.map((width) => Math.max(this.options.cellMinWidth, Math.round(width)));
     const transaction = createColumnResizeTransaction(this.view.state, activeResize.tablePos, table, widths)
       .setMeta(htmlTableInteractionPluginKey, {
         geometry: resizedGeometry,

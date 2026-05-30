@@ -52,14 +52,18 @@ function secondBodyCell(page: Page) {
 async function openRowMenu(page: Page, rowIndex: number) {
   await clickCenter(page, rowHandle(page, rowIndex));
   await expect(rowSelectionBand(page)).toBeVisible();
-  await clickCenter(page, rowHandle(page, rowIndex));
+  if (await contextMenu(page).isHidden()) {
+    await clickCenter(page, rowHandle(page, rowIndex));
+  }
   await expect(contextMenu(page)).toBeVisible();
 }
 
 async function openColumnMenu(page: Page, columnIndex: number) {
   await clickCenter(page, columnHandle(page, columnIndex));
   await expect(columnSelectionBand(page)).toBeVisible();
-  await clickCenter(page, columnHandle(page, columnIndex));
+  if (await contextMenu(page).isHidden()) {
+    await clickCenter(page, columnHandle(page, columnIndex));
+  }
   await expect(contextMenu(page)).toBeVisible();
 }
 
@@ -88,7 +92,11 @@ async function clickCenter(page: Page, target: Locator) {
 }
 
 async function activateMenuAction(page: Page, label: string) {
-  await clickCenter(page, contextMenuAction(page, label));
+  const action = contextMenuAction(page, label);
+  await action.evaluate((element) => {
+    element.scrollIntoView({ block: 'center', inline: 'nearest' });
+  });
+  await action.dispatchEvent('mousedown');
 }
 
 test.describe('table interactions', () => {

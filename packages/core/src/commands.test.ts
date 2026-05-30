@@ -1,5 +1,5 @@
 import { Schema, type Node as ProseMirrorNode } from 'prosemirror-model';
-import { EditorState, NodeSelection } from 'prosemirror-state';
+import { EditorState, NodeSelection, TextSelection } from 'prosemirror-state';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -245,6 +245,42 @@ describe('html table commands', () => {
     });
 
     expect(result).toBe(false);
+  });
+
+  it('deletes a selected column consistently across head body and foot sections', () => {
+    const table = schema.nodes.htmlTable!.create(null, [
+      schema.nodes.htmlTableHead!.create(null, [
+        schema.nodes.htmlTableRow!.create(null, [
+          schema.nodes.htmlTableHeaderCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('Task'))]),
+          schema.nodes.htmlTableHeaderCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('Status'))]),
+        ]),
+      ]),
+      schema.nodes.htmlTableBody!.create(null, [
+        schema.nodes.htmlTableRow!.create(null, [
+          schema.nodes.htmlTableCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('Open panel'))]),
+          schema.nodes.htmlTableCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('Done'))]),
+        ]),
+        schema.nodes.htmlTableRow!.create(null, [
+          schema.nodes.htmlTableCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('Inspect connector'))]),
+          schema.nodes.htmlTableCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('Pending'))]),
+        ]),
+      ]),
+      schema.nodes.htmlTableFoot!.create(null, [
+        schema.nodes.htmlTableRow!.create(null, [
+          schema.nodes.htmlTableCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('Total'))]),
+          schema.nodes.htmlTableCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('2 tasks'))]),
+        ]),
+      ]),
+    ]);
+    const baseState = createStateForTable(table);
+    const selectedColumnState = applyCommand(baseState, selectColumn());
+    const nextState = applyCommand(selectedColumnState, deleteColumn());
+    const nextTable = getTable(nextState.doc);
+
+    expect(getSection(nextTable, 'htmlTableHead')?.child(0).childCount).toBe(1);
+    expect(getBody(nextTable).child(0).childCount).toBe(1);
+    expect(getBody(nextTable).child(1).childCount).toBe(1);
+    expect(getSection(nextTable, 'htmlTableFoot')?.child(0).childCount).toBe(1);
   });
 
   it('keeps colgroup widths in sync when deleting columns', () => {
@@ -1138,9 +1174,14 @@ describe('html table commands', () => {
     const mergedState = applyCommand(selectedState, mergeCells());
     const nextState = applyCommand(mergedState, splitCell());
     const firstRow = getBody(getTable(nextState.doc)).child(0);
+    const splitCellPos = findNodePositions(nextState.doc, 'htmlTableHeaderCell')[0]!;
+    const firstCellNodeSize = firstRow.child(0).nodeSize;
 
     expect(firstRow.childCount).toBe(2);
     expect(firstRow.child(0).attrs.colspan).toBe(1);
+    expect(nextState.selection).toBeInstanceOf(TextSelection);
+    expect(nextState.selection.from).toBeGreaterThan(splitCellPos);
+    expect(nextState.selection.from).toBeLessThan(splitCellPos + firstCellNodeSize);
   });
 
   it('merges first and splits on repeated mergeOrSplit', () => {
@@ -1166,7 +1207,12 @@ describe('html table commands', () => {
       selection: CellSelection.create(mergedState.doc, mergedCellPos),
     });
     const splitState = applyCommand(mergeFocusedState, mergeOrSplit());
+    const splitCellPos = findNodePositions(splitState.doc, 'htmlTableHeaderCell')[0]!;
+    const firstCellNodeSize = getBody(getTable(splitState.doc)).child(0).child(0).nodeSize;
     expect(getBody(getTable(splitState.doc)).child(0).child(0).attrs.colspan).toBe(1);
+    expect(splitState.selection).toBeInstanceOf(TextSelection);
+    expect(splitState.selection.from).toBeGreaterThan(splitCellPos);
+    expect(splitState.selection.from).toBeLessThan(splitCellPos + firstCellNodeSize);
   });
 
   it('normalizes malformed table structure and clamps invalid spans', () => {

@@ -46,6 +46,7 @@ function createInteractionState(
       index: null,
       tablePos: null,
     },
+    selectedAxisExplicit: false,
     contextTrigger: {
       visible: false,
       left: null,
@@ -86,6 +87,7 @@ describe('html table handles', () => {
           index: 1,
           tablePos: 5,
         },
+        selectedAxisExplicit: true,
       }), 5),
     ).toBe(true);
 
@@ -97,6 +99,7 @@ describe('html table handles', () => {
           index: 1,
           tablePos: 5,
         },
+        selectedAxisExplicit: true,
       }), 5),
     ).toBe(true);
   });
@@ -154,6 +157,7 @@ describe('html table handles', () => {
           index: 1,
           tablePos: 5,
         },
+        selectedAxisExplicit: true,
       }, 5, null),
     ).toBe('row');
     expect(
@@ -164,6 +168,7 @@ describe('html table handles', () => {
           index: 1,
           tablePos: 5,
         },
+        selectedAxisExplicit: true,
       }, 5, null),
     ).toBe('column');
     expect(
@@ -216,6 +221,7 @@ describe('html table handles', () => {
           index: 1,
           tablePos: 5,
         },
+        selectedAxisExplicit: true,
       }, 5, geometry, 20, 10, null),
     ).toEqual({
       left: 20,
@@ -229,6 +235,7 @@ describe('html table handles', () => {
           index: 1,
           tablePos: 5,
         },
+        selectedAxisExplicit: true,
       }, 5, geometry, 20, 10, null),
     ).toEqual({
       left: 190,
@@ -694,6 +701,7 @@ describe('html table handles', () => {
         index: 1,
         tablePos: 5,
       },
+      selectedAxisExplicit: true,
     });
     const columnInteraction = createInteractionState({
       selectedAxis: {
@@ -701,6 +709,7 @@ describe('html table handles', () => {
         index: 2,
         tablePos: 5,
       },
+      selectedAxisExplicit: true,
     });
 
     expect(shouldToggleHtmlTableContextMenuFromAxisHandle(rowInteraction, 'row', 1, 5)).toBe(true);

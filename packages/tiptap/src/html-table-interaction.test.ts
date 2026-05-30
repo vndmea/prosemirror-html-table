@@ -241,7 +241,16 @@ describe('html table interaction plugin', () => {
       selection: CellSelection.create(doc, cellPositions[0]!),
       plugins: [createHtmlTableInteractionPlugin()],
     });
-    const rowState = baseState.apply(createRowSelectionTransaction(baseState, 0, table, 1)!);
+    const rowState = baseState.apply(
+      createRowSelectionTransaction(baseState, 0, table, 1)!.setMeta(htmlTableInteractionPluginKey, {
+        selectedAxis: {
+          kind: 'row',
+          index: 1,
+          tablePos: 0,
+        },
+        selectedAxisExplicit: true,
+      }),
+    );
     const geometryState = rowState.apply(
       rowState.tr.setMeta(htmlTableInteractionPluginKey, {
         geometry: createGeometry(),
@@ -269,7 +278,7 @@ describe('html table interaction plugin', () => {
     );
 
     expect(getHtmlTableInteractionState(hiddenOpenState).contextTrigger.visible).toBe(false);
-    expect(getHtmlTableInteractionState(hiddenOpenState).contextMenuOpen).toBe(false);
+    expect(getHtmlTableInteractionState(hiddenOpenState).contextMenuOpen).toBe(true);
   });
 
   it('keeps the context trigger visible for column handles that store axis state via plugin meta', () => {
