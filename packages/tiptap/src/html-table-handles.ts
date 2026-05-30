@@ -5,6 +5,7 @@ import { addColumnAfter as addCoreColumnAfter, addRowAfter as addCoreRowAfter } 
 import type { HtmlTableTiptapOptions } from './options.js';
 import {
   getHtmlTableContextActionMenuItemState,
+  getHtmlTableContextActionShortcutState,
   type HtmlTableContextActionId,
 } from './html-table-actions.js';
 import {
@@ -1814,6 +1815,7 @@ class HtmlTableHandleOverlayView {
 
       for (const action of group.actions) {
         const menuItemState = getHtmlTableContextActionMenuItemState(action);
+        const shortcutState = getHtmlTableContextActionShortcutState(action);
         const renderState = getHtmlTableContextMenuActionRenderState(
           action,
           menuItemState,
@@ -1828,6 +1830,11 @@ class HtmlTableHandleOverlayView {
         button.disabled = !action.enabled;
         button.textContent = action.label;
         button.setAttribute('role', renderState.role);
+        if (shortcutState.ariaKeyshortcuts) {
+          button.setAttribute('aria-keyshortcuts', shortcutState.ariaKeyshortcuts);
+        } else {
+          button.removeAttribute('aria-keyshortcuts');
+        }
         if (renderState.checked === null) {
           button.removeAttribute('aria-checked');
         } else {

@@ -118,6 +118,10 @@ export interface HtmlTableContextActionMenuItemState {
   checked: boolean | null;
 }
 
+export interface HtmlTableContextActionShortcutState {
+  ariaKeyshortcuts: string | null;
+}
+
 export function getHtmlTableContextActions(
   state: EditorState,
   interaction: HtmlTableInteractionState,
@@ -432,6 +436,14 @@ export function getHtmlTableContextActionMenuItemState(
   };
 }
 
+export function getHtmlTableContextActionShortcutState(
+  action: HtmlTableContextAction,
+): HtmlTableContextActionShortcutState {
+  return {
+    ariaKeyshortcuts: ACTION_ARIA_KEYSHORTCUTS[action.id] ?? null,
+  };
+}
+
 function resolveTableScopeCommand(
   id: Extract<HtmlTableContextActionId, 'deleteTable' | 'toggleCaption' | 'toggleColgroup' | 'toggleHeadSection' | 'toggleFootSection'>,
   active: boolean,
@@ -708,6 +720,22 @@ const RADIO_ACTION_IDS = new Set<HtmlTableContextActionId>([
   'setCellVerticalAlignMiddle',
   'setCellVerticalAlignBottom',
 ]);
+
+const ACTION_ARIA_KEYSHORTCUTS: Partial<Record<HtmlTableContextActionId, string>> = {
+  sortBodyRowsAsc: 'Alt+ArrowUp',
+  sortBodyRowsDesc: 'Alt+ArrowDown',
+  clearSelectedCells: 'Delete',
+  mergeOrSplitCells: 'Enter',
+  toggleHeaderRow: 'Shift+R',
+  toggleHeaderColumn: 'Shift+C',
+  toggleHeaderCell: 'Shift+H',
+  setCellTextAlignLeft: 'Alt+Shift+L',
+  setCellTextAlignCenter: 'Alt+Shift+C',
+  setCellTextAlignRight: 'Alt+Shift+R',
+  setCellVerticalAlignTop: 'Alt+Shift+T',
+  setCellVerticalAlignMiddle: 'Alt+Shift+M',
+  setCellVerticalAlignBottom: 'Alt+Shift+B',
+};
 
 const PRIMARY_ACTION_ORDER: HtmlTableContextActionId[] = [
   'toggleHeadSection',

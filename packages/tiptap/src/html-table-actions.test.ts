@@ -8,6 +8,7 @@ import {
   getHtmlTableContextActionGroups,
   getHtmlTableContextActionCommand,
   getHtmlTableContextActionMenuItemState,
+  getHtmlTableContextActionShortcutState,
   getHtmlTableContextActions,
   getPrimaryHtmlTableContextAction,
   runHtmlTableContextAction,
@@ -425,6 +426,35 @@ describe('html table context actions', () => {
     })).toEqual({
       role: 'menuitem',
       checked: null,
+    });
+  });
+
+  it('derives aria-keyshortcuts for the actions that expose keyboard affordances', () => {
+    expect(getHtmlTableContextActionShortcutState({
+      id: 'mergeOrSplitCells',
+      label: 'Merge or split cells',
+      scope: 'cell',
+      enabled: true,
+    })).toEqual({
+      ariaKeyshortcuts: 'Enter',
+    });
+
+    expect(getHtmlTableContextActionShortcutState({
+      id: 'sortBodyRowsAsc',
+      label: 'Sort ascending',
+      scope: 'column',
+      enabled: true,
+    })).toEqual({
+      ariaKeyshortcuts: 'Alt+ArrowUp',
+    });
+
+    expect(getHtmlTableContextActionShortcutState({
+      id: 'addRowAfter',
+      label: 'Add row after',
+      scope: 'row',
+      enabled: true,
+    })).toEqual({
+      ariaKeyshortcuts: null,
     });
   });
 
