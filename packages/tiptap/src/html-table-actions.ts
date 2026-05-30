@@ -22,9 +22,11 @@ import {
   moveRowToFoot,
   moveRowToHead,
   moveRowUp,
+  removeCaption,
   removeColgroup,
   removeFootSection,
   removeHeadSection,
+  setCaption,
   setCellTextAlign,
   setCellVerticalAlign,
   setColgroup,
@@ -44,6 +46,7 @@ import { getTableSelectionInfo } from './table-utils.js';
 
 export type HtmlTableContextActionId =
   | 'deleteTable'
+  | 'toggleCaption'
   | 'toggleColgroup'
   | 'toggleHeadSection'
   | 'toggleFootSection'
@@ -118,12 +121,20 @@ export function getHtmlTableContextActions(
   }
 
   if (scope === 'table') {
+    const hasCaption = hasChild(table, 'htmlTableCaption');
     const hasColgroup = hasChild(table, 'htmlTableColgroup');
     const hasHead = hasChild(table, 'htmlTableHead');
     const hasFoot = hasChild(table, 'htmlTableFoot');
 
     return [
       createAction('deleteTable', scope, resolveTableScopeCommand('deleteTable', false, options), state, { destructive: true }),
+      createAction(
+        'toggleCaption',
+        scope,
+        resolveTableScopeCommand('toggleCaption', hasCaption, options),
+        state,
+        { active: hasCaption },
+      ),
       createAction(
         'toggleColgroup',
         scope,
@@ -235,6 +246,8 @@ export function getHtmlTableContextActionCommand(
   switch (action.id) {
     case 'deleteTable':
       return resolveTableScopeCommand(action.id, false, options);
+    case 'toggleCaption':
+      return resolveTableScopeCommand(action.id, Boolean(action.active), options);
     case 'toggleColgroup':
       return resolveTableScopeCommand(action.id, Boolean(action.active), options);
     case 'toggleHeadSection':
@@ -364,13 +377,15 @@ export function getPrimaryHtmlTableContextAction(
 }
 
 function resolveTableScopeCommand(
-  id: Extract<HtmlTableContextActionId, 'deleteTable' | 'toggleColgroup' | 'toggleHeadSection' | 'toggleFootSection'>,
+  id: Extract<HtmlTableContextActionId, 'deleteTable' | 'toggleCaption' | 'toggleColgroup' | 'toggleHeadSection' | 'toggleFootSection'>,
   active: boolean,
   options: HtmlTableCommandOptions,
 ): Command {
   const baseCommand =
     id === 'deleteTable'
       ? deleteTable(options)
+      : id === 'toggleCaption'
+        ? active ? removeCaption(options) : setCaption('', options)
       : id === 'toggleColgroup'
         ? active ? removeColgroup(options) : setColgroup(undefined, options)
         : id === 'toggleHeadSection'
@@ -476,6 +491,7 @@ function areSelectedCellsHeader(
 
 const ACTION_LABELS: Record<HtmlTableContextActionId, string> = {
   deleteTable: 'Delete table',
+  toggleCaption: 'Toggle caption',
   toggleColgroup: 'Toggle colgroup',
   toggleHeadSection: 'Toggle header section',
   toggleFootSection: 'Toggle footer section',
@@ -513,6 +529,7 @@ const ACTION_LABELS: Record<HtmlTableContextActionId, string> = {
 
 const ACTION_GROUPS: Record<HtmlTableContextActionId, HtmlTableContextActionGroupId> = {
   deleteTable: 'danger',
+  toggleCaption: 'table',
   toggleColgroup: 'table',
   toggleHeadSection: 'table',
   toggleFootSection: 'table',
@@ -572,6 +589,7 @@ const ACTION_GROUP_LABELS: Record<HtmlTableContextActionGroupId, string> = {
 
 const PRIMARY_ACTION_ORDER: HtmlTableContextActionId[] = [
   'toggleHeadSection',
+  'toggleCaption',
   'addRowAfter',
   'addColumnAfter',
   'mergeOrSplitCells',

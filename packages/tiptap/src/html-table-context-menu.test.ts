@@ -68,6 +68,7 @@ describe('html table context menu state', () => {
     expect(menu.anchor).toEqual({ left: 10, top: 20 });
     expect(menu.groups.map((group) => group.id)).toEqual(['table', 'danger']);
     expect(menu.primaryAction?.id).toBe('toggleHeadSection');
+    expect(menu.actions.map((action) => action.id)).toContain('toggleCaption');
   });
 
   it('aggregates row-scope menu state with grouped actions', () => {

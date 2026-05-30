@@ -50,6 +50,7 @@ describe('html table context actions', () => {
 
     expect(actions.map((action) => action.id)).toEqual([
       'deleteTable',
+      'toggleCaption',
       'toggleColgroup',
       'toggleHeadSection',
       'toggleFootSection',
@@ -310,6 +311,20 @@ describe('html table context actions', () => {
 
     expect(applied).toBe(true);
     expect(transactionState.doc.firstChild?.firstChild?.type.name).toBe('htmlTableHead');
+  });
+
+  it('marks toggleCaption as active when the current table already has a caption', () => {
+    const table = createHtmlTableNode(schema, { rows: 2, cols: 2, withCaption: true, captionText: 'Summary' });
+    const doc = schema.nodes.doc!.create(null, [table]);
+    const state = EditorState.create({
+      schema,
+      doc,
+      selection: NodeSelection.create(doc, 0),
+      plugins: [createHtmlTableInteractionPlugin()],
+    });
+
+    const actions = getHtmlTableContextActions(state, getHtmlTableInteractionState(state));
+    expect(actions.find((action) => action.id === 'toggleCaption')?.active).toBe(true);
   });
 
   it('runs context actions through a single entry point and closes the context menu on success', () => {
