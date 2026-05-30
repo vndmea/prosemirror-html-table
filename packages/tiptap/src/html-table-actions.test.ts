@@ -137,6 +137,10 @@ describe('html table context actions', () => {
       'setCellTextAlignLeft',
       'setCellTextAlignCenter',
       'setCellTextAlignRight',
+      'setCellBackgroundColorBlue',
+      'setCellBackgroundColorGreen',
+      'setCellBackgroundColorYellow',
+      'clearCellBackgroundColor',
       'setCellVerticalAlignTop',
       'setCellVerticalAlignMiddle',
       'setCellVerticalAlignBottom',
@@ -198,6 +202,38 @@ describe('html table context actions', () => {
     );
     expect(verticalActions.find((action) => action.id === 'setCellVerticalAlignMiddle')?.active).toBe(true);
     expect(verticalActions.find((action) => action.id === 'setCellVerticalAlignTop')?.active).toBeFalsy();
+  });
+
+  it('marks active cell background actions from the current selection attrs', () => {
+    const table = createHtmlTableNode(schema, { rows: 2, cols: 2 });
+    const doc = schema.nodes.doc!.create(null, [table]);
+    const cellPositions = findNodePositions(doc, 'htmlTableCell');
+    const state = EditorState.create({
+      schema,
+      doc,
+      selection: CellSelection.create(doc, cellPositions[0]!),
+      plugins: [createHtmlTableInteractionPlugin()],
+    });
+
+    let coloredState = state;
+    const colored = getHtmlTableContextActionCommand({
+      id: 'setCellBackgroundColorBlue',
+      label: 'Background blue',
+      scope: 'cell',
+      enabled: true,
+    })(state, (transaction) => {
+      coloredState = state.apply(transaction);
+    });
+
+    expect(colored).toBe(true);
+    coloredState = coloredState.apply(
+      coloredState.tr.setSelection(CellSelection.create(coloredState.doc, cellPositions[0]!)),
+    );
+    expect(coloredState.doc.firstChild?.firstChild?.firstChild?.firstChild?.attrs.backgroundColor).toBe('#dbeafe');
+
+    const actions = getHtmlTableContextActions(coloredState, getHtmlTableInteractionState(coloredState));
+    expect(actions.find((action) => action.id === 'setCellBackgroundColorBlue')?.active).toBe(true);
+    expect(actions.find((action) => action.id === 'clearCellBackgroundColor')?.active).toBeFalsy();
   });
 
   it('marks toggleHeaderCell as active when the current cell selection is header cells', () => {

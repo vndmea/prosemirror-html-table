@@ -26,6 +26,7 @@ import {
   removeColgroup,
   removeFootSection,
   removeHeadSection,
+  setCellBackgroundColor,
   setCaption,
   setCellTextAlign,
   setCellVerticalAlign,
@@ -74,6 +75,10 @@ export type HtmlTableContextActionId =
   | 'setCellTextAlignLeft'
   | 'setCellTextAlignCenter'
   | 'setCellTextAlignRight'
+  | 'setCellBackgroundColorBlue'
+  | 'setCellBackgroundColorGreen'
+  | 'setCellBackgroundColorYellow'
+  | 'clearCellBackgroundColor'
   | 'setCellVerticalAlignTop'
   | 'setCellVerticalAlignMiddle'
   | 'setCellVerticalAlignBottom'
@@ -205,6 +210,7 @@ export function getHtmlTableContextActions(
   }
 
   const textAlign = getCommonSelectedCellAttribute(state, selectionInfo, 'textAlign');
+  const backgroundColor = getCommonSelectedCellAttribute(state, selectionInfo, 'backgroundColor');
   const verticalAlign = getCommonSelectedCellAttribute(state, selectionInfo, 'verticalAlign');
   const headerCellActive = areSelectedCellsHeader(selectionInfo);
 
@@ -217,6 +223,18 @@ export function getHtmlTableContextActions(
     }),
     createAction('setCellTextAlignRight', scope, setCellTextAlign('right', options), state, {
       active: textAlign === 'right',
+    }),
+    createAction('setCellBackgroundColorBlue', scope, setCellBackgroundColor('#dbeafe', options), state, {
+      active: backgroundColor === '#dbeafe',
+    }),
+    createAction('setCellBackgroundColorGreen', scope, setCellBackgroundColor('#dcfce7', options), state, {
+      active: backgroundColor === '#dcfce7',
+    }),
+    createAction('setCellBackgroundColorYellow', scope, setCellBackgroundColor('#fef3c7', options), state, {
+      active: backgroundColor === '#fef3c7',
+    }),
+    createAction('clearCellBackgroundColor', scope, setCellBackgroundColor(null, options), state, {
+      active: backgroundColor === null,
     }),
     createAction('setCellVerticalAlignTop', scope, setCellVerticalAlign('top', options), state, {
       active: verticalAlign === 'top',
@@ -302,6 +320,14 @@ export function getHtmlTableContextActionCommand(
       return setCellTextAlign('center', options);
     case 'setCellTextAlignRight':
       return setCellTextAlign('right', options);
+    case 'setCellBackgroundColorBlue':
+      return setCellBackgroundColor('#dbeafe', options);
+    case 'setCellBackgroundColorGreen':
+      return setCellBackgroundColor('#dcfce7', options);
+    case 'setCellBackgroundColorYellow':
+      return setCellBackgroundColor('#fef3c7', options);
+    case 'clearCellBackgroundColor':
+      return setCellBackgroundColor(null, options);
     case 'setCellVerticalAlignTop':
       return setCellVerticalAlign('top', options);
     case 'setCellVerticalAlignMiddle':
@@ -455,7 +481,7 @@ function findFirstTableCellPos(table: NonNullable<HtmlTableInteractionState['act
 function getCommonSelectedCellAttribute(
   _state: EditorState,
   selectionInfo: ReturnType<typeof getTableSelectionInfo> | null,
-  attribute: 'textAlign' | 'verticalAlign',
+  attribute: 'textAlign' | 'backgroundColor' | 'verticalAlign',
 ): string | null | undefined {
   if (!selectionInfo?.cells.length) {
     return undefined;
@@ -519,6 +545,10 @@ const ACTION_LABELS: Record<HtmlTableContextActionId, string> = {
   setCellTextAlignLeft: 'Align left',
   setCellTextAlignCenter: 'Align center',
   setCellTextAlignRight: 'Align right',
+  setCellBackgroundColorBlue: 'Background blue',
+  setCellBackgroundColorGreen: 'Background green',
+  setCellBackgroundColorYellow: 'Background yellow',
+  clearCellBackgroundColor: 'Clear background',
   setCellVerticalAlignTop: 'Align top',
   setCellVerticalAlignMiddle: 'Align middle',
   setCellVerticalAlignBottom: 'Align bottom',
@@ -557,6 +587,10 @@ const ACTION_GROUPS: Record<HtmlTableContextActionId, HtmlTableContextActionGrou
   setCellTextAlignLeft: 'format',
   setCellTextAlignCenter: 'format',
   setCellTextAlignRight: 'format',
+  setCellBackgroundColorBlue: 'format',
+  setCellBackgroundColorGreen: 'format',
+  setCellBackgroundColorYellow: 'format',
+  clearCellBackgroundColor: 'format',
   setCellVerticalAlignTop: 'format',
   setCellVerticalAlignMiddle: 'format',
   setCellVerticalAlignBottom: 'format',
