@@ -4,6 +4,7 @@ import type { HtmlTableInteractionState } from './html-table-interaction.js';
 import {
   canRestoreHtmlTableContextMenuFocus,
   getHtmlTableCellContextTriggerRenderState,
+  getHtmlTableContextMenuActionRenderState,
   getHtmlTableContextMenuAriaControls,
   getHtmlTableContextMenuRenderState,
   getNextHtmlTableContextMenuActionIndex,
@@ -383,6 +384,45 @@ describe('html table handles', () => {
     expect(getHtmlTableOverlayHandleText('table', null, true, true, 'Add caption')).toEqual({
       label: 'Table actions',
       title: 'Table actions: Add caption',
+    });
+  });
+
+  it('derives context menu action render state for checked and primary items', () => {
+    expect(getHtmlTableContextMenuActionRenderState(
+      {
+        active: true,
+        destructive: false,
+      },
+      {
+        role: 'menuitemradio',
+        checked: true,
+      },
+      true,
+    )).toEqual({
+      role: 'menuitemradio',
+      checked: 'true',
+      current: 'true',
+      primary: true,
+      destructive: false,
+      active: true,
+    });
+
+    expect(getHtmlTableContextMenuActionRenderState(
+      {
+        destructive: true,
+      },
+      {
+        role: 'menuitem',
+        checked: null,
+      },
+      false,
+    )).toEqual({
+      role: 'menuitem',
+      checked: null,
+      current: 'false',
+      primary: false,
+      destructive: true,
+      active: false,
     });
   });
 

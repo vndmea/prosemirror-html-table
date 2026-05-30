@@ -78,6 +78,15 @@ export interface HtmlTableOverlayHandleText {
   title: string;
 }
 
+export interface HtmlTableContextMenuActionRenderState {
+  role: string;
+  checked: 'true' | 'false' | null;
+  current: 'true' | 'false';
+  primary: boolean;
+  destructive: boolean;
+  active: boolean;
+}
+
 export function isTableHandleVisible(
   allowTableNodeSelection: boolean,
   interaction: HtmlTableInteractionState,
@@ -245,6 +254,32 @@ export function getHtmlTableOverlayHandleText(
   return {
     label: kind === 'table' ? 'Select table' : `Select ${actionTarget}`,
     title: kind === 'table' ? 'Select table' : `Select ${actionTarget}`,
+  };
+}
+
+export function getHtmlTableContextMenuActionRenderState(
+  action: {
+    active?: boolean;
+    destructive?: boolean;
+  },
+  menuItemState: {
+    role: string;
+    checked: boolean | null;
+  },
+  primary: boolean,
+): HtmlTableContextMenuActionRenderState {
+  return {
+    role: menuItemState.role,
+    checked:
+      menuItemState.checked === null
+        ? null
+        : menuItemState.checked
+          ? 'true'
+          : 'false',
+    current: primary ? 'true' : 'false',
+    primary,
+    destructive: Boolean(action.destructive),
+    active: Boolean(action.active),
   };
 }
 
@@ -1507,22 +1542,29 @@ class HtmlTableHandleOverlayView {
 
       for (const action of group.actions) {
         const menuItemState = getHtmlTableContextActionMenuItemState(action);
+        const renderState = getHtmlTableContextMenuActionRenderState(
+          action,
+          menuItemState,
+          menu.primaryAction?.id === action.id,
+        );
         const button = this.root.ownerDocument.createElement('button');
         button.type = 'button';
         button.className = 'html-table-overlay__context-menu-action';
         button.dataset.actionId = action.id;
+        button.dataset.role = renderState.role;
+        button.dataset.checked = renderState.checked ?? '';
         button.disabled = !action.enabled;
         button.textContent = action.label;
-        button.setAttribute('role', menuItemState.role);
-        if (menuItemState.checked === null) {
+        button.setAttribute('role', renderState.role);
+        if (renderState.checked === null) {
           button.removeAttribute('aria-checked');
         } else {
-          button.setAttribute('aria-checked', menuItemState.checked ? 'true' : 'false');
+          button.setAttribute('aria-checked', renderState.checked);
         }
-        button.setAttribute('aria-current', menu.primaryAction?.id === action.id ? 'true' : 'false');
-        button.classList.toggle('is-active', Boolean(action.active));
-        button.classList.toggle('is-destructive', Boolean(action.destructive));
-        button.classList.toggle('is-primary', menu.primaryAction?.id === action.id);
+        button.setAttribute('aria-current', renderState.current);
+        button.classList.toggle('is-active', renderState.active);
+        button.classList.toggle('is-destructive', renderState.destructive);
+        button.classList.toggle('is-primary', renderState.primary);
         groupElement.append(button);
       }
 
