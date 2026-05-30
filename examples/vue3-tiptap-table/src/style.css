@@ -197,6 +197,10 @@
   box-shadow: 0 0 0 2px #ffffff, 0 8px 18px rgba(37, 99, 235, 0.28);
 }
 
+.pmht-demo .editor-panel .html-table-overlay__cell-selection-handle.is-menu-open {
+  background: #1d4ed8;
+}
+
 .pmht-demo .editor-panel .html-table-overlay__handle {
   position: absolute;
   z-index: 1;
@@ -239,8 +243,17 @@
   box-shadow: 0 4px 12px rgba(37, 99, 235, 0.24);
 }
 
+.pmht-demo .editor-panel .html-table-overlay__handle.is-menu-open {
+  background: #1d4ed8;
+  box-shadow: 0 6px 16px rgba(37, 99, 235, 0.3);
+}
+
 .pmht-demo .editor-panel .html-table-overlay__handle.is-hovered::after,
 .pmht-demo .editor-panel .html-table-overlay__handle.is-selected::after {
+  color: #ffffff;
+}
+
+.pmht-demo .editor-panel .html-table-overlay__handle.is-menu-open::after {
   color: #ffffff;
 }
 

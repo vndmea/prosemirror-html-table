@@ -182,6 +182,13 @@ export function getHtmlTableContextMenuRenderState(
   };
 }
 
+export function isHtmlTableContextMenuExpandedForScope(
+  menu: HtmlTableContextMenuState,
+  scope: HtmlTableSelectionScope,
+): boolean {
+  return menu.open && menu.scope === scope;
+}
+
 export function shouldCloseHtmlTableContextMenuForTarget(
   target: EventTarget | null,
   ...elements: Array<Pick<Element, 'contains'> | null>
@@ -420,7 +427,7 @@ class HtmlTableHandleOverlayView {
     this.syncSelectionContextState(interaction, activeTable.tablePos, geometry, tableLeft, tableTop, selectionInfo);
     this.syncContextTriggerButton(contextTrigger, context.wrapper, wrapperRect);
     this.syncContextMenu(contextMenu, context.wrapper, wrapperRect);
-    this.syncTableHandle(interaction, activeTable.tablePos, rowHandleLeft, columnHandleTop);
+    this.syncTableHandle(interaction, contextMenu, activeTable.tablePos, rowHandleLeft, columnHandleTop);
     this.syncSelectionOverlay(interaction, activeTable.tablePos, geometry, tableLeft, tableTop);
     this.syncCellSelectionHandle(contextMenu, activeTable.tablePos, geometry, tableLeft, tableTop, selectionInfo);
     this.syncExtendButtons(tableLeft, tableTop, geometry);
@@ -444,8 +451,11 @@ class HtmlTableHandleOverlayView {
         interaction.selectedAxis.kind === 'row' &&
         interaction.selectedAxis.index === row.index &&
         interaction.selectedAxis.tablePos === activeTable.tablePos;
+      const isRowMenuOpen = isRowSelected && isHtmlTableContextMenuExpandedForScope(contextMenu, 'row');
       handle.hidden = interaction.tableSelected || (!isRowHovered && !isRowSelected);
       handle.tabIndex = handle.hidden ? -1 : 0;
+      handle.setAttribute('aria-haspopup', 'menu');
+      handle.setAttribute('aria-expanded', isRowMenuOpen ? 'true' : 'false');
       handle.classList.toggle(
         'is-hovered',
         isRowHovered,
@@ -454,6 +464,7 @@ class HtmlTableHandleOverlayView {
         'is-selected',
         isRowSelected,
       );
+      handle.classList.toggle('is-menu-open', isRowMenuOpen);
     }
 
     for (const column of geometry.columns) {
@@ -475,8 +486,11 @@ class HtmlTableHandleOverlayView {
         interaction.selectedAxis.kind === 'column' &&
         interaction.selectedAxis.index === column.index &&
         interaction.selectedAxis.tablePos === activeTable.tablePos;
+      const isColumnMenuOpen = isColumnSelected && isHtmlTableContextMenuExpandedForScope(contextMenu, 'column');
       handle.hidden = interaction.tableSelected || (!isColumnHovered && !isColumnSelected);
       handle.tabIndex = handle.hidden ? -1 : 0;
+      handle.setAttribute('aria-haspopup', 'menu');
+      handle.setAttribute('aria-expanded', isColumnMenuOpen ? 'true' : 'false');
       handle.classList.toggle(
         'is-hovered',
         isColumnHovered,
@@ -485,6 +499,7 @@ class HtmlTableHandleOverlayView {
         'is-selected',
         isColumnSelected,
       );
+      handle.classList.toggle('is-menu-open', isColumnMenuOpen);
 
       const resizeHandle = this.resizeHandles[column.index];
       if (!resizeHandle) continue;
@@ -590,6 +605,7 @@ class HtmlTableHandleOverlayView {
 
   private syncTableHandle(
     interaction: HtmlTableInteractionState,
+    menu: HtmlTableContextMenuState,
     tablePos: number,
     left: number,
     top: number,
@@ -597,15 +613,19 @@ class HtmlTableHandleOverlayView {
     const visible = isTableHandleVisible(this.options.allowTableNodeSelection, interaction, tablePos);
     const isHovered = interaction.hovered?.kind === 'table' && interaction.hovered.tablePos === tablePos;
     const isSelected = interaction.tableSelected && interaction.activeTable?.tablePos === tablePos;
+    const isMenuOpen = isSelected && isHtmlTableContextMenuExpandedForScope(menu, 'table');
 
     this.tableHandle.hidden = !visible;
     this.tableHandle.tabIndex = visible ? 0 : -1;
+    this.tableHandle.setAttribute('aria-haspopup', 'menu');
+    this.tableHandle.setAttribute('aria-expanded', isMenuOpen ? 'true' : 'false');
     this.tableHandle.style.left = `${left}px`;
     this.tableHandle.style.top = `${top}px`;
     this.tableHandle.style.width = `${HANDLE_CROSS_AXIS_SIZE}px`;
     this.tableHandle.style.height = `${HANDLE_CROSS_AXIS_SIZE}px`;
     this.tableHandle.classList.toggle('is-hovered', isHovered);
     this.tableHandle.classList.toggle('is-selected', isSelected);
+    this.tableHandle.classList.toggle('is-menu-open', isMenuOpen);
   }
 
   private syncSelectionContextState(
@@ -763,9 +783,11 @@ class HtmlTableHandleOverlayView {
     this.cellSelectionHandle.style.left = `${selectionRight - 1}px`;
     this.cellSelectionHandle.style.top = `${selectionTop + (selectionBottom - selectionTop) / 2}px`;
     this.cellSelectionHandle.dataset.primaryAction = renderState.primaryActionId ?? '';
+    this.cellSelectionHandle.setAttribute('aria-haspopup', 'menu');
     this.cellSelectionHandle.setAttribute('aria-expanded', renderState.expanded ? 'true' : 'false');
     this.cellSelectionHandle.setAttribute('aria-label', renderState.label ?? 'Cell actions');
     this.cellSelectionHandle.title = renderState.title ?? renderState.label ?? 'Cell actions';
+    this.cellSelectionHandle.classList.toggle('is-menu-open', renderState.expanded);
   }
 
   private createHandle(axis: 'row' | 'column'): HTMLButtonElement {
@@ -787,6 +809,7 @@ class HtmlTableHandleOverlayView {
     handle.hidden = true;
     handle.setAttribute('aria-label', 'Select table');
     handle.title = 'Select table';
+    handle.setAttribute('aria-haspopup', 'menu');
     handle.addEventListener('mousedown', (event) => this.handleTableSelectionMouseDown(event));
     handle.addEventListener('click', (event) => this.handleTableSelectionClick(event));
     return handle;
@@ -799,6 +822,7 @@ class HtmlTableHandleOverlayView {
     button.tabIndex = -1;
     button.hidden = true;
     button.setAttribute('aria-label', 'Context actions');
+    button.setAttribute('aria-haspopup', 'menu');
     button.addEventListener('mousedown', (event) => this.handleContextTriggerMouseDown(event));
     button.addEventListener('click', (event) => this.handleContextTriggerClick(event));
     return button;

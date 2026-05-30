@@ -9,6 +9,7 @@ import {
   getHtmlTableContextTriggerRenderState,
   getHtmlTableSelectionAnchor,
   getHtmlTableSelectionScope,
+  isHtmlTableContextMenuExpandedForScope,
   isHtmlTableContextMenuDismissKey,
   isHtmlTableKeyboardClick,
   isHtmlTableContextMenuNavigationKey,
@@ -342,6 +343,25 @@ describe('html table handles', () => {
       primaryActionId: null,
       groupCount: 2,
     });
+  });
+
+  it('matches expanded state only for the currently open selection scope', () => {
+    const menu: HtmlTableContextMenuState = {
+      visible: true,
+      open: true,
+      scope: 'row',
+      anchor: {
+        left: 10,
+        top: 90,
+      },
+      actions: [],
+      groups: [],
+      primaryAction: null,
+    };
+
+    expect(isHtmlTableContextMenuExpandedForScope(menu, 'row')).toBe(true);
+    expect(isHtmlTableContextMenuExpandedForScope(menu, 'table')).toBe(false);
+    expect(isHtmlTableContextMenuExpandedForScope({ ...menu, open: false }, 'row')).toBe(false);
   });
 
   it('derives cell context trigger render state from cell menu state', () => {
