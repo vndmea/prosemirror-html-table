@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { HtmlTableInteractionState } from './html-table-interaction.js';
 import {
+  canRestoreHtmlTableContextMenuFocus,
   getHtmlTableCellContextTriggerRenderState,
   getHtmlTableContextMenuRenderState,
   getNextHtmlTableContextMenuActionIndex,
@@ -443,6 +444,27 @@ describe('html table handles', () => {
   it('treats detail-less click events as keyboard activation', () => {
     expect(isHtmlTableKeyboardClick({ detail: 0 })).toBe(true);
     expect(isHtmlTableKeyboardClick({ detail: 1 })).toBe(false);
+  });
+
+  it('restores context menu focus only to connected visible controls', () => {
+    const connected = {
+      isConnected: true,
+      hidden: false,
+      tabIndex: 0,
+    } as HTMLButtonElement;
+    expect(canRestoreHtmlTableContextMenuFocus(connected)).toBe(true);
+
+    connected.hidden = true;
+    expect(canRestoreHtmlTableContextMenuFocus(connected)).toBe(false);
+    connected.hidden = false;
+    connected.tabIndex = -1;
+    expect(canRestoreHtmlTableContextMenuFocus(connected)).toBe(false);
+    expect(canRestoreHtmlTableContextMenuFocus({
+      isConnected: false,
+      hidden: false,
+      tabIndex: 0,
+    } as HTMLButtonElement)).toBe(false);
+    expect(canRestoreHtmlTableContextMenuFocus(null)).toBe(false);
   });
 
   it('toggles the context menu directly from selected row and column handles', () => {

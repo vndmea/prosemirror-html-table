@@ -233,6 +233,10 @@ export function isHtmlTableKeyboardClick(event: Pick<MouseEvent, 'detail'>): boo
   return event.detail === 0;
 }
 
+export function canRestoreHtmlTableContextMenuFocus(target: HTMLButtonElement | null): target is HTMLButtonElement {
+  return Boolean(target && target.isConnected && !target.hidden && target.tabIndex >= 0);
+}
+
 export function getHtmlTableCellContextTriggerRenderState(
   menu: HtmlTableContextMenuState,
 ): HtmlTableCellContextTriggerRenderState {
@@ -319,6 +323,8 @@ class HtmlTableHandleOverlayView {
       }
     | null = null;
   private lastContextMenuOpen = false;
+  private contextMenuFocusTarget: HTMLButtonElement | null = null;
+  private restoreContextMenuFocusOnClose = false;
   private readonly onDocumentMouseMove = (event: MouseEvent) => this.handleResizeMove(event);
   private readonly onDocumentMouseUp = () => this.finishResize();
   private readonly onDocumentMouseDown = (event: MouseEvent) => this.handleDocumentMouseDown(event);
@@ -671,6 +677,7 @@ class HtmlTableHandleOverlayView {
     this.contextMenu.dataset.primaryAction = renderState.primaryActionId ?? '';
 
     if (!renderState.visible || renderState.left === null || renderState.top === null) {
+      this.restoreContextMenuFocusIfNeeded();
       this.contextMenu.replaceChildren();
       this.contextMenu.style.removeProperty('left');
       this.contextMenu.style.removeProperty('top');
@@ -689,6 +696,24 @@ class HtmlTableHandleOverlayView {
 
     this.contextMenu.replaceChildren(...this.buildContextMenuGroups(menu));
     this.restoreContextMenuFocus(menu, focusedActionId);
+  }
+
+  private toggleContextMenuFromControl(
+    interaction: HtmlTableInteractionState,
+    focusTarget: HTMLButtonElement | null,
+  ): void {
+    const nextOpen = !interaction.contextMenuOpen;
+    this.contextMenuFocusTarget = focusTarget;
+    this.restoreContextMenuFocusOnClose = !nextOpen;
+    this.view.dispatch(
+      this.view.state.tr.setMeta(htmlTableInteractionPluginKey, {
+        contextMenuOpen: nextOpen,
+      }),
+    );
+
+    if (nextOpen) {
+      this.view.focus();
+    }
   }
 
   private syncCellSelectionHandle(
@@ -830,7 +855,7 @@ class HtmlTableHandleOverlayView {
 
     event.preventDefault();
     event.stopPropagation();
-    this.activateAxisHandle(axis, index, activeTable.tablePos, table, interaction);
+    this.activateAxisHandle(axis, index, activeTable.tablePos, table, interaction, handle);
   }
 
   private handleHandleClick(event: MouseEvent): void {
@@ -854,7 +879,7 @@ class HtmlTableHandleOverlayView {
 
     event.preventDefault();
     event.stopPropagation();
-    this.activateAxisHandle(axis, index, activeTable.tablePos, table, interaction);
+    this.activateAxisHandle(axis, index, activeTable.tablePos, table, interaction, handle);
   }
 
   private activateAxisHandle(
@@ -863,14 +888,10 @@ class HtmlTableHandleOverlayView {
     tablePos: number,
     table: NonNullable<ReturnType<EditorView['state']['doc']['nodeAt']>>,
     interaction: HtmlTableInteractionState,
+    handle: HTMLButtonElement | null,
   ): void {
     if (shouldToggleHtmlTableContextMenuFromAxisHandle(interaction, axis, index, tablePos)) {
-      this.view.dispatch(
-        this.view.state.tr.setMeta(htmlTableInteractionPluginKey, {
-          contextMenuOpen: !interaction.contextMenuOpen,
-        }),
-      );
-      this.view.focus();
+      this.toggleContextMenuFromControl(interaction, handle);
       return;
     }
 
@@ -907,7 +928,7 @@ class HtmlTableHandleOverlayView {
 
     event.preventDefault();
     event.stopPropagation();
-    this.activateTableHandle(activeTable.tablePos, interaction);
+    this.activateTableHandle(activeTable.tablePos, interaction, this.tableHandle);
   }
 
   private handleTableSelectionClick(event: MouseEvent): void {
@@ -923,17 +944,16 @@ class HtmlTableHandleOverlayView {
 
     event.preventDefault();
     event.stopPropagation();
-    this.activateTableHandle(activeTable.tablePos, interaction);
+    this.activateTableHandle(activeTable.tablePos, interaction, this.tableHandle);
   }
 
-  private activateTableHandle(tablePos: number, interaction: HtmlTableInteractionState): void {
+  private activateTableHandle(
+    tablePos: number,
+    interaction: HtmlTableInteractionState,
+    handle: HTMLButtonElement | null,
+  ): void {
     if (shouldToggleHtmlTableContextMenuFromTableHandle(interaction, tablePos)) {
-      this.view.dispatch(
-        this.view.state.tr.setMeta(htmlTableInteractionPluginKey, {
-          contextMenuOpen: !interaction.contextMenuOpen,
-        }),
-      );
-      this.view.focus();
+      this.toggleContextMenuFromControl(interaction, handle);
       return;
     }
 
@@ -968,12 +988,7 @@ class HtmlTableHandleOverlayView {
       return;
     }
 
-    this.view.dispatch(
-      this.view.state.tr.setMeta(htmlTableInteractionPluginKey, {
-        contextMenuOpen: !interaction.contextMenuOpen,
-      }),
-    );
-    this.view.focus();
+    this.toggleContextMenuFromControl(interaction, this.contextTriggerButton);
   }
 
   private handleContextMenuMouseDown(event: MouseEvent): void {
@@ -1052,12 +1067,7 @@ class HtmlTableHandleOverlayView {
       return;
     }
 
-    this.view.dispatch(
-      this.view.state.tr.setMeta(htmlTableInteractionPluginKey, {
-        contextMenuOpen: !interaction.contextMenuOpen,
-      }),
-    );
-    this.view.focus();
+    this.toggleContextMenuFromControl(interaction, this.cellSelectionHandle);
   }
 
   private handleDocumentMouseDown(event: MouseEvent): void {
@@ -1075,7 +1085,7 @@ class HtmlTableHandleOverlayView {
       return;
     }
 
-    this.closeContextMenu();
+    this.closeContextMenu(false);
   }
 
   private handleDocumentKeyDown(event: KeyboardEvent): void {
@@ -1086,8 +1096,7 @@ class HtmlTableHandleOverlayView {
 
     event.preventDefault();
     event.stopPropagation();
-    this.closeContextMenu();
-    this.view.focus();
+    this.closeContextMenu(true);
   }
 
   private handleResizeStart(event: MouseEvent): void {
@@ -1418,12 +1427,26 @@ class HtmlTableHandleOverlayView {
     this.lastContextMenuOpen = menu.open;
   }
 
-  private closeContextMenu(): void {
+  private restoreContextMenuFocusIfNeeded(): void {
+    if (!this.lastContextMenuOpen || !this.restoreContextMenuFocusOnClose) {
+      this.restoreContextMenuFocusOnClose = false;
+      return;
+    }
+
+    if (canRestoreHtmlTableContextMenuFocus(this.contextMenuFocusTarget)) {
+      this.contextMenuFocusTarget.focus();
+    }
+
+    this.restoreContextMenuFocusOnClose = false;
+  }
+
+  private closeContextMenu(restoreFocus: boolean): void {
     const interaction = getHtmlTableInteractionState(this.view.state);
     if (!interaction.contextMenuOpen) {
       return;
     }
 
+    this.restoreContextMenuFocusOnClose = restoreFocus;
     this.view.dispatch(
       this.view.state.tr.setMeta(htmlTableInteractionPluginKey, {
         contextMenuOpen: false,
