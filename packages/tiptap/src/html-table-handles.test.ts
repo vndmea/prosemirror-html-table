@@ -9,6 +9,7 @@ import {
   getHtmlTableSelectionScope,
   isHtmlTableContextMenuDismissKey,
   isTableHandleVisible,
+  shouldToggleHtmlTableContextMenuFromAxisHandle,
   shouldCloseHtmlTableContextMenuForTarget,
 } from './html-table-handles.js';
 import type { HtmlTableContextTriggerButtonState } from './html-table-context-menu.js';
@@ -415,5 +416,28 @@ describe('html table handles', () => {
     expect(isHtmlTableContextMenuDismissKey('Escape')).toBe(true);
     expect(isHtmlTableContextMenuDismissKey('Enter')).toBe(false);
     expect(isHtmlTableContextMenuDismissKey('Tab')).toBe(false);
+  });
+
+  it('toggles the context menu directly from selected row and column handles', () => {
+    const rowInteraction = createInteractionState({
+      selectedAxis: {
+        kind: 'row',
+        index: 1,
+        tablePos: 5,
+      },
+    });
+    const columnInteraction = createInteractionState({
+      selectedAxis: {
+        kind: 'column',
+        index: 2,
+        tablePos: 5,
+      },
+    });
+
+    expect(shouldToggleHtmlTableContextMenuFromAxisHandle(rowInteraction, 'row', 1, 5)).toBe(true);
+    expect(shouldToggleHtmlTableContextMenuFromAxisHandle(rowInteraction, 'row', 0, 5)).toBe(false);
+    expect(shouldToggleHtmlTableContextMenuFromAxisHandle(rowInteraction, 'column', 1, 5)).toBe(false);
+    expect(shouldToggleHtmlTableContextMenuFromAxisHandle(columnInteraction, 'column', 2, 5)).toBe(true);
+    expect(shouldToggleHtmlTableContextMenuFromAxisHandle(columnInteraction, 'column', 2, 9)).toBe(false);
   });
 });

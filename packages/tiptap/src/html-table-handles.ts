@@ -206,6 +206,19 @@ export function getHtmlTableCellContextTriggerRenderState(
   };
 }
 
+export function shouldToggleHtmlTableContextMenuFromAxisHandle(
+  interaction: HtmlTableInteractionState,
+  axis: 'row' | 'column',
+  index: number,
+  tablePos: number,
+): boolean {
+  return (
+    interaction.selectedAxis.kind === axis &&
+    interaction.selectedAxis.index === index &&
+    interaction.selectedAxis.tablePos === tablePos
+  );
+}
+
 function containsEventTarget(
   element: Pick<Element, 'contains'>,
   target: EventTarget | null,
@@ -750,6 +763,16 @@ class HtmlTableHandleOverlayView {
 
     event.preventDefault();
     event.stopPropagation();
+
+    if (shouldToggleHtmlTableContextMenuFromAxisHandle(interaction, axis, index, activeTable.tablePos)) {
+      this.view.dispatch(
+        this.view.state.tr.setMeta(htmlTableInteractionPluginKey, {
+          contextMenuOpen: !interaction.contextMenuOpen,
+        }),
+      );
+      this.view.focus();
+      return;
+    }
 
     const transaction =
       axis === 'row'
