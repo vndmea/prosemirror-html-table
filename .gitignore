@@ -1,7 +1,8 @@
 node_modules
 coverage
 packages/*/dist
-examples/vue3-tiptap-table/dist
+examples/*/dist
+docs
 test-results
 *.tsbuildinfo
 .DS_Store
