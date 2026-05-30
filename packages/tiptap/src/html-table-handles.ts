@@ -34,6 +34,7 @@ const MIN_HANDLE_INSET = 8;
 const EXTEND_BUTTON_OFFSET = 14;
 const HANDLE_CROSS_AXIS_SIZE = 12;
 const HANDLE_MAIN_AXIS_INSET = 8;
+const CONTEXT_MENU_TYPEAHEAD_RESET_MS = 700;
 let htmlTableContextMenuIdCounter = 0;
 
 export const htmlTableHandlePluginKey = new PluginKey('html-table-handle-overlay');
@@ -298,6 +299,19 @@ export function isHtmlTableContextMenuNavigationKey(key: string): boolean {
   return key === 'ArrowDown' || key === 'ArrowUp' || key === 'Home' || key === 'End';
 }
 
+export function isHtmlTableContextMenuTypeaheadKey(event: {
+  key: string;
+  altKey?: boolean;
+  ctrlKey?: boolean;
+  metaKey?: boolean;
+}): boolean {
+  if (event.altKey || event.ctrlKey || event.metaKey) {
+    return false;
+  }
+
+  return event.key.length === 1 && event.key.trim().length > 0;
+}
+
 export function getNextHtmlTableContextMenuActionIndex(
   currentIndex: number,
   total: number,
@@ -328,6 +342,27 @@ export function getNextHtmlTableContextMenuActionIndex(
   }
 
   return currentIndex;
+}
+
+export function getNextHtmlTableContextMenuTypeaheadIndex(
+  labels: string[],
+  currentIndex: number,
+  query: string,
+): number {
+  if (!labels.length || !query.length) {
+    return -1;
+  }
+
+  const normalizedQuery = query.toLowerCase();
+  for (let offset = 1; offset <= labels.length; offset += 1) {
+    const index = (Math.max(currentIndex, -1) + offset) % labels.length;
+    const label = labels[index]?.trim().toLowerCase() ?? '';
+    if (label.startsWith(normalizedQuery)) {
+      return index;
+    }
+  }
+
+  return -1;
 }
 
 export function isHtmlTableKeyboardClick(event: Pick<MouseEvent, 'detail'>): boolean {
@@ -427,6 +462,8 @@ class HtmlTableHandleOverlayView {
   private lastContextMenuOpen = false;
   private contextMenuFocusTarget: HTMLButtonElement | null = null;
   private restoreContextMenuFocusOnClose = false;
+  private contextMenuTypeaheadQuery = '';
+  private contextMenuTypeaheadResetTimer: ReturnType<typeof setTimeout> | null = null;
   private readonly onDocumentMouseMove = (event: MouseEvent) => this.handleResizeMove(event);
   private readonly onDocumentMouseUp = () => this.finishResize();
   private readonly onDocumentMouseDown = (event: MouseEvent) => this.handleDocumentMouseDown(event);
@@ -482,6 +519,7 @@ class HtmlTableHandleOverlayView {
 
   destroy(): void {
     this.clearActiveResize(false);
+    this.resetContextMenuTypeahead();
     this.root.ownerDocument.removeEventListener('mousedown', this.onDocumentMouseDown);
     this.root.ownerDocument.removeEventListener('keydown', this.onDocumentKeyDown);
     this.currentWrapper = null;
@@ -840,6 +878,7 @@ class HtmlTableHandleOverlayView {
     this.contextMenu.dataset.primaryAction = renderState.primaryActionId ?? '';
 
     if (!renderState.visible || renderState.left === null || renderState.top === null) {
+      this.resetContextMenuTypeahead();
       this.restoreContextMenuFocusIfNeeded();
       this.contextMenu.replaceChildren();
       this.contextMenu.style.removeProperty('left');
@@ -1199,20 +1238,46 @@ class HtmlTableHandleOverlayView {
   }
 
   private handleContextMenuKeyDown(event: KeyboardEvent): void {
-    if (!isHtmlTableContextMenuNavigationKey(event.key)) {
+    const enabledButtons = this.getEnabledContextMenuActionButtons();
+    if (enabledButtons.length === 0) {
       return;
     }
 
-    const enabledButtons = this.getEnabledContextMenuActionButtons();
-    if (enabledButtons.length === 0) {
+    if (isHtmlTableContextMenuNavigationKey(event.key)) {
+      event.preventDefault();
+      event.stopPropagation();
+
+      const currentIndex = enabledButtons.findIndex((button) => button === this.root.ownerDocument.activeElement);
+      const nextIndex = getNextHtmlTableContextMenuActionIndex(currentIndex, enabledButtons.length, event.key);
+      enabledButtons[nextIndex]?.focus();
+      return;
+    }
+
+    if (!isHtmlTableContextMenuTypeaheadKey(event)) {
       return;
     }
 
     event.preventDefault();
     event.stopPropagation();
 
+    const labels = enabledButtons.map((button) => button.textContent?.trim() ?? '');
     const currentIndex = enabledButtons.findIndex((button) => button === this.root.ownerDocument.activeElement);
-    const nextIndex = getNextHtmlTableContextMenuActionIndex(currentIndex, enabledButtons.length, event.key);
+    const nextCharacter = event.key.toLowerCase();
+    const composedQuery = `${this.contextMenuTypeaheadQuery}${nextCharacter}`;
+    let nextIndex = getNextHtmlTableContextMenuTypeaheadIndex(labels, currentIndex, composedQuery);
+    let nextQuery = composedQuery;
+
+    if (nextIndex < 0) {
+      nextIndex = getNextHtmlTableContextMenuTypeaheadIndex(labels, currentIndex, nextCharacter);
+      nextQuery = nextCharacter;
+    }
+
+    if (nextIndex < 0) {
+      return;
+    }
+
+    this.contextMenuTypeaheadQuery = nextQuery;
+    this.scheduleContextMenuTypeaheadReset();
     enabledButtons[nextIndex]?.focus();
   }
 
@@ -1583,6 +1648,25 @@ class HtmlTableHandleOverlayView {
     return Array.from(this.contextMenu.querySelectorAll<HTMLButtonElement>('button[data-action-id]')).filter(
       (button) => !button.disabled,
     );
+  }
+
+  private scheduleContextMenuTypeaheadReset(): void {
+    if (this.contextMenuTypeaheadResetTimer !== null) {
+      clearTimeout(this.contextMenuTypeaheadResetTimer);
+    }
+
+    this.contextMenuTypeaheadResetTimer = setTimeout(() => {
+      this.contextMenuTypeaheadQuery = '';
+      this.contextMenuTypeaheadResetTimer = null;
+    }, CONTEXT_MENU_TYPEAHEAD_RESET_MS);
+  }
+
+  private resetContextMenuTypeahead(): void {
+    this.contextMenuTypeaheadQuery = '';
+    if (this.contextMenuTypeaheadResetTimer !== null) {
+      clearTimeout(this.contextMenuTypeaheadResetTimer);
+      this.contextMenuTypeaheadResetTimer = null;
+    }
   }
 
   private restoreContextMenuFocus(menu: HtmlTableContextMenuState, focusedActionId: string | null): void {

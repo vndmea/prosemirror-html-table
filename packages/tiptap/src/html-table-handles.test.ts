@@ -8,6 +8,7 @@ import {
   getHtmlTableContextMenuAriaControls,
   getHtmlTableContextMenuRenderState,
   getNextHtmlTableContextMenuActionIndex,
+  getNextHtmlTableContextMenuTypeaheadIndex,
   getHtmlTableOverlayHandleText,
   getHtmlTableContextTriggerRenderState,
   getHtmlTableSelectionAnchor,
@@ -16,6 +17,7 @@ import {
   isHtmlTableContextMenuDismissKey,
   isHtmlTableKeyboardClick,
   isHtmlTableContextMenuNavigationKey,
+  isHtmlTableContextMenuTypeaheadKey,
   isTableHandleVisible,
   shouldToggleHtmlTableContextMenuFromTableHandle,
   shouldToggleHtmlTableContextMenuFromAxisHandle,
@@ -513,6 +515,14 @@ describe('html table handles', () => {
     expect(isHtmlTableContextMenuNavigationKey('Escape')).toBe(false);
   });
 
+  it('recognizes printable keys for context menu typeahead', () => {
+    expect(isHtmlTableContextMenuTypeaheadKey({ key: 'a' })).toBe(true);
+    expect(isHtmlTableContextMenuTypeaheadKey({ key: 'A' })).toBe(true);
+    expect(isHtmlTableContextMenuTypeaheadKey({ key: ' ', altKey: false })).toBe(false);
+    expect(isHtmlTableContextMenuTypeaheadKey({ key: 'ArrowDown' })).toBe(false);
+    expect(isHtmlTableContextMenuTypeaheadKey({ key: 'f', ctrlKey: true })).toBe(false);
+  });
+
   it('derives the next focusable context menu action index for keyboard navigation', () => {
     expect(getNextHtmlTableContextMenuActionIndex(-1, 3, 'ArrowDown')).toBe(0);
     expect(getNextHtmlTableContextMenuActionIndex(-1, 3, 'ArrowUp')).toBe(2);
@@ -521,6 +531,16 @@ describe('html table handles', () => {
     expect(getNextHtmlTableContextMenuActionIndex(1, 3, 'Home')).toBe(0);
     expect(getNextHtmlTableContextMenuActionIndex(1, 3, 'End')).toBe(2);
     expect(getNextHtmlTableContextMenuActionIndex(1, 0, 'ArrowDown')).toBe(-1);
+  });
+
+  it('finds the next matching action index for context menu typeahead', () => {
+    const labels = ['Add row before', 'Add row after', 'Delete row', 'Duplicate row'];
+
+    expect(getNextHtmlTableContextMenuTypeaheadIndex(labels, -1, 'a')).toBe(0);
+    expect(getNextHtmlTableContextMenuTypeaheadIndex(labels, 0, 'a')).toBe(1);
+    expect(getNextHtmlTableContextMenuTypeaheadIndex(labels, 1, 'du')).toBe(3);
+    expect(getNextHtmlTableContextMenuTypeaheadIndex(labels, 3, 'de')).toBe(2);
+    expect(getNextHtmlTableContextMenuTypeaheadIndex(labels, 1, 'zz')).toBe(-1);
   });
 
   it('treats detail-less click events as keyboard activation', () => {
