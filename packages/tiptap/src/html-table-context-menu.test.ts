@@ -128,7 +128,7 @@ describe('html table context menu state', () => {
     expect(menu.open).toBe(false);
     expect(menu.scope).toBe('cell');
     expect(menu.anchor).toEqual({ left: 89, top: 40 });
-    expect(menu.groups.map((group) => group.id)).toEqual(['structure', 'content']);
+    expect(menu.groups.map((group) => group.id)).toEqual(['format', 'structure', 'content']);
     expect(menu.primaryAction?.id).toBe('clearSelectedCells');
   });
 

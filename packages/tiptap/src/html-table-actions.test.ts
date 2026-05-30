@@ -131,11 +131,70 @@ describe('html table context actions', () => {
     const actions = getHtmlTableContextActions(state, getHtmlTableInteractionState(state));
 
     expect(actions.map((action) => action.id)).toEqual([
+      'setCellTextAlignLeft',
+      'setCellTextAlignCenter',
+      'setCellTextAlignRight',
+      'setCellVerticalAlignTop',
+      'setCellVerticalAlignMiddle',
+      'setCellVerticalAlignBottom',
       'clearSelectedCells',
       'mergeOrSplitCells',
       'toggleHeaderCell',
     ]);
     expect(actions.every((action) => action.scope === 'cell')).toBe(true);
+  });
+
+  it('marks active cell formatting actions from the current selection attrs', () => {
+    const table = createHtmlTableNode(schema, { rows: 2, cols: 2 });
+    const doc = schema.nodes.doc!.create(null, [table]);
+    const cellPositions = findNodePositions(doc, 'htmlTableCell');
+    const state = EditorState.create({
+      schema,
+      doc,
+      selection: CellSelection.create(doc, cellPositions[0]!),
+      plugins: [createHtmlTableInteractionPlugin()],
+    });
+
+    let centeredState = state;
+    const centered = getHtmlTableContextActionCommand({
+      id: 'setCellTextAlignCenter',
+      label: 'Align center',
+      scope: 'cell',
+      enabled: true,
+    })(state, (transaction) => {
+      centeredState = state.apply(transaction);
+    });
+    expect(centered).toBe(true);
+    centeredState = centeredState.apply(
+      centeredState.tr.setSelection(CellSelection.create(centeredState.doc, cellPositions[0]!)),
+    );
+    expect(centeredState.doc.firstChild?.firstChild?.firstChild?.firstChild?.attrs.textAlign).toBe('center');
+
+    const centeredActions = getHtmlTableContextActions(centeredState, getHtmlTableInteractionState(centeredState));
+    expect(centeredActions.find((action) => action.id === 'setCellTextAlignCenter')?.active).toBe(true);
+    expect(centeredActions.find((action) => action.id === 'setCellTextAlignLeft')?.active).toBeFalsy();
+
+    let middleAlignedState = state;
+    const middleAligned = getHtmlTableContextActionCommand({
+      id: 'setCellVerticalAlignMiddle',
+      label: 'Align middle',
+      scope: 'cell',
+      enabled: true,
+    })(state, (transaction) => {
+      middleAlignedState = state.apply(transaction);
+    });
+    expect(middleAligned).toBe(true);
+    middleAlignedState = middleAlignedState.apply(
+      middleAlignedState.tr.setSelection(CellSelection.create(middleAlignedState.doc, cellPositions[0]!)),
+    );
+    expect(middleAlignedState.doc.firstChild?.firstChild?.firstChild?.firstChild?.attrs.verticalAlign).toBe('middle');
+
+    const verticalActions = getHtmlTableContextActions(
+      middleAlignedState,
+      getHtmlTableInteractionState(middleAlignedState),
+    );
+    expect(verticalActions.find((action) => action.id === 'setCellVerticalAlignMiddle')?.active).toBe(true);
+    expect(verticalActions.find((action) => action.id === 'setCellVerticalAlignTop')?.active).toBeFalsy();
   });
 
   it('resolves executable commands from context actions', () => {

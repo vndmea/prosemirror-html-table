@@ -25,6 +25,8 @@ import {
   removeColgroup,
   removeFootSection,
   removeHeadSection,
+  setCellTextAlign,
+  setCellVerticalAlign,
   setColgroup,
   sortBodyRowsByColumn,
   toggleHeaderCell,
@@ -62,6 +64,12 @@ export type HtmlTableContextActionId =
   | 'clearColumnContent'
   | 'sortBodyRowsAsc'
   | 'sortBodyRowsDesc'
+  | 'setCellTextAlignLeft'
+  | 'setCellTextAlignCenter'
+  | 'setCellTextAlignRight'
+  | 'setCellVerticalAlignTop'
+  | 'setCellVerticalAlignMiddle'
+  | 'setCellVerticalAlignBottom'
   | 'clearSelectedCells'
   | 'mergeOrSplitCells'
   | 'toggleHeaderCell';
@@ -78,6 +86,7 @@ export interface HtmlTableContextAction {
 export type HtmlTableContextActionGroupId =
   | 'table'
   | 'insert'
+  | 'format'
   | 'structure'
   | 'reorder'
   | 'section'
@@ -164,7 +173,28 @@ export function getHtmlTableContextActions(
     ];
   }
 
+  const textAlign = getCommonSelectedCellAttribute(state, selectionInfo, 'textAlign');
+  const verticalAlign = getCommonSelectedCellAttribute(state, selectionInfo, 'verticalAlign');
+
   return [
+    createAction('setCellTextAlignLeft', scope, setCellTextAlign('left', options), state, {
+      active: textAlign === 'left',
+    }),
+    createAction('setCellTextAlignCenter', scope, setCellTextAlign('center', options), state, {
+      active: textAlign === 'center',
+    }),
+    createAction('setCellTextAlignRight', scope, setCellTextAlign('right', options), state, {
+      active: textAlign === 'right',
+    }),
+    createAction('setCellVerticalAlignTop', scope, setCellVerticalAlign('top', options), state, {
+      active: verticalAlign === 'top',
+    }),
+    createAction('setCellVerticalAlignMiddle', scope, setCellVerticalAlign('middle', options), state, {
+      active: verticalAlign === 'middle',
+    }),
+    createAction('setCellVerticalAlignBottom', scope, setCellVerticalAlign('bottom', options), state, {
+      active: verticalAlign === 'bottom',
+    }),
     createAction('clearSelectedCells', scope, clearSelectedCells(options), state),
     createAction('mergeOrSplitCells', scope, mergeOrSplit(options), state),
     createAction('toggleHeaderCell', scope, toggleHeaderCell(options), state),
@@ -222,6 +252,18 @@ export function getHtmlTableContextActionCommand(
       return sortBodyRowsByColumn({ direction: 'asc', ...options });
     case 'sortBodyRowsDesc':
       return sortBodyRowsByColumn({ direction: 'desc', ...options });
+    case 'setCellTextAlignLeft':
+      return setCellTextAlign('left', options);
+    case 'setCellTextAlignCenter':
+      return setCellTextAlign('center', options);
+    case 'setCellTextAlignRight':
+      return setCellTextAlign('right', options);
+    case 'setCellVerticalAlignTop':
+      return setCellVerticalAlign('top', options);
+    case 'setCellVerticalAlignMiddle':
+      return setCellVerticalAlign('middle', options);
+    case 'setCellVerticalAlignBottom':
+      return setCellVerticalAlign('bottom', options);
     case 'clearSelectedCells':
       return clearSelectedCells(options);
     case 'mergeOrSplitCells':
@@ -364,6 +406,33 @@ function findFirstTableCellPos(table: NonNullable<HtmlTableInteractionState['act
   return found;
 }
 
+function getCommonSelectedCellAttribute(
+  _state: EditorState,
+  selectionInfo: ReturnType<typeof getTableSelectionInfo> | null,
+  attribute: 'textAlign' | 'verticalAlign',
+): string | null | undefined {
+  if (!selectionInfo?.cells.length) {
+    return undefined;
+  }
+
+  let commonValue: string | null | undefined;
+  for (const cell of selectionInfo.cells) {
+    const value = typeof cell.node.attrs[attribute] === 'string' && cell.node.attrs[attribute].length > 0
+      ? cell.node.attrs[attribute]
+      : null;
+    if (commonValue === undefined) {
+      commonValue = value;
+      continue;
+    }
+
+    if (commonValue !== value) {
+      return undefined;
+    }
+  }
+
+  return commonValue;
+}
+
 const ACTION_LABELS: Record<HtmlTableContextActionId, string> = {
   deleteTable: 'Delete table',
   toggleColgroup: 'Toggle colgroup',
@@ -388,6 +457,12 @@ const ACTION_LABELS: Record<HtmlTableContextActionId, string> = {
   clearColumnContent: 'Clear column',
   sortBodyRowsAsc: 'Sort ascending',
   sortBodyRowsDesc: 'Sort descending',
+  setCellTextAlignLeft: 'Align left',
+  setCellTextAlignCenter: 'Align center',
+  setCellTextAlignRight: 'Align right',
+  setCellVerticalAlignTop: 'Align top',
+  setCellVerticalAlignMiddle: 'Align middle',
+  setCellVerticalAlignBottom: 'Align bottom',
   clearSelectedCells: 'Clear selected cells',
   mergeOrSplitCells: 'Merge or split cells',
   toggleHeaderCell: 'Toggle header cell',
@@ -417,6 +492,12 @@ const ACTION_GROUPS: Record<HtmlTableContextActionId, HtmlTableContextActionGrou
   clearColumnContent: 'content',
   sortBodyRowsAsc: 'structure',
   sortBodyRowsDesc: 'structure',
+  setCellTextAlignLeft: 'format',
+  setCellTextAlignCenter: 'format',
+  setCellTextAlignRight: 'format',
+  setCellVerticalAlignTop: 'format',
+  setCellVerticalAlignMiddle: 'format',
+  setCellVerticalAlignBottom: 'format',
   clearSelectedCells: 'content',
   mergeOrSplitCells: 'structure',
   toggleHeaderCell: 'structure',
@@ -425,6 +506,7 @@ const ACTION_GROUPS: Record<HtmlTableContextActionId, HtmlTableContextActionGrou
 const ACTION_GROUP_ORDER: HtmlTableContextActionGroupId[] = [
   'table',
   'insert',
+  'format',
   'structure',
   'reorder',
   'section',
@@ -435,6 +517,7 @@ const ACTION_GROUP_ORDER: HtmlTableContextActionGroupId[] = [
 const ACTION_GROUP_LABELS: Record<HtmlTableContextActionGroupId, string> = {
   table: 'Table',
   insert: 'Insert',
+  format: 'Format',
   structure: 'Structure',
   reorder: 'Reorder',
   section: 'Section',
