@@ -9,6 +9,7 @@ import {
   getHtmlTableSelectionScope,
   isHtmlTableContextMenuDismissKey,
   isTableHandleVisible,
+  shouldToggleHtmlTableContextMenuFromTableHandle,
   shouldToggleHtmlTableContextMenuFromAxisHandle,
   shouldCloseHtmlTableContextMenuForTarget,
 } from './html-table-handles.js';
@@ -439,5 +440,25 @@ describe('html table handles', () => {
     expect(shouldToggleHtmlTableContextMenuFromAxisHandle(rowInteraction, 'column', 1, 5)).toBe(false);
     expect(shouldToggleHtmlTableContextMenuFromAxisHandle(columnInteraction, 'column', 2, 5)).toBe(true);
     expect(shouldToggleHtmlTableContextMenuFromAxisHandle(columnInteraction, 'column', 2, 9)).toBe(false);
+  });
+
+  it('toggles the context menu directly from the selected table handle', () => {
+    const selectedTable = createInteractionState({
+      activeTable: {
+        tablePos: 5,
+        table: {} as never,
+      },
+      tableSelected: true,
+    });
+    const unselectedTable = createInteractionState({
+      activeTable: {
+        tablePos: 5,
+        table: {} as never,
+      },
+    });
+
+    expect(shouldToggleHtmlTableContextMenuFromTableHandle(selectedTable, 5)).toBe(true);
+    expect(shouldToggleHtmlTableContextMenuFromTableHandle(selectedTable, 9)).toBe(false);
+    expect(shouldToggleHtmlTableContextMenuFromTableHandle(unselectedTable, 5)).toBe(false);
   });
 });

@@ -219,6 +219,13 @@ export function shouldToggleHtmlTableContextMenuFromAxisHandle(
   );
 }
 
+export function shouldToggleHtmlTableContextMenuFromTableHandle(
+  interaction: HtmlTableInteractionState,
+  tablePos: number,
+): boolean {
+  return interaction.tableSelected && interaction.activeTable?.tablePos === tablePos;
+}
+
 function containsEventTarget(
   element: Pick<Element, 'contains'>,
   target: EventTarget | null,
@@ -807,6 +814,16 @@ class HtmlTableHandleOverlayView {
 
     event.preventDefault();
     event.stopPropagation();
+
+    if (shouldToggleHtmlTableContextMenuFromTableHandle(interaction, activeTable.tablePos)) {
+      this.view.dispatch(
+        this.view.state.tr.setMeta(htmlTableInteractionPluginKey, {
+          contextMenuOpen: !interaction.contextMenuOpen,
+        }),
+      );
+      this.view.focus();
+      return;
+    }
 
     const transaction = this.view.state.tr.setSelection(
       NodeSelection.create(this.view.state.doc, activeTable.tablePos),
