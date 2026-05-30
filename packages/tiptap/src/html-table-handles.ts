@@ -439,6 +439,7 @@ class HtmlTableHandleOverlayView {
         interaction.selectedAxis.index === row.index &&
         interaction.selectedAxis.tablePos === activeTable.tablePos;
       handle.hidden = interaction.tableSelected || (!isRowHovered && !isRowSelected);
+      handle.tabIndex = handle.hidden ? -1 : 0;
       handle.classList.toggle(
         'is-hovered',
         isRowHovered,
@@ -469,6 +470,7 @@ class HtmlTableHandleOverlayView {
         interaction.selectedAxis.index === column.index &&
         interaction.selectedAxis.tablePos === activeTable.tablePos;
       handle.hidden = interaction.tableSelected || (!isColumnHovered && !isColumnSelected);
+      handle.tabIndex = handle.hidden ? -1 : 0;
       handle.classList.toggle(
         'is-hovered',
         isColumnHovered,
@@ -591,6 +593,7 @@ class HtmlTableHandleOverlayView {
     const isSelected = interaction.tableSelected && interaction.activeTable?.tablePos === tablePos;
 
     this.tableHandle.hidden = !visible;
+    this.tableHandle.tabIndex = visible ? 0 : -1;
     this.tableHandle.style.left = `${left}px`;
     this.tableHandle.style.top = `${top}px`;
     this.tableHandle.style.width = `${HANDLE_CROSS_AXIS_SIZE}px`;
@@ -747,6 +750,7 @@ class HtmlTableHandleOverlayView {
     handle.dataset.axis = axis;
     handle.tabIndex = -1;
     handle.addEventListener('mousedown', (event) => this.handleMouseDown(event));
+    handle.addEventListener('click', (event) => this.handleHandleClick(event));
     return handle;
   }
 
@@ -759,6 +763,7 @@ class HtmlTableHandleOverlayView {
     handle.setAttribute('aria-label', 'Select table');
     handle.title = 'Select table';
     handle.addEventListener('mousedown', (event) => this.handleTableSelectionMouseDown(event));
+    handle.addEventListener('click', (event) => this.handleTableSelectionClick(event));
     return handle;
   }
 
@@ -804,6 +809,7 @@ class HtmlTableHandleOverlayView {
     button.setAttribute('aria-label', axis === 'row' ? 'Add row after' : 'Add column after');
     button.title = axis === 'row' ? 'Add row after' : 'Add column after';
     button.addEventListener('mousedown', (event) => this.handleExtendButtonMouseDown(event));
+    button.addEventListener('click', (event) => this.handleExtendButtonClick(event));
     return button;
   }
 
@@ -824,8 +830,41 @@ class HtmlTableHandleOverlayView {
 
     event.preventDefault();
     event.stopPropagation();
+    this.activateAxisHandle(axis, index, activeTable.tablePos, table, interaction);
+  }
 
-    if (shouldToggleHtmlTableContextMenuFromAxisHandle(interaction, axis, index, activeTable.tablePos)) {
+  private handleHandleClick(event: MouseEvent): void {
+    if (!isHtmlTableKeyboardClick(event)) {
+      return;
+    }
+
+    const handle = event.currentTarget as HTMLButtonElement | null;
+    const axis = handle?.dataset.axis;
+    const index = Number(handle?.dataset.index);
+    const interaction = getHtmlTableInteractionState(this.view.state);
+    const activeTable = interaction.activeTable;
+    if (!handle || !activeTable || (axis !== 'row' && axis !== 'column') || !Number.isInteger(index)) {
+      return;
+    }
+
+    const table = this.view.state.doc.nodeAt(activeTable.tablePos);
+    if (!table || table.type.name !== 'htmlTable') {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+    this.activateAxisHandle(axis, index, activeTable.tablePos, table, interaction);
+  }
+
+  private activateAxisHandle(
+    axis: 'row' | 'column',
+    index: number,
+    tablePos: number,
+    table: NonNullable<ReturnType<EditorView['state']['doc']['nodeAt']>>,
+    interaction: HtmlTableInteractionState,
+  ): void {
+    if (shouldToggleHtmlTableContextMenuFromAxisHandle(interaction, axis, index, tablePos)) {
       this.view.dispatch(
         this.view.state.tr.setMeta(htmlTableInteractionPluginKey, {
           contextMenuOpen: !interaction.contextMenuOpen,
@@ -837,14 +876,14 @@ class HtmlTableHandleOverlayView {
 
     const transaction =
       axis === 'row'
-        ? createRowSelectionTransaction(this.view.state, activeTable.tablePos, table, index)
-        : createAxisFocusTransaction(this.view.state, activeTable.tablePos, table, 'column', index)?.setMeta(
+        ? createRowSelectionTransaction(this.view.state, tablePos, table, index)
+        : createAxisFocusTransaction(this.view.state, tablePos, table, 'column', index)?.setMeta(
             htmlTableInteractionPluginKey,
             {
               selectedAxis: {
                 kind: 'column',
                 index,
-                tablePos: activeTable.tablePos,
+                tablePos,
               },
             },
           );
@@ -868,8 +907,27 @@ class HtmlTableHandleOverlayView {
 
     event.preventDefault();
     event.stopPropagation();
+    this.activateTableHandle(activeTable.tablePos, interaction);
+  }
 
-    if (shouldToggleHtmlTableContextMenuFromTableHandle(interaction, activeTable.tablePos)) {
+  private handleTableSelectionClick(event: MouseEvent): void {
+    if (!isHtmlTableKeyboardClick(event) || !this.options.allowTableNodeSelection) {
+      return;
+    }
+
+    const interaction = getHtmlTableInteractionState(this.view.state);
+    const activeTable = interaction.activeTable;
+    if (!activeTable) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+    this.activateTableHandle(activeTable.tablePos, interaction);
+  }
+
+  private activateTableHandle(tablePos: number, interaction: HtmlTableInteractionState): void {
+    if (shouldToggleHtmlTableContextMenuFromTableHandle(interaction, tablePos)) {
       this.view.dispatch(
         this.view.state.tr.setMeta(htmlTableInteractionPluginKey, {
           contextMenuOpen: !interaction.contextMenuOpen,
@@ -880,7 +938,7 @@ class HtmlTableHandleOverlayView {
     }
 
     const transaction = this.view.state.tr.setSelection(
-      NodeSelection.create(this.view.state.doc, activeTable.tablePos),
+      NodeSelection.create(this.view.state.doc, tablePos),
     );
     this.view.focus();
     this.view.dispatch(transaction);
@@ -1090,13 +1148,45 @@ class HtmlTableHandleOverlayView {
 
     event.preventDefault();
     event.stopPropagation();
+    this.activateExtendButton(axis, activeTable.tablePos, geometry, table);
+  }
 
+  private handleExtendButtonClick(event: MouseEvent): void {
+    if (!isHtmlTableKeyboardClick(event)) {
+      return;
+    }
+
+    const button = event.currentTarget as HTMLButtonElement | null;
+    const axis = button?.dataset.axis;
+    const interaction = getHtmlTableInteractionState(this.view.state);
+    const activeTable = interaction.activeTable;
+    const geometry = interaction.geometry;
+    if (!button || !activeTable || !geometry || (axis !== 'row' && axis !== 'column')) {
+      return;
+    }
+
+    const table = this.view.state.doc.nodeAt(activeTable.tablePos);
+    if (!table || table.type.name !== 'htmlTable') {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+    this.activateExtendButton(axis, activeTable.tablePos, geometry, table);
+  }
+
+  private activateExtendButton(
+    axis: 'row' | 'column',
+    tablePos: number,
+    geometry: ReturnType<typeof measureHtmlTableGeometry>,
+    table: NonNullable<ReturnType<EditorView['state']['doc']['nodeAt']>>,
+  ): void {
     const selectionTransaction =
       axis === 'row'
-        ? createRowSelectionTransaction(this.view.state, activeTable.tablePos, table, Math.max(0, geometry.rows.length - 1))
+        ? createRowSelectionTransaction(this.view.state, tablePos, table, Math.max(0, geometry.rows.length - 1))
         : createAxisFocusTransaction(
             this.view.state,
-            activeTable.tablePos,
+            tablePos,
             table,
             'column',
             Math.max(0, geometry.columns.length - 1),
@@ -1104,7 +1194,7 @@ class HtmlTableHandleOverlayView {
             selectedAxis: {
               kind: 'column',
               index: Math.max(0, geometry.columns.length - 1),
-              tablePos: activeTable.tablePos,
+              tablePos,
             },
           });
     if (!selectionTransaction) return;
@@ -1216,10 +1306,12 @@ class HtmlTableHandleOverlayView {
     geometry: ReturnType<typeof measureHtmlTableGeometry>,
   ): void {
     this.addRowButton.hidden = false;
+    this.addRowButton.tabIndex = 0;
     this.addRowButton.style.left = `${tableLeft + geometry.tableRect.width / 2}px`;
     this.addRowButton.style.top = `${tableTop + geometry.tableRect.height + EXTEND_BUTTON_OFFSET}px`;
 
     this.addColumnButton.hidden = false;
+    this.addColumnButton.tabIndex = 0;
     this.addColumnButton.style.left = `${tableLeft + geometry.tableRect.width + EXTEND_BUTTON_OFFSET}px`;
     this.addColumnButton.style.top = `${tableTop + geometry.tableRect.height / 2}px`;
   }
