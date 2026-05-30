@@ -374,6 +374,27 @@
   pointer-events: auto;
 }
 
+.pmht-demo .editor-panel .html-table-overlay__context-menu-header {
+  display: grid;
+  gap: 0.1rem;
+  padding-bottom: 0.45rem;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.9);
+}
+
+.pmht-demo .editor-panel .html-table-overlay__context-menu-header-title {
+  color: #0f172a;
+  font-size: 0.82rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.pmht-demo .editor-panel .html-table-overlay__context-menu-header-detail {
+  color: #64748b;
+  font-size: 0.7rem;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
 .pmht-demo .editor-panel .html-table-overlay__context-menu-group {
   display: grid;
   gap: 0.28rem;

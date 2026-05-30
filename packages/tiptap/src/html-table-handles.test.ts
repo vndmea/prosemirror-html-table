@@ -6,6 +6,7 @@ import {
   getHtmlTableCellContextTriggerRenderState,
   getHtmlTableContextMenuActionRenderState,
   getHtmlTableContextMenuAriaControls,
+  getHtmlTableContextMenuHeaderState,
   getHtmlTableContextMenuPosition,
   getHtmlTableContextMenuRenderState,
   getNextHtmlTableContextMenuActionIndex,
@@ -398,6 +399,29 @@ describe('html table handles', () => {
       left: 130,
       top: 158,
       placement: 'top-center',
+    });
+  });
+
+  it('derives a context menu header from scope and primary action', () => {
+    expect(getHtmlTableContextMenuHeaderState({
+      scope: 'column',
+      primaryAction: {
+        id: 'addColumnAfter',
+        label: 'Add column after',
+        scope: 'column',
+        enabled: true,
+      },
+    })).toEqual({
+      label: 'Column actions',
+      detail: 'Add column after',
+    });
+
+    expect(getHtmlTableContextMenuHeaderState({
+      scope: null,
+      primaryAction: null,
+    })).toEqual({
+      label: null,
+      detail: null,
     });
   });
 

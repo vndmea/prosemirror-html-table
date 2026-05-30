@@ -36,6 +36,12 @@ const HANDLE_CROSS_AXIS_SIZE = 12;
 const HANDLE_MAIN_AXIS_INSET = 8;
 const CONTEXT_MENU_TYPEAHEAD_RESET_MS = 700;
 let htmlTableContextMenuIdCounter = 0;
+const MENU_SCOPE_LABELS: Record<HtmlTableSelectionScope, string> = {
+  table: 'Table actions',
+  row: 'Row actions',
+  column: 'Column actions',
+  cell: 'Cell actions',
+};
 
 export const htmlTableHandlePluginKey = new PluginKey('html-table-handle-overlay');
 
@@ -86,6 +92,11 @@ export interface HtmlTableContextMenuActionRenderState {
   primary: boolean;
   destructive: boolean;
   active: boolean;
+}
+
+export interface HtmlTableContextMenuHeaderState {
+  label: string | null;
+  detail: string | null;
 }
 
 export type HtmlTableContextMenuPlacement =
@@ -355,6 +366,16 @@ export function getHtmlTableContextMenuPosition(
     left,
     top,
     placement,
+  };
+}
+
+export function getHtmlTableContextMenuHeaderState(
+  menu: Pick<HtmlTableContextMenuState, 'scope' | 'primaryAction'>,
+): HtmlTableContextMenuHeaderState {
+  const label = menu.scope ? MENU_SCOPE_LABELS[menu.scope] : null;
+  return {
+    label,
+    detail: menu.primaryAction?.label ?? null,
   };
 }
 
@@ -1682,7 +1703,29 @@ class HtmlTableHandleOverlayView {
   }
 
   private buildContextMenuGroups(menu: HtmlTableContextMenuState): HTMLElement[] {
-    return menu.groups.map((group) => {
+    const headerState = getHtmlTableContextMenuHeaderState(menu);
+    const elements: HTMLElement[] = [];
+
+    if (headerState.label) {
+      const header = this.root.ownerDocument.createElement('div');
+      header.className = 'html-table-overlay__context-menu-header';
+
+      const title = this.root.ownerDocument.createElement('div');
+      title.className = 'html-table-overlay__context-menu-header-title';
+      title.textContent = headerState.label;
+      header.append(title);
+
+      if (headerState.detail) {
+        const detail = this.root.ownerDocument.createElement('div');
+        detail.className = 'html-table-overlay__context-menu-header-detail';
+        detail.textContent = headerState.detail;
+        header.append(detail);
+      }
+
+      elements.push(header);
+    }
+
+    return elements.concat(menu.groups.map((group) => {
       const groupElement = this.root.ownerDocument.createElement('div');
       groupElement.className = 'html-table-overlay__context-menu-group';
       groupElement.dataset.group = group.id;
@@ -1721,7 +1764,7 @@ class HtmlTableHandleOverlayView {
       }
 
       return groupElement;
-    });
+    }));
   }
 
   private getFocusedContextMenuActionId(): string | null {
