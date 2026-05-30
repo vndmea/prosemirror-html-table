@@ -21,16 +21,22 @@ packages/core    ProseMirror schema helpers, table model types, grid utilities, 
 packages/tiptap  Tiptap v3 node extensions and command wrappers built on top of the core package
 ```
 
-## Example
+## Playground
 
-A Vue 3 + Tiptap v3 demo is available in `examples/vue3-tiptap-table`.
+A Vue 3 + Tiptap v3 playground is available in `examples/vue3-tiptap-table`.
+
+Online:
+
+[Playground](https://vndmea.github.io/prosemirror-html-table/)
+
+Local:
 
 ```bash
 npm install
 npm run dev --workspace vue3-tiptap-table-demo
 ```
 
-The demo includes a full HTML table with `caption`, `colgroup`, `thead`, `tbody`, and `tfoot`, plus toolbar buttons for row/column editing, header toggles, cell navigation, and table selection commands.
+The playground includes a full HTML table with `caption`, `colgroup`, `thead`, `tbody`, and `tfoot`, plus toolbar buttons for row/column editing, header toggles, cell navigation, and table selection commands.
 
 ## Install
 

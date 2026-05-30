@@ -2,6 +2,19 @@
 
 This example demonstrates `tiptap-html-table` in a Vue 3 + Tiptap v3 application.
 
+## Playground
+
+Online:
+
+[Playground](https://vndmea.github.io/prosemirror-html-table/)
+
+Local:
+
+```bash
+npm install
+npm run dev -w vue3-tiptap-table-demo
+```
+
 It includes a full HTML table structure with:
 
 - `caption`
