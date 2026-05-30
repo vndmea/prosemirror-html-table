@@ -7,6 +7,7 @@ import {
   getHtmlTableContextMenuActionRenderState,
   getHtmlTableContextMenuAccessibleState,
   getHtmlTableContextMenuAriaControls,
+  getHtmlTableContextMenuGroupAccessibleState,
   getHtmlTableContextMenuHeaderState,
   getHtmlTableContextMenuPosition,
   getHtmlTableContextMenuRenderState,
@@ -451,6 +452,12 @@ describe('html table handles', () => {
     })).toEqual({
       labelledBy: null,
       describedBy: null,
+    });
+  });
+
+  it('derives accessible ids for context menu groups', () => {
+    expect(getHtmlTableContextMenuGroupAccessibleState('pmht-menu-1', 'format')).toEqual({
+      labelId: 'pmht-menu-1-group-format',
     });
   });
 

@@ -104,6 +104,10 @@ export interface HtmlTableContextMenuAccessibleState {
   describedBy: string | null;
 }
 
+export interface HtmlTableContextMenuGroupAccessibleState {
+  labelId: string;
+}
+
 export type HtmlTableContextMenuPlacement =
   | 'right-start'
   | 'right-center'
@@ -411,6 +415,15 @@ export function getHtmlTableContextMenuAccessibleState(
   return {
     labelledBy: header.label ? `${menuId}-title` : null,
     describedBy: header.detail ? `${menuId}-detail` : null,
+  };
+}
+
+export function getHtmlTableContextMenuGroupAccessibleState(
+  menuId: string,
+  groupId: string,
+): HtmlTableContextMenuGroupAccessibleState {
+  return {
+    labelId: `${menuId}-group-${groupId}`,
   };
 }
 
@@ -1182,6 +1195,7 @@ class HtmlTableHandleOverlayView {
     menu.id = this.contextMenuId;
     menu.hidden = true;
     menu.setAttribute('role', 'menu');
+    menu.setAttribute('aria-orientation', 'vertical');
     menu.addEventListener('mousedown', (event) => this.handleContextMenuMouseDown(event));
     menu.addEventListener('click', (event) => this.handleContextMenuClick(event));
     menu.addEventListener('keydown', (event) => this.handleContextMenuKeyDown(event));
@@ -1788,9 +1802,13 @@ class HtmlTableHandleOverlayView {
       const groupElement = this.root.ownerDocument.createElement('div');
       groupElement.className = 'html-table-overlay__context-menu-group';
       groupElement.dataset.group = group.id;
+      groupElement.setAttribute('role', 'group');
+      const accessibleGroupState = getHtmlTableContextMenuGroupAccessibleState(this.contextMenuId, group.id);
+      groupElement.setAttribute('aria-labelledby', accessibleGroupState.labelId);
 
       const label = this.root.ownerDocument.createElement('div');
       label.className = 'html-table-overlay__context-menu-group-label';
+      label.id = accessibleGroupState.labelId;
       label.textContent = group.label;
       groupElement.append(label);
 
