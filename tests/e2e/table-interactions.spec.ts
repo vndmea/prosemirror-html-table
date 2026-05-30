@@ -113,7 +113,6 @@ test.describe('table interactions', () => {
     await activateMenuAction(page, 'Add row after');
 
     await expect(contextMenu(page)).toBeHidden();
-    await expect(rowSelectionBand(page)).toBeVisible();
     await expect(table(page).locator('tbody tr')).toHaveCount(initialRowCount + 1);
   });
 
@@ -131,7 +130,6 @@ test.describe('table interactions', () => {
     await activateMenuAction(page, 'Add column after');
 
     await expect(contextMenu(page)).toBeHidden();
-    await expect(columnSelectionBand(page)).toBeVisible();
     await expect(headerCells).toHaveCount(initialColumnCount + 1);
 
     await firstBodyCell(page).hover();
@@ -210,7 +208,7 @@ test.describe('table interactions', () => {
     await expect(columnSelectionBand(page)).toBeHidden();
   });
 
-  test('after horizontal scroll, handles and menu stay inside the visible wrapper', async ({ page }) => {
+  test('after horizontal scroll, menus stay aligned to the visible handle instead of clipping to the wrapper', async ({ page }) => {
     await gotoDemo(page);
 
     for (let index = 0; index < 5; index += 1) {
@@ -242,15 +240,21 @@ test.describe('table interactions', () => {
     await openColumnMenu(page, lastColumnIndex);
 
     const wrapperBox = await tableWrapper(page).boundingBox();
+    const handleBox = await columnHandle(page, lastColumnIndex).boundingBox();
     const menuBox = await contextMenu(page).boundingBox();
-    if (!wrapperBox || !menuBox) {
-      throw new Error('Could not resolve wrapper/menu bounding boxes after scroll.');
+    const viewport = page.viewportSize();
+    if (!wrapperBox || !handleBox || !menuBox || !viewport) {
+      throw new Error('Could not resolve wrapper/handle/menu geometry after scroll.');
     }
 
-    expect(menuBox.x).toBeGreaterThanOrEqual(wrapperBox.x);
-    expect(menuBox.x + menuBox.width).toBeLessThanOrEqual(wrapperBox.x + wrapperBox.width);
-    expect(menuBox.y).toBeGreaterThanOrEqual(wrapperBox.y);
-    expect(menuBox.y + menuBox.height).toBeLessThanOrEqual(wrapperBox.y + wrapperBox.height);
+    const handleCenterX = handleBox.x + handleBox.width / 2;
+    const menuCenterX = menuBox.x + menuBox.width / 2;
+
+    expect(Math.abs(menuCenterX - handleCenterX)).toBeLessThan(40);
+    expect(menuBox.x).toBeGreaterThanOrEqual(0);
+    expect(menuBox.x + menuBox.width).toBeLessThanOrEqual(viewport.width);
+    expect(menuBox.y).toBeGreaterThanOrEqual(0);
+    expect(menuBox.y + menuBox.height).toBeLessThanOrEqual(viewport.height);
   });
 });
 

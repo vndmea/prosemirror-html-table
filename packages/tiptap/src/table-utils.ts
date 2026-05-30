@@ -263,7 +263,6 @@ export function getTableSelectionInfo(
   const anchorCell = selection instanceof CellSelection ? cellPosToRef.get(selection.anchorCellPos) ?? fallbackCell : fallbackCell;
   const headCell = selection instanceof CellSelection ? cellPosToRef.get(selection.headCellPos) ?? anchorCell : anchorCell;
   if (!anchorCell || !headCell) return undefined;
-  if (anchorCell.section !== headCell.section || anchorCell.sectionIndex !== headCell.sectionIndex) return undefined;
 
   const top = Math.min(anchorCell.rowIndex, headCell.rowIndex);
   const bottom = Math.max(anchorCell.rowIndex + anchorCell.rowSpan - 1, headCell.rowIndex + headCell.rowSpan - 1);

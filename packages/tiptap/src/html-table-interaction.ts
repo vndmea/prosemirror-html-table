@@ -13,6 +13,7 @@ import { getTableSelectionInfo } from './table-utils.js';
 
 export type HtmlTableHoverKind = 'table' | 'cell';
 export type HtmlTableSelectedAxisKind = 'row' | 'column';
+const HTML_TABLE_OVERLAY_SELECTOR = '[data-html-table-overlay]';
 
 export interface HtmlTableReference {
   tablePos: number;
@@ -337,7 +338,7 @@ class HtmlTableInteractionView {
   private readonly onClickCapture = (event: MouseEvent) => this.handleClickCapture(event);
   private readonly onDocumentMouseMove = (event: MouseEvent) => this.updateCellDragSelection(event);
   private readonly onMouseMove = (event: MouseEvent) => this.handleMouseMove(event);
-  private readonly onMouseLeave = () => this.clearHover();
+  private readonly onMouseLeave = (event: MouseEvent) => this.handleMouseLeave(event);
   private readonly onDocumentMouseUp = (event: MouseEvent) => this.handleDocumentMouseUp(event);
   private readonly onViewportChange = () => this.syncSelectionGeometry();
 
@@ -446,6 +447,15 @@ class HtmlTableInteractionView {
       hovered: null,
       hoveredTable: getSelectionTableReference(this.view.state.selection),
     });
+  }
+
+  private handleMouseLeave(event: MouseEvent): void {
+    const relatedTarget = event.relatedTarget;
+    if (relatedTarget instanceof Element && relatedTarget.closest(HTML_TABLE_OVERLAY_SELECTOR)) {
+      return;
+    }
+
+    this.clearHover();
   }
 
   private syncSelectionGeometry(): void {

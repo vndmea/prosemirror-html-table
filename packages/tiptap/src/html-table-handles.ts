@@ -1,6 +1,11 @@
 import { NodeSelection, Plugin, PluginKey, type Transaction } from '@tiptap/pm/state';
 import type { EditorView } from '@tiptap/pm/view';
-import { addColumnAfter as addCoreColumnAfter, addRowAfter as addCoreRowAfter } from 'prosemirror-html-table';
+import {
+  CellSelection,
+  addColumnAfter as addCoreColumnAfter,
+  addRowAfter as addCoreRowAfter,
+  createHtmlTableGrid,
+} from 'prosemirror-html-table';
 
 import type { HtmlTableTiptapOptions } from './options.js';
 import {
@@ -22,7 +27,7 @@ import {
 } from './html-table-interaction.js';
 import { getRenderedHtmlTableContext, measureHtmlTableGeometry } from './table-dom.js';
 import {
-  createAxisFocusTransaction,
+  createColumnSelectionTransaction,
   createColumnResizeTransaction,
   createRowSelectionTransaction,
   getTableColumnWidths,
@@ -108,6 +113,12 @@ export interface HtmlTableContextMenuAccessibleState {
 export interface HtmlTableContextMenuGroupAccessibleState {
   labelId: string;
 }
+
+type HtmlTableMenuContext =
+  | { scope: 'table'; tablePos: number }
+  | { scope: 'row'; tablePos: number; rowIndex: number }
+  | { scope: 'column'; tablePos: number; columnIndex: number }
+  | { scope: 'cell'; tablePos: number; anchorCellPos: number; headCellPos: number };
 
 export type HtmlTableContextMenuPlacement =
   | 'right-start'
@@ -613,7 +624,10 @@ class HtmlTableHandleOverlayView {
   private readonly cellSelectionHandle: HTMLButtonElement;
   private readonly addRowButton: HTMLButtonElement;
   private readonly addColumnButton: HTMLButtonElement;
-  private currentWrapper: HTMLElement | null = null;
+  private currentHost: HTMLElement | null = null;
+  private currentHostPositionManaged = false;
+  private renderedTablePos: number | null = null;
+  private renderedGeometry: ReturnType<typeof measureHtmlTableGeometry> | null = null;
   private rowHandles: HTMLButtonElement[] = [];
   private columnHandles: HTMLButtonElement[] = [];
   private resizeHandles: HTMLButtonElement[] = [];
@@ -631,8 +645,12 @@ class HtmlTableHandleOverlayView {
   private restoreContextMenuFocusOnClose = false;
   private contextMenuTypeaheadQuery = '';
   private contextMenuTypeaheadResetTimer: ReturnType<typeof setTimeout> | null = null;
+  private contextMenuContext: HtmlTableMenuContext | null = null;
+  private suppressNextDocumentClick = false;
   private readonly onDocumentMouseMove = (event: MouseEvent) => this.handleResizeMove(event);
   private readonly onDocumentMouseUp = () => this.finishResize();
+  private readonly onDocumentMouseUpCapture = (event: MouseEvent) => this.handleDocumentMouseUpCapture(event);
+  private readonly onDocumentClickCapture = (event: MouseEvent) => this.handleDocumentClickCapture(event);
   private readonly onDocumentMouseDown = (event: MouseEvent) => this.handleDocumentMouseDown(event);
   private readonly onDocumentKeyDown = (event: KeyboardEvent) => this.handleDocumentKeyDown(event);
 
@@ -679,6 +697,8 @@ class HtmlTableHandleOverlayView {
       this.addColumnButton,
     );
     this.root.ownerDocument.addEventListener('mousedown', this.onDocumentMouseDown);
+    this.root.ownerDocument.addEventListener('mouseup', this.onDocumentMouseUpCapture, true);
+    this.root.ownerDocument.addEventListener('click', this.onDocumentClickCapture, true);
     this.root.ownerDocument.addEventListener('keydown', this.onDocumentKeyDown);
     this.render();
   }
@@ -692,8 +712,13 @@ class HtmlTableHandleOverlayView {
     this.clearActiveResize(false);
     this.resetContextMenuTypeahead();
     this.root.ownerDocument.removeEventListener('mousedown', this.onDocumentMouseDown);
+    this.root.ownerDocument.removeEventListener('mouseup', this.onDocumentMouseUpCapture, true);
+    this.root.ownerDocument.removeEventListener('click', this.onDocumentClickCapture, true);
     this.root.ownerDocument.removeEventListener('keydown', this.onDocumentKeyDown);
-    this.currentWrapper = null;
+    this.currentHost = null;
+    this.currentHostPositionManaged = false;
+    this.renderedTablePos = null;
+    this.renderedGeometry = null;
     this.root.remove();
     this.rowHandles = [];
     this.columnHandles = [];
@@ -715,11 +740,15 @@ class HtmlTableHandleOverlayView {
       return;
     }
 
-    this.attach(context.wrapper);
+    this.renderedTablePos = activeTable.tablePos;
+    this.renderedGeometry = geometry;
 
-    const wrapperRect = context.wrapper.getBoundingClientRect();
-    const tableLeft = context.wrapper.scrollLeft + geometry.tableRect.left - wrapperRect.left;
-    const tableTop = context.wrapper.scrollTop + geometry.tableRect.top - wrapperRect.top;
+    const overlayHost = this.getOverlayHost();
+    this.attach(overlayHost);
+
+    const hostRect = overlayHost.getBoundingClientRect();
+    const tableLeft = geometry.tableRect.left - hostRect.left;
+    const tableTop = geometry.tableRect.top - hostRect.top;
     const rowHandleLeft = Math.max(MIN_HANDLE_INSET, tableLeft - ROW_HANDLE_OFFSET);
     const columnHandleTop = Math.max(MIN_HANDLE_INSET, tableTop - COLUMN_HANDLE_OFFSET);
     const selectionInfo = getTableSelectionInfo(this.view.state.doc, this.view.state.selection);
@@ -730,8 +759,8 @@ class HtmlTableHandleOverlayView {
     this.syncHandleCount('column', geometry.columns.length);
     this.syncResizeHandleCount(this.options.resizable ? geometry.columns.length : 0);
     this.syncSelectionContextState(interaction, activeTable.tablePos, geometry, tableLeft, tableTop, selectionInfo);
-    this.syncContextTriggerButton(contextTrigger, context.wrapper, wrapperRect);
-    this.syncContextMenu(contextMenu, context.wrapper, wrapperRect);
+    this.syncContextTriggerButton(contextTrigger, hostRect);
+    this.syncContextMenu(contextMenu, hostRect);
     this.syncTableHandle(interaction, contextMenu, activeTable.tablePos, rowHandleLeft, columnHandleTop);
     this.syncSelectionOverlay(interaction, activeTable.tablePos, geometry, tableLeft, tableTop);
     this.syncCellSelectionHandle(contextMenu, activeTable.tablePos, geometry, tableLeft, tableTop, selectionInfo);
@@ -998,8 +1027,7 @@ class HtmlTableHandleOverlayView {
 
   private syncContextTriggerButton(
     trigger: HtmlTableContextTriggerButtonState,
-    wrapper: HTMLElement,
-    wrapperRect: DOMRect,
+    hostRect: DOMRect,
   ): void {
     const renderState = getHtmlTableContextTriggerRenderState(trigger);
     const hasDedicatedScopeHandle =
@@ -1031,20 +1059,13 @@ class HtmlTableHandleOverlayView {
       return;
     }
 
-    this.contextTriggerButton.style.left = `${Math.max(
-      MIN_HANDLE_INSET,
-      wrapper.scrollLeft + renderState.left - wrapperRect.left,
-    )}px`;
-    this.contextTriggerButton.style.top = `${Math.max(
-      MIN_HANDLE_INSET,
-      wrapper.scrollTop + renderState.top - wrapperRect.top,
-    )}px`;
+    this.contextTriggerButton.style.left = `${Math.max(MIN_HANDLE_INSET, renderState.left - hostRect.left)}px`;
+    this.contextTriggerButton.style.top = `${Math.max(MIN_HANDLE_INSET, renderState.top - hostRect.top)}px`;
   }
 
   private syncContextMenu(
     menu: HtmlTableContextMenuState,
-    wrapper: HTMLElement,
-    wrapperRect: DOMRect,
+    hostRect: DOMRect,
   ): void {
     const renderState = getHtmlTableContextMenuRenderState(menu);
     const focusedActionId = this.getFocusedContextMenuActionId();
@@ -1079,15 +1100,15 @@ class HtmlTableHandleOverlayView {
     this.contextMenu.replaceChildren(...this.buildContextMenuGroups(menu));
     const menuWidth = this.contextMenu.offsetWidth;
     const menuHeight = this.contextMenu.offsetHeight;
-    const viewportLeft = wrapper.scrollLeft + MIN_HANDLE_INSET;
-    const viewportTop = wrapper.scrollTop + MIN_HANDLE_INSET;
-    const viewportRight = wrapper.scrollLeft + wrapper.clientWidth - MIN_HANDLE_INSET;
-    const viewportBottom = wrapper.scrollTop + wrapper.clientHeight - MIN_HANDLE_INSET;
+    const viewportLeft = MIN_HANDLE_INSET - hostRect.left;
+    const viewportTop = MIN_HANDLE_INSET - hostRect.top;
+    const viewportRight = this.root.ownerDocument.defaultView!.innerWidth - hostRect.left - MIN_HANDLE_INSET;
+    const viewportBottom = this.root.ownerDocument.defaultView!.innerHeight - hostRect.top - MIN_HANDLE_INSET;
     const availableHeight = Math.max(160, viewportBottom - viewportTop);
     const position = getHtmlTableContextMenuPosition(
       renderState.scope ?? 'table',
-      wrapper.scrollLeft + renderState.left - wrapperRect.left,
-      wrapper.scrollTop + renderState.top - wrapperRect.top,
+      renderState.left - hostRect.left,
+      renderState.top - hostRect.top,
       menuWidth,
       menuHeight,
       viewportLeft,
@@ -1111,6 +1132,7 @@ class HtmlTableHandleOverlayView {
     const nextOpen = !interaction.contextMenuOpen;
     this.contextMenuFocusTarget = focusTarget;
     this.restoreContextMenuFocusOnClose = !nextOpen;
+    this.contextMenuContext = nextOpen ? this.captureContextMenuContext(interaction) : null;
     this.view.dispatch(
       this.view.state.tr.setMeta(htmlTableInteractionPluginKey, {
         contextMenuOpen: nextOpen,
@@ -1248,6 +1270,7 @@ class HtmlTableHandleOverlayView {
     button.type = 'button';
     button.className = `html-table-overlay__extend-button html-table-overlay__extend-button--${axis}`;
     button.dataset.axis = axis;
+    button.dataset.testid = axis === 'row' ? 'pmht-extend-row' : 'pmht-extend-column';
     button.tabIndex = -1;
     button.textContent = '+';
     button.setAttribute('aria-label', axis === 'row' ? 'Add row after' : 'Add column after');
@@ -1274,6 +1297,7 @@ class HtmlTableHandleOverlayView {
 
     event.preventDefault();
     event.stopPropagation();
+    this.suppressPointerClick();
     this.activateAxisHandle(axis, index, activeTable.tablePos, table, interaction, handle);
   }
 
@@ -1327,7 +1351,7 @@ class HtmlTableHandleOverlayView {
               selectedAxisExplicit: true,
             },
           )
-        : createAxisFocusTransaction(this.view.state, tablePos, table, 'column', index)?.setMeta(
+        : createColumnSelectionTransaction(this.view.state, tablePos, table, index)?.setMeta(
             htmlTableInteractionPluginKey,
             {
               selectedAxis: {
@@ -1358,6 +1382,7 @@ class HtmlTableHandleOverlayView {
 
     event.preventDefault();
     event.stopPropagation();
+    this.suppressPointerClick();
     this.activateTableHandle(activeTable.tablePos, interaction, this.tableHandle);
   }
 
@@ -1397,6 +1422,7 @@ class HtmlTableHandleOverlayView {
   private handleContextTriggerMouseDown(event: MouseEvent): void {
     event.preventDefault();
     event.stopPropagation();
+    this.suppressPointerClick();
     this.toggleContextTriggerMenu();
   }
 
@@ -1422,6 +1448,7 @@ class HtmlTableHandleOverlayView {
   }
 
   private handleContextMenuMouseDown(event: MouseEvent): void {
+    this.suppressPointerClick();
     this.runContextMenuActionFromEvent(event);
   }
 
@@ -1447,8 +1474,8 @@ class HtmlTableHandleOverlayView {
     event.preventDefault();
     event.stopPropagation();
 
-    const interaction = getHtmlTableInteractionState(this.view.state);
-    runHtmlTableContextMenuAction(this.view.state, interaction, actionId as HtmlTableContextActionId, (transaction) => {
+    const { state, interaction } = this.getContextMenuActionInvocation();
+    runHtmlTableContextMenuAction(state, interaction, actionId as HtmlTableContextActionId, (transaction) => {
       this.view.dispatch(transaction);
     });
     this.view.focus();
@@ -1506,6 +1533,7 @@ class HtmlTableHandleOverlayView {
   private handleCellSelectionHandleMouseDown(event: MouseEvent): void {
     event.preventDefault();
     event.stopPropagation();
+    this.suppressPointerClick();
     this.toggleCellSelectionMenu();
   }
 
@@ -1547,6 +1575,25 @@ class HtmlTableHandleOverlayView {
     }
 
     this.closeContextMenu(false);
+  }
+
+  private handleDocumentMouseUpCapture(event: MouseEvent): void {
+    if (!this.suppressNextDocumentClick) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+  }
+
+  private handleDocumentClickCapture(event: MouseEvent): void {
+    if (!this.suppressNextDocumentClick) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+    this.suppressNextDocumentClick = false;
   }
 
   private handleDocumentKeyDown(event: KeyboardEvent): void {
@@ -1605,21 +1652,20 @@ class HtmlTableHandleOverlayView {
   private handleExtendButtonMouseDown(event: MouseEvent): void {
     const button = event.currentTarget as HTMLButtonElement | null;
     const axis = button?.dataset.axis;
-    const interaction = getHtmlTableInteractionState(this.view.state);
-    const activeTable = interaction.activeTable;
-    const geometry = interaction.geometry;
-    if (!button || !activeTable || !geometry || (axis !== 'row' && axis !== 'column')) {
+    const extendTarget = this.getExtendButtonTarget();
+    if (!button || !extendTarget || (axis !== 'row' && axis !== 'column')) {
       return;
     }
 
-    const table = this.view.state.doc.nodeAt(activeTable.tablePos);
+    const table = this.view.state.doc.nodeAt(extendTarget.tablePos);
     if (!table || table.type.name !== 'htmlTable') {
       return;
     }
 
     event.preventDefault();
     event.stopPropagation();
-    this.activateExtendButton(axis, activeTable.tablePos, geometry, table);
+    this.suppressPointerClick();
+    this.activateExtendButton(axis, extendTarget.tablePos, extendTarget.geometry, table);
   }
 
   private handleExtendButtonClick(event: MouseEvent): void {
@@ -1629,21 +1675,19 @@ class HtmlTableHandleOverlayView {
 
     const button = event.currentTarget as HTMLButtonElement | null;
     const axis = button?.dataset.axis;
-    const interaction = getHtmlTableInteractionState(this.view.state);
-    const activeTable = interaction.activeTable;
-    const geometry = interaction.geometry;
-    if (!button || !activeTable || !geometry || (axis !== 'row' && axis !== 'column')) {
+    const extendTarget = this.getExtendButtonTarget();
+    if (!button || !extendTarget || (axis !== 'row' && axis !== 'column')) {
       return;
     }
 
-    const table = this.view.state.doc.nodeAt(activeTable.tablePos);
+    const table = this.view.state.doc.nodeAt(extendTarget.tablePos);
     if (!table || table.type.name !== 'htmlTable') {
       return;
     }
 
     event.preventDefault();
     event.stopPropagation();
-    this.activateExtendButton(axis, activeTable.tablePos, geometry, table);
+    this.activateExtendButton(axis, extendTarget.tablePos, extendTarget.geometry, table);
   }
 
   private activateExtendButton(
@@ -1652,14 +1696,14 @@ class HtmlTableHandleOverlayView {
     geometry: ReturnType<typeof measureHtmlTableGeometry>,
     table: NonNullable<ReturnType<EditorView['state']['doc']['nodeAt']>>,
   ): void {
+    const targetRowIndex = this.getExtendRowIndex(table);
     const selectionTransaction =
       axis === 'row'
-        ? createRowSelectionTransaction(this.view.state, tablePos, table, Math.max(0, geometry.rows.length - 1))
-        : createAxisFocusTransaction(
+        ? createRowSelectionTransaction(this.view.state, tablePos, table, targetRowIndex)
+        : createColumnSelectionTransaction(
             this.view.state,
             tablePos,
             table,
-            'column',
             Math.max(0, geometry.columns.length - 1),
           )?.setMeta(htmlTableInteractionPluginKey, {
             selectedAxis: {
@@ -1797,19 +1841,29 @@ class HtmlTableHandleOverlayView {
   }
 
   private attach(wrapper: HTMLElement): void {
-    if (this.currentWrapper === wrapper && this.root.parentElement === wrapper) {
+    if (this.currentHost === wrapper && this.root.parentElement === wrapper) {
       return;
     }
 
     this.detach();
+    if (this.root.ownerDocument.defaultView?.getComputedStyle(wrapper).position === 'static') {
+      wrapper.style.position = 'relative';
+      this.currentHostPositionManaged = true;
+    }
     wrapper.append(this.root);
-    this.currentWrapper = wrapper;
+    this.currentHost = wrapper;
   }
 
   private detach(): void {
     this.root.hidden = true;
     this.root.remove();
-    this.currentWrapper = null;
+    this.renderedTablePos = null;
+    this.renderedGeometry = null;
+    if (this.currentHost && this.currentHostPositionManaged) {
+      this.currentHost.style.removeProperty('position');
+    }
+    this.currentHost = null;
+    this.currentHostPositionManaged = false;
   }
 
   private isColumnResizable(index: number, totalColumns: number): boolean {
@@ -1977,10 +2031,158 @@ class HtmlTableHandleOverlayView {
     }
 
     this.restoreContextMenuFocusOnClose = restoreFocus;
+    this.contextMenuContext = null;
     this.view.dispatch(
       this.view.state.tr.setMeta(htmlTableInteractionPluginKey, {
         contextMenuOpen: false,
       }),
     );
+  }
+
+  private getOverlayHost(): HTMLElement {
+    return (this.view.dom.parentElement ?? this.view.dom) as HTMLElement;
+  }
+
+  private suppressPointerClick(): void {
+    this.suppressNextDocumentClick = true;
+  }
+
+  private captureContextMenuContext(interaction: HtmlTableInteractionState): HtmlTableMenuContext | null {
+    const tablePos = interaction.activeTable?.tablePos ?? null;
+    if (tablePos === null) {
+      return null;
+    }
+
+    const selectionInfo = getTableSelectionInfo(this.view.state.doc, this.view.state.selection);
+    const scope = getHtmlTableSelectionScope(interaction, tablePos, selectionInfo);
+    if (scope === 'table') {
+      return { scope, tablePos };
+    }
+
+    if (scope === 'row' && interaction.selectedAxis.index !== null) {
+      return {
+        scope,
+        tablePos,
+        rowIndex: interaction.selectedAxis.index,
+      };
+    }
+
+    if (scope === 'column' && interaction.selectedAxis.index !== null) {
+      return {
+        scope,
+        tablePos,
+        columnIndex: interaction.selectedAxis.index,
+      };
+    }
+
+    if (scope === 'cell' && selectionInfo) {
+      const anchorCellPos = selectionInfo.cellPositions.get(selectionInfo.anchorCell);
+      const headCellPos = selectionInfo.cellPositions.get(selectionInfo.headCell);
+      if (anchorCellPos === undefined || headCellPos === undefined) {
+        return null;
+      }
+
+      return {
+        scope,
+        tablePos,
+        anchorCellPos,
+        headCellPos,
+      };
+    }
+
+    return null;
+  }
+
+  private getContextMenuActionInvocation(): {
+    state: EditorView['state'];
+    interaction: HtmlTableInteractionState;
+  } {
+    const snapshot = this.contextMenuContext;
+    if (!snapshot) {
+      return {
+        state: this.view.state,
+        interaction: getHtmlTableInteractionState(this.view.state),
+      };
+    }
+
+    const table = this.view.state.doc.nodeAt(snapshot.tablePos);
+    if (!table || table.type.name !== 'htmlTable') {
+      return {
+        state: this.view.state,
+        interaction: getHtmlTableInteractionState(this.view.state),
+      };
+    }
+
+    const transaction =
+      snapshot.scope === 'table'
+        ? this.view.state.tr.setSelection(NodeSelection.create(this.view.state.doc, snapshot.tablePos))
+        : snapshot.scope === 'row'
+          ? createRowSelectionTransaction(this.view.state, snapshot.tablePos, table, snapshot.rowIndex)?.setMeta(
+              htmlTableInteractionPluginKey,
+              {
+                selectedAxis: {
+                  kind: 'row',
+                  index: snapshot.rowIndex,
+                  tablePos: snapshot.tablePos,
+                },
+                selectedAxisExplicit: true,
+              },
+            )
+          : snapshot.scope === 'column'
+            ? createColumnSelectionTransaction(this.view.state, snapshot.tablePos, table, snapshot.columnIndex)?.setMeta(
+                htmlTableInteractionPluginKey,
+                {
+                  selectedAxis: {
+                    kind: 'column',
+                    index: snapshot.columnIndex,
+                    tablePos: snapshot.tablePos,
+                  },
+                  selectedAxisExplicit: true,
+                },
+              )
+            : this.view.state.tr.setSelection(
+                CellSelection.create(this.view.state.doc, snapshot.anchorCellPos, snapshot.headCellPos),
+              );
+
+    if (!transaction) {
+      return {
+        state: this.view.state,
+        interaction: getHtmlTableInteractionState(this.view.state),
+      };
+    }
+
+    const state = this.view.state.apply(transaction);
+    return {
+      state,
+      interaction: getHtmlTableInteractionState(state),
+    };
+  }
+
+  private getExtendButtonTarget(): {
+    tablePos: number;
+    geometry: ReturnType<typeof measureHtmlTableGeometry>;
+  } | null {
+    const interaction = getHtmlTableInteractionState(this.view.state);
+    if (interaction.activeTable && interaction.geometry) {
+      return {
+        tablePos: interaction.activeTable.tablePos,
+        geometry: interaction.geometry,
+      };
+    }
+
+    if (this.renderedTablePos !== null && this.renderedGeometry) {
+      return {
+        tablePos: this.renderedTablePos,
+        geometry: this.renderedGeometry,
+      };
+    }
+
+    return null;
+  }
+
+  private getExtendRowIndex(table: NonNullable<ReturnType<EditorView['state']['doc']['nodeAt']>>): number {
+    const grid = createHtmlTableGrid(table);
+    const lastBodyRow = [...grid.rows].reverse().find((row) => row.section === 'body');
+    return lastBodyRow?.rowIndex ?? Math.max(0, grid.height - 1);
   }
 }

@@ -1406,7 +1406,6 @@ function getCellSelectionInfo(state: EditorState, options: HtmlTableCommandOptio
   }
 
   if (!anchorCell || !headCell) return undefined;
-  if (anchorCell.section !== headCell.section || anchorCell.sectionIndex !== headCell.sectionIndex) return undefined;
 
   const top = Math.min(anchorCell.rowIndex, headCell.rowIndex);
   const bottom = Math.max(anchorCell.rowIndex + anchorCell.rowSpan - 1, headCell.rowIndex + headCell.rowSpan - 1);
@@ -1511,7 +1510,10 @@ function replaceTable(
   table: ProseMirrorNode,
 ): boolean {
   if (dispatch) {
-    dispatch(state.tr.replaceWith(context.tablePos, context.tablePos + context.table.nodeSize, table).scrollIntoView());
+    const transaction = state.tr.replaceWith(context.tablePos, context.tablePos + context.table.nodeSize, table);
+    const selection = preserveCellSelectionOnTableReplace(state.selection, transaction.doc, context, table)
+      ?? state.selection.getBookmark().map(transaction.mapping).resolve(transaction.doc);
+    dispatch(transaction.setSelection(selection).scrollIntoView());
   }
 
   return true;
@@ -1529,6 +1531,47 @@ function createEmptyRow(
   );
 
   return rowType.create(null, cells);
+}
+
+function preserveCellSelectionOnTableReplace(
+  selection: Selection,
+  doc: ProseMirrorNode,
+  context: TableContext,
+  nextTable: ProseMirrorNode,
+): Selection | undefined {
+  if (!(selection instanceof CellSelection)) {
+    return undefined;
+  }
+
+  const previousGrid = createHtmlTableGrid(context.table, { names: context.names });
+  const nextGrid = createHtmlTableGrid(nextTable, { names: context.names });
+  if (!hasEquivalentGridShape(previousGrid, nextGrid)) {
+    return undefined;
+  }
+
+  const anchorCell = findCellByPosition(context, previousGrid, selection.anchorCellPos);
+  const headCell = findCellByPosition(context, previousGrid, selection.headCellPos);
+  if (!anchorCell || !headCell) {
+    return undefined;
+  }
+
+  const nextAnchorCell = nextGrid.slots[anchorCell.rowIndex]?.[anchorCell.columnIndex]?.cell;
+  const nextHeadCell = nextGrid.slots[headCell.rowIndex]?.[headCell.columnIndex]?.cell;
+  if (!nextAnchorCell || !nextHeadCell) {
+    return undefined;
+  }
+
+  const nextContext: TableContext = {
+    ...context,
+    table: nextTable,
+  };
+  const nextAnchorCellPos = findCellPosition(nextContext, nextAnchorCell);
+  const nextHeadCellPos = findCellPosition(nextContext, nextHeadCell);
+  if (nextAnchorCellPos === undefined || nextHeadCellPos === undefined) {
+    return undefined;
+  }
+
+  return CellSelection.create(doc, nextAnchorCellPos, nextHeadCellPos);
 }
 
 function createEmptyCell(
@@ -2207,6 +2250,32 @@ function copyRowNode(row: ProseMirrorNode): ProseMirrorNode {
 
 function clearCellContent(schema: Schema, cell: ProseMirrorNode): ProseMirrorNode {
   return copyCellNode(cell, {}, createEmptyCellContent(schema));
+}
+
+function hasEquivalentGridShape(previousGrid: HtmlTableGrid, nextGrid: HtmlTableGrid): boolean {
+  if (
+    previousGrid.width !== nextGrid.width
+    || previousGrid.height !== nextGrid.height
+    || previousGrid.cells.length !== nextGrid.cells.length
+    || previousGrid.rows.length !== nextGrid.rows.length
+  ) {
+    return false;
+  }
+
+  return previousGrid.cells.every((cell, index) => {
+    const nextCell = nextGrid.cells[index];
+    return Boolean(
+      nextCell
+      && nextCell.section === cell.section
+      && nextCell.sectionIndex === cell.sectionIndex
+      && nextCell.rowIndex === cell.rowIndex
+      && nextCell.rowIndexInSection === cell.rowIndexInSection
+      && nextCell.columnIndex === cell.columnIndex
+      && nextCell.cellIndex === cell.cellIndex
+      && nextCell.rowSpan === cell.rowSpan
+      && nextCell.colSpan === cell.colSpan,
+    );
+  });
 }
 
 function copyCellNode(
