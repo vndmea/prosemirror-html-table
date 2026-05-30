@@ -6,7 +6,9 @@ import {
   getHtmlTableContextTriggerRenderState,
   getHtmlTableSelectionAnchor,
   getHtmlTableSelectionScope,
+  isHtmlTableContextMenuDismissKey,
   isTableHandleVisible,
+  shouldCloseHtmlTableContextMenuForTarget,
 } from './html-table-handles.js';
 import type { HtmlTableContextTriggerButtonState } from './html-table-context-menu.js';
 import type { HtmlTableContextMenuState } from './html-table-context-menu.js';
@@ -333,5 +335,34 @@ describe('html table handles', () => {
       primaryActionId: null,
       groupCount: 2,
     });
+  });
+
+  it('keeps the context menu open for trigger and menu clicks, and closes it for outside targets', () => {
+    const triggerChild = {} as EventTarget;
+    const menuChild = {} as EventTarget;
+    const outside = {} as EventTarget;
+    const trigger = {
+      contains(candidate: unknown) {
+        return candidate === this || candidate === triggerChild;
+      },
+    } as HTMLButtonElement;
+    const menu = {
+      contains(candidate: unknown) {
+        return candidate === this || candidate === menuChild;
+      },
+    } as HTMLDivElement;
+
+    expect(shouldCloseHtmlTableContextMenuForTarget(trigger, trigger, menu)).toBe(false);
+    expect(shouldCloseHtmlTableContextMenuForTarget(triggerChild, trigger, menu)).toBe(false);
+    expect(shouldCloseHtmlTableContextMenuForTarget(menu, trigger, menu)).toBe(false);
+    expect(shouldCloseHtmlTableContextMenuForTarget(menuChild, trigger, menu)).toBe(false);
+    expect(shouldCloseHtmlTableContextMenuForTarget(outside, trigger, menu)).toBe(true);
+    expect(shouldCloseHtmlTableContextMenuForTarget(null, trigger, menu)).toBe(true);
+  });
+
+  it('uses Escape as the context menu dismiss key', () => {
+    expect(isHtmlTableContextMenuDismissKey('Escape')).toBe(true);
+    expect(isHtmlTableContextMenuDismissKey('Enter')).toBe(false);
+    expect(isHtmlTableContextMenuDismissKey('Tab')).toBe(false);
   });
 });

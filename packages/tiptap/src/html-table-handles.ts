@@ -174,6 +174,37 @@ export function getHtmlTableContextMenuRenderState(
   };
 }
 
+export function shouldCloseHtmlTableContextMenuForTarget(
+  target: EventTarget | null,
+  triggerButton: HTMLButtonElement,
+  menu: HTMLDivElement,
+): boolean {
+  return !containsEventTarget(triggerButton, target) && !containsEventTarget(menu, target);
+}
+
+export function isHtmlTableContextMenuDismissKey(key: string): boolean {
+  return key === 'Escape';
+}
+
+function containsEventTarget(
+  element: Pick<Element, 'contains'>,
+  target: EventTarget | null,
+): boolean {
+  if (!target) {
+    return false;
+  }
+
+  if (target === (element as unknown as EventTarget)) {
+    return true;
+  }
+
+  try {
+    return element.contains(target as Node);
+  } catch {
+    return false;
+  }
+}
+
 export function createHtmlTableHandlePlugin(options: HtmlTableTiptapOptions): Plugin {
   return new Plugin({
     key: htmlTableHandlePluginKey,
@@ -209,6 +240,8 @@ class HtmlTableHandleOverlayView {
     | null = null;
   private readonly onDocumentMouseMove = (event: MouseEvent) => this.handleResizeMove(event);
   private readonly onDocumentMouseUp = () => this.finishResize();
+  private readonly onDocumentMouseDown = (event: MouseEvent) => this.handleDocumentMouseDown(event);
+  private readonly onDocumentKeyDown = (event: KeyboardEvent) => this.handleDocumentKeyDown(event);
 
   constructor(view: EditorView, options: HtmlTableTiptapOptions) {
     this.view = view;
@@ -245,6 +278,8 @@ class HtmlTableHandleOverlayView {
       this.addRowButton,
       this.addColumnButton,
     );
+    this.root.ownerDocument.addEventListener('mousedown', this.onDocumentMouseDown);
+    this.root.ownerDocument.addEventListener('keydown', this.onDocumentKeyDown);
     this.render();
   }
 
@@ -255,6 +290,8 @@ class HtmlTableHandleOverlayView {
 
   destroy(): void {
     this.clearActiveResize(false);
+    this.root.ownerDocument.removeEventListener('mousedown', this.onDocumentMouseDown);
+    this.root.ownerDocument.removeEventListener('keydown', this.onDocumentKeyDown);
     this.currentWrapper = null;
     this.root.remove();
     this.rowHandles = [];
@@ -767,6 +804,31 @@ class HtmlTableHandleOverlayView {
     this.view.focus();
   }
 
+  private handleDocumentMouseDown(event: MouseEvent): void {
+    const interaction = getHtmlTableInteractionState(this.view.state);
+    if (!interaction.contextMenuOpen) {
+      return;
+    }
+
+    if (!shouldCloseHtmlTableContextMenuForTarget(event.target, this.contextTriggerButton, this.contextMenu)) {
+      return;
+    }
+
+    this.closeContextMenu();
+  }
+
+  private handleDocumentKeyDown(event: KeyboardEvent): void {
+    const interaction = getHtmlTableInteractionState(this.view.state);
+    if (!interaction.contextMenuOpen || !isHtmlTableContextMenuDismissKey(event.key)) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+    this.closeContextMenu();
+    this.view.focus();
+  }
+
   private handleResizeStart(event: MouseEvent): void {
     const handle = event.currentTarget as HTMLButtonElement | null;
     const index = Number(handle?.dataset.index);
@@ -1016,5 +1078,18 @@ class HtmlTableHandleOverlayView {
 
       return groupElement;
     });
+  }
+
+  private closeContextMenu(): void {
+    const interaction = getHtmlTableInteractionState(this.view.state);
+    if (!interaction.contextMenuOpen) {
+      return;
+    }
+
+    this.view.dispatch(
+      this.view.state.tr.setMeta(htmlTableInteractionPluginKey, {
+        contextMenuOpen: false,
+      }),
+    );
   }
 }
