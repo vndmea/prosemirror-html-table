@@ -111,6 +111,13 @@ export interface HtmlTableContextActionGroup {
   actions: HtmlTableContextAction[];
 }
 
+export type HtmlTableContextActionMenuItemRole = 'menuitem' | 'menuitemcheckbox' | 'menuitemradio';
+
+export interface HtmlTableContextActionMenuItemState {
+  role: HtmlTableContextActionMenuItemRole;
+  checked: boolean | null;
+}
+
 export function getHtmlTableContextActions(
   state: EditorState,
   interaction: HtmlTableInteractionState,
@@ -402,6 +409,29 @@ export function getPrimaryHtmlTableContextAction(
   return actions.find((action) => action.enabled) ?? null;
 }
 
+export function getHtmlTableContextActionMenuItemState(
+  action: HtmlTableContextAction,
+): HtmlTableContextActionMenuItemState {
+  if (CHECKBOX_ACTION_IDS.has(action.id)) {
+    return {
+      role: 'menuitemcheckbox',
+      checked: Boolean(action.active),
+    };
+  }
+
+  if (RADIO_ACTION_IDS.has(action.id)) {
+    return {
+      role: 'menuitemradio',
+      checked: Boolean(action.active),
+    };
+  }
+
+  return {
+    role: 'menuitem',
+    checked: null,
+  };
+}
+
 function resolveTableScopeCommand(
   id: Extract<HtmlTableContextActionId, 'deleteTable' | 'toggleCaption' | 'toggleColgroup' | 'toggleHeadSection' | 'toggleFootSection'>,
   active: boolean,
@@ -655,6 +685,29 @@ const ACTION_GROUP_LABELS: Record<HtmlTableContextActionGroupId, string> = {
   content: 'Content',
   danger: 'Danger',
 };
+
+const CHECKBOX_ACTION_IDS = new Set<HtmlTableContextActionId>([
+  'toggleCaption',
+  'toggleColgroup',
+  'toggleHeadSection',
+  'toggleFootSection',
+  'toggleHeaderRow',
+  'toggleHeaderColumn',
+  'toggleHeaderCell',
+]);
+
+const RADIO_ACTION_IDS = new Set<HtmlTableContextActionId>([
+  'setCellTextAlignLeft',
+  'setCellTextAlignCenter',
+  'setCellTextAlignRight',
+  'setCellBackgroundColorBlue',
+  'setCellBackgroundColorGreen',
+  'setCellBackgroundColorYellow',
+  'clearCellBackgroundColor',
+  'setCellVerticalAlignTop',
+  'setCellVerticalAlignMiddle',
+  'setCellVerticalAlignBottom',
+]);
 
 const PRIMARY_ACTION_ORDER: HtmlTableContextActionId[] = [
   'toggleHeadSection',

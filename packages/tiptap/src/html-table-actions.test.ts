@@ -7,6 +7,7 @@ import { CellSelection, createHtmlTableNode, createHtmlTableNodeSpecs } from 'pr
 import {
   getHtmlTableContextActionGroups,
   getHtmlTableContextActionCommand,
+  getHtmlTableContextActionMenuItemState,
   getHtmlTableContextActions,
   getPrimaryHtmlTableContextAction,
   runHtmlTableContextAction,
@@ -391,6 +392,40 @@ describe('html table context actions', () => {
     });
     const cellActions = getHtmlTableContextActions(cellState, getHtmlTableInteractionState(cellState));
     expect(cellActions.find((action) => action.id === 'toggleHeaderCell')?.label).toBe('Set header cell');
+  });
+
+  it('derives checkbox and radio menu item semantics for toggle and formatting actions', () => {
+    expect(getHtmlTableContextActionMenuItemState({
+      id: 'toggleCaption',
+      label: 'Remove caption',
+      scope: 'table',
+      enabled: true,
+      active: true,
+    })).toEqual({
+      role: 'menuitemcheckbox',
+      checked: true,
+    });
+
+    expect(getHtmlTableContextActionMenuItemState({
+      id: 'setCellTextAlignCenter',
+      label: 'Align center',
+      scope: 'cell',
+      enabled: true,
+      active: false,
+    })).toEqual({
+      role: 'menuitemradio',
+      checked: false,
+    });
+
+    expect(getHtmlTableContextActionMenuItemState({
+      id: 'deleteRow',
+      label: 'Delete row',
+      scope: 'row',
+      enabled: true,
+    })).toEqual({
+      role: 'menuitem',
+      checked: null,
+    });
   });
 
   it('runs context actions through a single entry point and closes the context menu on success', () => {

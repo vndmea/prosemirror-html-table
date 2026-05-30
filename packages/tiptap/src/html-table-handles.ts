@@ -3,7 +3,10 @@ import type { EditorView } from '@tiptap/pm/view';
 import { addColumnAfter as addCoreColumnAfter, addRowAfter as addCoreRowAfter } from 'prosemirror-html-table';
 
 import type { HtmlTableTiptapOptions } from './options.js';
-import type { HtmlTableContextActionId } from './html-table-actions.js';
+import {
+  getHtmlTableContextActionMenuItemState,
+  type HtmlTableContextActionId,
+} from './html-table-actions.js';
 import {
   getHtmlTableContextMenuState,
   runHtmlTableContextMenuAction,
@@ -1503,14 +1506,19 @@ class HtmlTableHandleOverlayView {
       groupElement.append(label);
 
       for (const action of group.actions) {
+        const menuItemState = getHtmlTableContextActionMenuItemState(action);
         const button = this.root.ownerDocument.createElement('button');
         button.type = 'button';
         button.className = 'html-table-overlay__context-menu-action';
         button.dataset.actionId = action.id;
         button.disabled = !action.enabled;
         button.textContent = action.label;
-        button.setAttribute('role', 'menuitem');
-        button.setAttribute('aria-pressed', action.active ? 'true' : 'false');
+        button.setAttribute('role', menuItemState.role);
+        if (menuItemState.checked === null) {
+          button.removeAttribute('aria-checked');
+        } else {
+          button.setAttribute('aria-checked', menuItemState.checked ? 'true' : 'false');
+        }
         button.setAttribute('aria-current', menu.primaryAction?.id === action.id ? 'true' : 'false');
         button.classList.toggle('is-active', Boolean(action.active));
         button.classList.toggle('is-destructive', Boolean(action.destructive));
