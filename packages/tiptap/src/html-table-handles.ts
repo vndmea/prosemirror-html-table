@@ -70,6 +70,11 @@ export interface HtmlTableCellContextTriggerRenderState {
   primaryActionId: string | null;
 }
 
+export interface HtmlTableOverlayHandleText {
+  label: string;
+  title: string;
+}
+
 export function isTableHandleVisible(
   allowTableNodeSelection: boolean,
   interaction: HtmlTableInteractionState,
@@ -195,6 +200,49 @@ export function getHtmlTableContextMenuAriaControls(
   expanded: boolean,
 ): string | null {
   return expanded ? menuId : null;
+}
+
+export function getHtmlTableOverlayHandleText(
+  kind: 'table' | 'row' | 'column',
+  index: number | null,
+  selected: boolean,
+  expanded: boolean,
+  primaryActionLabel: string | null,
+): HtmlTableOverlayHandleText {
+  const target =
+    kind === 'table'
+      ? 'Table'
+      : kind === 'row'
+        ? `Row ${index !== null ? index + 1 : ''}`.trim()
+        : `Column ${index !== null ? index + 1 : ''}`.trim();
+  const actionTarget =
+    kind === 'table'
+      ? 'table'
+      : kind === 'row'
+        ? `row ${index !== null ? index + 1 : ''}`.trim()
+        : `column ${index !== null ? index + 1 : ''}`.trim();
+
+  if (expanded) {
+    const title = primaryActionLabel
+      ? `${target} actions: ${primaryActionLabel}`
+      : `${target} actions`;
+    return {
+      label: `${target} actions`,
+      title,
+    };
+  }
+
+  if (selected) {
+    return {
+      label: `${target} actions`,
+      title: `Open actions for ${actionTarget}`,
+    };
+  }
+
+  return {
+    label: kind === 'table' ? 'Select table' : `Select ${actionTarget}`,
+    title: kind === 'table' ? 'Select table' : `Select ${actionTarget}`,
+  };
 }
 
 export function shouldCloseHtmlTableContextMenuForTarget(
@@ -447,8 +495,6 @@ class HtmlTableHandleOverlayView {
       if (!handle) continue;
 
       handle.dataset.index = String(row.index);
-      handle.setAttribute('aria-label', `Select row ${row.index + 1}`);
-      handle.title = `Select row ${row.index + 1}`;
       handle.style.left = `${rowHandleLeft}px`;
       handle.style.top = `${tableTop + row.top + row.height / 2}px`;
       handle.style.width = `${HANDLE_CROSS_AXIS_SIZE}px`;
@@ -462,9 +508,18 @@ class HtmlTableHandleOverlayView {
         interaction.selectedAxis.index === row.index &&
         interaction.selectedAxis.tablePos === activeTable.tablePos;
       const isRowMenuOpen = isRowSelected && isHtmlTableContextMenuExpandedForScope(contextMenu, 'row');
+      const rowText = getHtmlTableOverlayHandleText(
+        'row',
+        row.index,
+        isRowSelected,
+        isRowMenuOpen,
+        isRowMenuOpen ? contextMenu.primaryAction?.label ?? null : null,
+      );
       const rowControls = getHtmlTableContextMenuAriaControls(this.contextMenuId, isRowMenuOpen);
       handle.hidden = interaction.tableSelected || (!isRowHovered && !isRowSelected);
       handle.tabIndex = handle.hidden ? -1 : 0;
+      handle.setAttribute('aria-label', rowText.label);
+      handle.title = rowText.title;
       handle.setAttribute('aria-haspopup', 'menu');
       handle.setAttribute('aria-expanded', isRowMenuOpen ? 'true' : 'false');
       if (rowControls) {
@@ -488,8 +543,6 @@ class HtmlTableHandleOverlayView {
       if (!handle) continue;
 
       handle.dataset.index = String(column.index);
-      handle.setAttribute('aria-label', `Select column ${column.index + 1}`);
-      handle.title = `Select column ${column.index + 1}`;
       handle.style.left = `${tableLeft + column.left + column.width / 2}px`;
       handle.style.top = `${columnHandleTop}px`;
       handle.style.width = `${Math.max(HANDLE_CROSS_AXIS_SIZE, column.width - HANDLE_MAIN_AXIS_INSET)}px`;
@@ -503,9 +556,18 @@ class HtmlTableHandleOverlayView {
         interaction.selectedAxis.index === column.index &&
         interaction.selectedAxis.tablePos === activeTable.tablePos;
       const isColumnMenuOpen = isColumnSelected && isHtmlTableContextMenuExpandedForScope(contextMenu, 'column');
+      const columnText = getHtmlTableOverlayHandleText(
+        'column',
+        column.index,
+        isColumnSelected,
+        isColumnMenuOpen,
+        isColumnMenuOpen ? contextMenu.primaryAction?.label ?? null : null,
+      );
       const columnControls = getHtmlTableContextMenuAriaControls(this.contextMenuId, isColumnMenuOpen);
       handle.hidden = interaction.tableSelected || (!isColumnHovered && !isColumnSelected);
       handle.tabIndex = handle.hidden ? -1 : 0;
+      handle.setAttribute('aria-label', columnText.label);
+      handle.title = columnText.title;
       handle.setAttribute('aria-haspopup', 'menu');
       handle.setAttribute('aria-expanded', isColumnMenuOpen ? 'true' : 'false');
       if (columnControls) {
@@ -636,10 +698,19 @@ class HtmlTableHandleOverlayView {
     const isHovered = interaction.hovered?.kind === 'table' && interaction.hovered.tablePos === tablePos;
     const isSelected = interaction.tableSelected && interaction.activeTable?.tablePos === tablePos;
     const isMenuOpen = isSelected && isHtmlTableContextMenuExpandedForScope(menu, 'table');
+    const tableText = getHtmlTableOverlayHandleText(
+      'table',
+      null,
+      isSelected,
+      isMenuOpen,
+      isMenuOpen ? menu.primaryAction?.label ?? null : null,
+    );
     const controls = getHtmlTableContextMenuAriaControls(this.contextMenuId, isMenuOpen);
 
     this.tableHandle.hidden = !visible;
     this.tableHandle.tabIndex = visible ? 0 : -1;
+    this.tableHandle.setAttribute('aria-label', tableText.label);
+    this.tableHandle.title = tableText.title;
     this.tableHandle.setAttribute('aria-haspopup', 'menu');
     this.tableHandle.setAttribute('aria-expanded', isMenuOpen ? 'true' : 'false');
     if (controls) {

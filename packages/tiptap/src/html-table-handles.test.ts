@@ -7,6 +7,7 @@ import {
   getHtmlTableContextMenuAriaControls,
   getHtmlTableContextMenuRenderState,
   getNextHtmlTableContextMenuActionIndex,
+  getHtmlTableOverlayHandleText,
   getHtmlTableContextTriggerRenderState,
   getHtmlTableSelectionAnchor,
   getHtmlTableSelectionScope,
@@ -368,6 +369,21 @@ describe('html table handles', () => {
   it('only exposes aria-controls when the related context menu is expanded', () => {
     expect(getHtmlTableContextMenuAriaControls('pmht-menu-1', true)).toBe('pmht-menu-1');
     expect(getHtmlTableContextMenuAriaControls('pmht-menu-1', false)).toBeNull();
+  });
+
+  it('derives dynamic handle text for idle, selected, and expanded menu states', () => {
+    expect(getHtmlTableOverlayHandleText('row', 1, false, false, null)).toEqual({
+      label: 'Select row 2',
+      title: 'Select row 2',
+    });
+    expect(getHtmlTableOverlayHandleText('column', 0, true, false, null)).toEqual({
+      label: 'Column 1 actions',
+      title: 'Open actions for column 1',
+    });
+    expect(getHtmlTableOverlayHandleText('table', null, true, true, 'Add caption')).toEqual({
+      label: 'Table actions',
+      title: 'Table actions: Add caption',
+    });
   });
 
   it('derives cell context trigger render state from cell menu state', () => {
