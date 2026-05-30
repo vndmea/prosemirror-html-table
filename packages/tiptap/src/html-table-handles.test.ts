@@ -9,6 +9,7 @@ import {
   getHtmlTableSelectionAnchor,
   getHtmlTableSelectionScope,
   isHtmlTableContextMenuDismissKey,
+  isHtmlTableKeyboardClick,
   isHtmlTableContextMenuNavigationKey,
   isTableHandleVisible,
   shouldToggleHtmlTableContextMenuFromTableHandle,
@@ -437,6 +438,11 @@ describe('html table handles', () => {
     expect(getNextHtmlTableContextMenuActionIndex(1, 3, 'Home')).toBe(0);
     expect(getNextHtmlTableContextMenuActionIndex(1, 3, 'End')).toBe(2);
     expect(getNextHtmlTableContextMenuActionIndex(1, 0, 'ArrowDown')).toBe(-1);
+  });
+
+  it('treats detail-less click events as keyboard activation', () => {
+    expect(isHtmlTableKeyboardClick({ detail: 0 })).toBe(true);
+    expect(isHtmlTableKeyboardClick({ detail: 1 })).toBe(false);
   });
 
   it('toggles the context menu directly from selected row and column handles', () => {
