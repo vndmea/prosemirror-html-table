@@ -6,6 +6,7 @@ import {
   getHtmlTableCellContextTriggerRenderState,
   getHtmlTableContextMenuActionRenderState,
   getHtmlTableContextMenuAriaControls,
+  getHtmlTableContextMenuPosition,
   getHtmlTableContextMenuRenderState,
   getNextHtmlTableContextMenuActionIndex,
   getNextHtmlTableContextMenuTypeaheadIndex,
@@ -347,6 +348,56 @@ describe('html table handles', () => {
       scope: 'row',
       primaryActionId: null,
       groupCount: 2,
+    });
+  });
+
+  it('derives context menu positions with placement fallback inside the wrapper viewport', () => {
+    expect(getHtmlTableContextMenuPosition(
+      'row',
+      40,
+      80,
+      120,
+      100,
+      8,
+      8,
+      400,
+      300,
+    )).toEqual({
+      left: 52,
+      top: 30,
+      placement: 'right-center',
+    });
+
+    expect(getHtmlTableContextMenuPosition(
+      'row',
+      360,
+      80,
+      120,
+      100,
+      8,
+      8,
+      400,
+      300,
+    )).toEqual({
+      left: 228,
+      top: 30,
+      placement: 'left-center',
+    });
+
+    expect(getHtmlTableContextMenuPosition(
+      'column',
+      200,
+      260,
+      140,
+      90,
+      8,
+      8,
+      420,
+      300,
+    )).toEqual({
+      left: 130,
+      top: 158,
+      placement: 'top-center',
     });
   });
 

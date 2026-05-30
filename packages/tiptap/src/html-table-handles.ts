@@ -88,6 +88,20 @@ export interface HtmlTableContextMenuActionRenderState {
   active: boolean;
 }
 
+export type HtmlTableContextMenuPlacement =
+  | 'right-start'
+  | 'right-center'
+  | 'left-start'
+  | 'left-center'
+  | 'bottom-center'
+  | 'top-center';
+
+export interface HtmlTableContextMenuPosition {
+  left: number;
+  top: number;
+  placement: HtmlTableContextMenuPlacement;
+}
+
 export function isTableHandleVisible(
   allowTableNodeSelection: boolean,
   interaction: HtmlTableInteractionState,
@@ -281,6 +295,66 @@ export function getHtmlTableContextMenuActionRenderState(
     primary,
     destructive: Boolean(action.destructive),
     active: Boolean(action.active),
+  };
+}
+
+export function getHtmlTableContextMenuPosition(
+  scope: HtmlTableSelectionScope,
+  anchorLeft: number,
+  anchorTop: number,
+  menuWidth: number,
+  menuHeight: number,
+  viewportLeft: number,
+  viewportTop: number,
+  viewportRight: number,
+  viewportBottom: number,
+): HtmlTableContextMenuPosition {
+  const offset = HANDLE_CROSS_AXIS_SIZE;
+  let left = anchorLeft + offset;
+  let top = scope === 'column'
+    ? anchorTop + offset
+    : scope === 'table'
+      ? anchorTop + offset
+      : anchorTop - menuHeight / 2;
+  let placement: HtmlTableContextMenuPlacement =
+    scope === 'column' ? 'bottom-center' : scope === 'table' ? 'right-start' : 'right-center';
+
+  if (scope === 'column') {
+    left = anchorLeft - menuWidth / 2;
+  }
+
+  if (left + menuWidth > viewportRight) {
+    if (scope === 'column') {
+      left = viewportRight - menuWidth;
+    } else {
+      left = anchorLeft - offset - menuWidth;
+      placement = scope === 'table' ? 'left-start' : 'left-center';
+    }
+  }
+
+  if (left < viewportLeft) {
+    left = viewportLeft;
+  }
+
+  if (scope === 'column' || scope === 'table') {
+    if (top + menuHeight > viewportBottom) {
+      top = anchorTop - offset - menuHeight;
+      placement = 'top-center';
+    }
+  }
+
+  if (top < viewportTop) {
+    top = viewportTop;
+  }
+
+  if (top + menuHeight > viewportBottom) {
+    top = Math.max(viewportTop, viewportBottom - menuHeight);
+  }
+
+  return {
+    left,
+    top,
+    placement,
   };
 }
 
@@ -881,22 +955,35 @@ class HtmlTableHandleOverlayView {
       this.resetContextMenuTypeahead();
       this.restoreContextMenuFocusIfNeeded();
       this.contextMenu.replaceChildren();
+      this.contextMenu.dataset.placement = '';
       this.contextMenu.style.removeProperty('left');
       this.contextMenu.style.removeProperty('top');
       this.lastContextMenuOpen = false;
       return;
     }
 
-    this.contextMenu.style.left = `${Math.max(
-      MIN_HANDLE_INSET,
-      wrapper.scrollLeft + renderState.left - wrapperRect.left + HANDLE_CROSS_AXIS_SIZE,
-    )}px`;
-    this.contextMenu.style.top = `${Math.max(
-      MIN_HANDLE_INSET,
-      wrapper.scrollTop + renderState.top - wrapperRect.top + HANDLE_CROSS_AXIS_SIZE,
-    )}px`;
-
     this.contextMenu.replaceChildren(...this.buildContextMenuGroups(menu));
+    const menuWidth = this.contextMenu.offsetWidth;
+    const menuHeight = this.contextMenu.offsetHeight;
+    const viewportLeft = wrapper.scrollLeft + MIN_HANDLE_INSET;
+    const viewportTop = wrapper.scrollTop + MIN_HANDLE_INSET;
+    const viewportRight = wrapper.scrollLeft + wrapper.clientWidth - MIN_HANDLE_INSET;
+    const viewportBottom = wrapper.scrollTop + wrapper.clientHeight - MIN_HANDLE_INSET;
+    const position = getHtmlTableContextMenuPosition(
+      renderState.scope ?? 'table',
+      wrapper.scrollLeft + renderState.left - wrapperRect.left,
+      wrapper.scrollTop + renderState.top - wrapperRect.top,
+      menuWidth,
+      menuHeight,
+      viewportLeft,
+      viewportTop,
+      viewportRight,
+      viewportBottom,
+    );
+
+    this.contextMenu.style.left = `${position.left}px`;
+    this.contextMenu.style.top = `${position.top}px`;
+    this.contextMenu.dataset.placement = position.placement;
     this.restoreContextMenuFocus(menu, focusedActionId);
   }
 
