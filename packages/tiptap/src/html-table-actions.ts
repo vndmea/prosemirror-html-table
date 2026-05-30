@@ -43,7 +43,11 @@ import {
   getHtmlTableSelectionScope,
   type HtmlTableSelectionScope,
 } from './html-table-handles.js';
-import { getTableSelectionInfo } from './table-utils.js';
+import {
+  createColumnSelectionTransaction,
+  createRowSelectionTransaction,
+  getTableSelectionInfo,
+} from './table-utils.js';
 
 export type HtmlTableContextActionId =
   | 'deleteTable'
@@ -359,13 +363,15 @@ export function runHtmlTableContextAction(
   action: HtmlTableContextAction,
   dispatch?: Parameters<Command>[1],
   options: HtmlTableCommandOptions = {},
+  interaction?: HtmlTableInteractionState,
 ): boolean {
   const command = getHtmlTableContextActionCommand(action, options);
+  const commandState = createContextActionCommandState(state, action, interaction) ?? state;
   if (!dispatch) {
-    return command(state);
+    return command(commandState);
   }
 
-  return command(state, (transaction) => {
+  return command(commandState, (transaction) => {
     dispatch(transaction.setMeta(htmlTableInteractionPluginKey, {
       contextMenuOpen: false,
     }));
@@ -477,6 +483,34 @@ function resolveTableScopeCommand(
 
     return baseCommand(selectionState, dispatch);
   };
+}
+
+function createContextActionCommandState(
+  state: EditorState,
+  action: HtmlTableContextAction,
+  interaction?: HtmlTableInteractionState,
+): EditorState | null {
+  if (!interaction?.activeTable) {
+    return null;
+  }
+
+  const table = interaction.activeTable.table;
+  const tablePos = interaction.activeTable.tablePos;
+  if (action.scope === 'row' && interaction.selectedAxis.kind === 'row' && interaction.selectedAxis.index !== null) {
+    const transaction = createRowSelectionTransaction(state, tablePos, table, interaction.selectedAxis.index);
+    return transaction ? state.apply(transaction) : null;
+  }
+
+  if (
+    action.scope === 'column' &&
+    interaction.selectedAxis.kind === 'column' &&
+    interaction.selectedAxis.index !== null
+  ) {
+    const transaction = createColumnSelectionTransaction(state, tablePos, table, interaction.selectedAxis.index);
+    return transaction ? state.apply(transaction) : null;
+  }
+
+  return null;
 }
 
 function createAction(

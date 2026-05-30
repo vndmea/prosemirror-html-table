@@ -1,5 +1,5 @@
 import { Schema } from 'prosemirror-model';
-import { EditorState, NodeSelection } from 'prosemirror-state';
+import { EditorState, NodeSelection, TextSelection } from 'prosemirror-state';
 import { describe, expect, it } from 'vitest';
 
 import { CellSelection, createHtmlTableNode, createHtmlTableNodeSpecs } from 'prosemirror-html-table';
@@ -497,6 +497,44 @@ describe('html table context actions', () => {
     expect(applied).toBe(true);
     expect(findNodePositions(transactionState.doc, 'htmlTableRow')).toHaveLength(3);
     expect(getHtmlTableInteractionState(transactionState).contextMenuOpen).toBe(false);
+  });
+
+  it('materializes a column selection before running column-scope context actions', () => {
+    const table = createHtmlTableNode(schema, { rows: 2, cols: 2 });
+    const doc = schema.nodes.doc!.create(null, [table]);
+    const cellPositions = findNodePositions(doc, 'htmlTableCell');
+    const baseState = EditorState.create({
+      schema,
+      doc,
+      selection: TextSelection.near(doc.resolve(cellPositions[0]! + 1)),
+      plugins: [createHtmlTableInteractionPlugin()],
+    });
+    const interactionState = baseState.apply(
+      baseState.tr.setMeta(htmlTableInteractionPluginKey, {
+        selectedAxis: {
+          kind: 'column',
+          index: 0,
+          tablePos: 0,
+        },
+        geometry: createGeometry(),
+        contextMenuOpen: true,
+      }),
+    );
+    const interaction = getHtmlTableInteractionState(interactionState);
+    const action = getHtmlTableContextActions(interactionState, interaction).find((item) => item.id === 'deleteColumn');
+
+    expect(action?.enabled).toBe(true);
+
+    let nextState = interactionState;
+    const applied = runHtmlTableContextAction(interactionState, action!, (transaction) => {
+      nextState = interactionState.apply(transaction);
+    }, {}, interaction);
+
+    expect(applied).toBe(true);
+    expect(
+      findNodePositions(nextState.doc, 'htmlTableHeaderCell').length +
+      findNodePositions(nextState.doc, 'htmlTableCell').length,
+    ).toBe(2);
   });
 
   it('groups actions into stable popover sections', () => {

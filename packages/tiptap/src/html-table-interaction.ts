@@ -144,7 +144,7 @@ function buildInteractionState(
       : previous && previous.activeTable?.tablePos === activeTable?.tablePos
         ? previous.geometry
         : null;
-  const contextTrigger = deriveContextTriggerState(activeTable, tableSelected, derivedSelectedAxis, geometry);
+  const contextTrigger = deriveContextTriggerState(activeTable, tableSelected, selectedAxis, geometry);
   const contextMenuOpen =
     meta.contextMenuOpen !== undefined
       ? Boolean(meta.contextMenuOpen) && contextTrigger.visible

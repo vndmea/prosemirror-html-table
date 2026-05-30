@@ -203,6 +203,7 @@ export function createSelectionDecorations(
       decorations.push(
         Decoration.node(cellPos, cellPos + cell.node.nodeSize, {
           class: classNames.join(' '),
+          'data-testid': 'pmht-selected-cell',
         }),
       );
     }

@@ -16,6 +16,7 @@ import {
   getNextHtmlTableContextMenuTypeaheadIndex,
   getHtmlTableOverlayHandleText,
   getHtmlTableContextTriggerRenderState,
+  isHtmlTableAxisHandleHovered,
   getHtmlTableSelectionAnchor,
   getHtmlTableSelectionScope,
   isHtmlTableContextMenuExpandedForScope,
@@ -707,6 +708,22 @@ describe('html table handles', () => {
     expect(shouldToggleHtmlTableContextMenuFromAxisHandle(rowInteraction, 'column', 1, 5)).toBe(false);
     expect(shouldToggleHtmlTableContextMenuFromAxisHandle(columnInteraction, 'column', 2, 5)).toBe(true);
     expect(shouldToggleHtmlTableContextMenuFromAxisHandle(columnInteraction, 'column', 2, 9)).toBe(false);
+  });
+
+  it('keeps axis handles hovered when the pointer moves onto table chrome', () => {
+    const interaction = createInteractionState({
+      hovered: {
+        kind: 'table',
+        tablePos: 5,
+        rowIndex: 1,
+        columnIndex: 2,
+      },
+    });
+
+    expect(isHtmlTableAxisHandleHovered(interaction, 'row', 5, 1)).toBe(true);
+    expect(isHtmlTableAxisHandleHovered(interaction, 'column', 5, 2)).toBe(true);
+    expect(isHtmlTableAxisHandleHovered(interaction, 'row', 5, 0)).toBe(false);
+    expect(isHtmlTableAxisHandleHovered(interaction, 'column', 9, 2)).toBe(false);
   });
 
   it('toggles the context menu directly from the selected table handle', () => {

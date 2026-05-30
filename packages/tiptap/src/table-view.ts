@@ -21,11 +21,13 @@ export class HtmlTableNodeView {
 
     this.wrapper = document.createElement('div');
     this.wrapper.dataset.htmlTableWrapper = 'true';
+    this.wrapper.dataset.testid = 'pmht-table-wrapper';
     this.wrapper.style.position = 'relative';
 
     this.table = document.createElement('table');
     this.table.className = 'html-table-node__table';
     this.table.dataset.htmlTable = 'true';
+    this.table.dataset.testid = 'pmht-table';
 
     this.wrapper.append(this.table);
     this.dom = this.wrapper;
@@ -78,6 +80,7 @@ export class HtmlTableNodeView {
 
     this.table.className = 'html-table-node__table';
     this.table.dataset.htmlTable = 'true';
+    this.table.dataset.testid = 'pmht-table';
 
     for (const [name, value] of Object.entries(this.htmlAttributes)) {
       if (value === null || value === undefined || value === false) continue;

@@ -271,6 +271,38 @@ describe('html table interaction plugin', () => {
     expect(getHtmlTableInteractionState(hiddenOpenState).contextTrigger.visible).toBe(false);
     expect(getHtmlTableInteractionState(hiddenOpenState).contextMenuOpen).toBe(false);
   });
+
+  it('keeps the context trigger visible for column handles that store axis state via plugin meta', () => {
+    const table = createHtmlTableNode(schema, { rows: 2, cols: 2 });
+    const doc = schema.nodes.doc!.create(null, [table]);
+    const cellPositions = findNodePositions(doc, 'htmlTableCell');
+    const baseState = EditorState.create({
+      schema,
+      doc,
+      selection: TextSelection.near(doc.resolve(cellPositions[0]! + 1)),
+      plugins: [createHtmlTableInteractionPlugin()],
+    });
+
+    const columnState = baseState.apply(
+      baseState.tr.setMeta(htmlTableInteractionPluginKey, {
+        selectedAxis: {
+          kind: 'column',
+          index: 1,
+          tablePos: 0,
+        },
+        geometry: createGeometry(),
+      }),
+    );
+    const openState = columnState.apply(
+      columnState.tr.setMeta(htmlTableInteractionPluginKey, {
+        contextMenuOpen: true,
+      }),
+    );
+
+    expect(getHtmlTableInteractionState(openState).selectedAxis.kind).toBe('column');
+    expect(getHtmlTableInteractionState(openState).contextTrigger.visible).toBe(true);
+    expect(getHtmlTableInteractionState(openState).contextMenuOpen).toBe(true);
+  });
 });
 
 function createGeometry() {

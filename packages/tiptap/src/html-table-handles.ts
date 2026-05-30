@@ -554,6 +554,23 @@ export function shouldToggleHtmlTableContextMenuFromTableHandle(
   return interaction.tableSelected && interaction.activeTable?.tablePos === tablePos;
 }
 
+export function isHtmlTableAxisHandleHovered(
+  interaction: HtmlTableInteractionState,
+  axis: 'row' | 'column',
+  tablePos: number,
+  index: number,
+): boolean {
+  if (interaction.hovered?.tablePos !== tablePos) {
+    return false;
+  }
+
+  if (axis === 'row') {
+    return interaction.hovered.rowIndex === index;
+  }
+
+  return interaction.hovered.columnIndex === index;
+}
+
 function containsEventTarget(
   element: Pick<Element, 'contains'>,
   target: EventTarget | null,
@@ -623,6 +640,7 @@ class HtmlTableHandleOverlayView {
     this.root = view.dom.ownerDocument.createElement('div');
     this.root.className = 'html-table-overlay';
     this.root.dataset.htmlTableOverlay = 'true';
+    this.root.dataset.testid = 'pmht-overlay';
     this.root.setAttribute('role', 'presentation');
     this.root.hidden = true;
     this.contextMenuId = `html-table-overlay-menu-${htmlTableContextMenuIdCounter += 1}`;
@@ -631,12 +649,15 @@ class HtmlTableHandleOverlayView {
     this.tableHandle = this.createTableHandle();
     this.rowSelectionOverlay = this.root.ownerDocument.createElement('div');
     this.rowSelectionOverlay.className = 'html-table-overlay__selection-band html-table-overlay__selection-band--row';
+    this.rowSelectionOverlay.dataset.testid = 'pmht-selection-band-row';
     this.columnSelectionOverlay = this.root.ownerDocument.createElement('div');
     this.columnSelectionOverlay.className =
       'html-table-overlay__selection-band html-table-overlay__selection-band--column';
+    this.columnSelectionOverlay.dataset.testid = 'pmht-selection-band-column';
     this.cellSelectionHandle = this.root.ownerDocument.createElement('button');
     this.cellSelectionHandle.type = 'button';
     this.cellSelectionHandle.className = 'html-table-overlay__cell-selection-handle';
+    this.cellSelectionHandle.dataset.testid = 'pmht-cell-handle';
     this.cellSelectionHandle.tabIndex = -1;
     this.cellSelectionHandle.hidden = true;
     this.cellSelectionHandle.setAttribute('aria-label', 'Selected cells handle');
@@ -723,10 +744,7 @@ class HtmlTableHandleOverlayView {
       handle.style.top = `${tableTop + row.top + row.height / 2}px`;
       handle.style.width = `${HANDLE_CROSS_AXIS_SIZE}px`;
       handle.style.height = `${Math.max(HANDLE_CROSS_AXIS_SIZE, row.height - HANDLE_MAIN_AXIS_INSET)}px`;
-      const isRowHovered =
-        interaction.hovered?.kind === 'cell' &&
-        interaction.hovered.tablePos === activeTable.tablePos &&
-        interaction.hovered.rowIndex === row.index;
+      const isRowHovered = isHtmlTableAxisHandleHovered(interaction, 'row', activeTable.tablePos, row.index);
       const isRowSelected =
         interaction.selectedAxis.kind === 'row' &&
         interaction.selectedAxis.index === row.index &&
@@ -771,10 +789,7 @@ class HtmlTableHandleOverlayView {
       handle.style.top = `${columnHandleTop}px`;
       handle.style.width = `${Math.max(HANDLE_CROSS_AXIS_SIZE, column.width - HANDLE_MAIN_AXIS_INSET)}px`;
       handle.style.height = `${HANDLE_CROSS_AXIS_SIZE}px`;
-      const isColumnHovered =
-        interaction.hovered?.kind === 'cell' &&
-        interaction.hovered.tablePos === activeTable.tablePos &&
-        interaction.hovered.columnIndex === column.index;
+      const isColumnHovered = isHtmlTableAxisHandleHovered(interaction, 'column', activeTable.tablePos, column.index);
       const isColumnSelected =
         interaction.selectedAxis.kind === 'column' &&
         interaction.selectedAxis.index === column.index &&
@@ -980,10 +995,16 @@ class HtmlTableHandleOverlayView {
     wrapperRect: DOMRect,
   ): void {
     const renderState = getHtmlTableContextTriggerRenderState(trigger);
+    const hasDedicatedScopeHandle =
+      renderState.scope === 'table' ||
+      renderState.scope === 'row' ||
+      renderState.scope === 'column' ||
+      renderState.scope === 'cell';
+    const visible = renderState.visible && !hasDedicatedScopeHandle;
     const controls = getHtmlTableContextMenuAriaControls(this.contextMenuId, renderState.expanded);
 
-    this.contextTriggerButton.hidden = !renderState.visible;
-    this.contextTriggerButton.tabIndex = renderState.visible ? 0 : -1;
+    this.contextTriggerButton.hidden = !visible;
+    this.contextTriggerButton.tabIndex = visible ? 0 : -1;
     this.contextTriggerButton.dataset.scope = renderState.scope ?? '';
     this.contextTriggerButton.dataset.primaryAction = renderState.primaryActionId ?? '';
     this.contextTriggerButton.setAttribute('aria-expanded', renderState.expanded ? 'true' : 'false');
@@ -997,7 +1018,7 @@ class HtmlTableHandleOverlayView {
     this.contextTriggerButton.title = renderState.title ?? renderState.label ?? '';
     this.root.dataset.contextMenuOpen = renderState.expanded ? 'true' : 'false';
 
-    if (!renderState.visible || renderState.left === null || renderState.top === null) {
+    if (!visible || renderState.left === null || renderState.top === null) {
       this.contextTriggerButton.style.removeProperty('left');
       this.contextTriggerButton.style.removeProperty('top');
       return;
@@ -1086,10 +1107,6 @@ class HtmlTableHandleOverlayView {
         contextMenuOpen: nextOpen,
       }),
     );
-
-    if (nextOpen) {
-      this.view.focus();
-    }
   }
 
   private syncCellSelectionHandle(
@@ -1157,6 +1174,7 @@ class HtmlTableHandleOverlayView {
     handle.type = 'button';
     handle.className = `html-table-overlay__handle html-table-overlay__handle--${axis}`;
     handle.dataset.axis = axis;
+    handle.dataset.testid = axis === 'row' ? 'pmht-row-handle' : 'pmht-column-handle';
     handle.tabIndex = -1;
     handle.addEventListener('mousedown', (event) => this.handleMouseDown(event));
     handle.addEventListener('click', (event) => this.handleHandleClick(event));
@@ -1167,6 +1185,7 @@ class HtmlTableHandleOverlayView {
     const handle = this.root.ownerDocument.createElement('button');
     handle.type = 'button';
     handle.className = 'html-table-overlay__handle html-table-overlay__handle--table';
+    handle.dataset.testid = 'pmht-table-handle';
     handle.tabIndex = -1;
     handle.hidden = true;
     handle.setAttribute('aria-label', 'Select table');
@@ -1181,6 +1200,7 @@ class HtmlTableHandleOverlayView {
     const button = this.root.ownerDocument.createElement('button');
     button.type = 'button';
     button.className = 'html-table-overlay__context-trigger';
+    button.dataset.testid = 'pmht-context-trigger';
     button.tabIndex = -1;
     button.hidden = true;
     button.setAttribute('aria-label', 'Context actions');
@@ -1194,6 +1214,7 @@ class HtmlTableHandleOverlayView {
     const menu = this.root.ownerDocument.createElement('div');
     menu.className = 'html-table-overlay__context-menu';
     menu.id = this.contextMenuId;
+    menu.dataset.testid = 'pmht-context-menu';
     menu.hidden = true;
     menu.setAttribute('role', 'menu');
     menu.setAttribute('aria-orientation', 'vertical');
@@ -1207,6 +1228,7 @@ class HtmlTableHandleOverlayView {
     const handle = this.root.ownerDocument.createElement('button');
     handle.type = 'button';
     handle.className = 'html-table-overlay__resize-handle';
+    handle.dataset.testid = 'pmht-resize-handle';
     handle.tabIndex = -1;
     handle.addEventListener('mousedown', (event) => this.handleResizeStart(event));
     return handle;
@@ -1825,6 +1847,7 @@ class HtmlTableHandleOverlayView {
         button.type = 'button';
         button.className = 'html-table-overlay__context-menu-action';
         button.dataset.actionId = action.id;
+        button.dataset.testid = 'pmht-context-menu-action';
         button.dataset.role = renderState.role;
         button.dataset.checked = renderState.checked ?? '';
         button.disabled = !action.enabled;

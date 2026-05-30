@@ -264,7 +264,9 @@ onBeforeUnmount(() => {
 
     <section class="content-grid">
       <div class="panel editor-panel">
-        <EditorContent v-if="editor" :editor="editor" />
+        <div data-testid="pmht-editor">
+          <EditorContent v-if="editor" :editor="editor" />
+        </div>
       </div>
     </section>
   </main>

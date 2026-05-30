@@ -147,6 +147,11 @@
   pointer-events: none;
 }
 
+.pmht-demo .editor-panel .html-table-overlay[hidden],
+.pmht-demo .editor-panel .html-table-overlay [hidden] {
+  display: none !important;
+}
+
 .pmht-demo .editor-panel .html-table-overlay__rows,
 .pmht-demo .editor-panel .html-table-overlay__columns {
   position: absolute;

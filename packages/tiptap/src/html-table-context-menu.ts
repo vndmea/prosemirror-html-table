@@ -133,7 +133,7 @@ export function runHtmlTableContextMenuAction(
     return false;
   }
 
-  return runHtmlTableContextAction(state, action, dispatch, options);
+  return runHtmlTableContextAction(state, action, dispatch, options, interaction);
 }
 
 const TRIGGER_LABELS: Record<HtmlTableSelectionScope, string> = {
