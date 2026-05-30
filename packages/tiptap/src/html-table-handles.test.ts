@@ -2,12 +2,14 @@ import { describe, expect, it } from 'vitest';
 
 import type { HtmlTableInteractionState } from './html-table-interaction.js';
 import {
+  getHtmlTableContextMenuRenderState,
   getHtmlTableContextTriggerRenderState,
   getHtmlTableSelectionAnchor,
   getHtmlTableSelectionScope,
   isTableHandleVisible,
 } from './html-table-handles.js';
 import type { HtmlTableContextTriggerButtonState } from './html-table-context-menu.js';
+import type { HtmlTableContextMenuState } from './html-table-context-menu.js';
 import type { HtmlTableGeometry } from './table-dom.js';
 
 function createInteractionState(
@@ -274,6 +276,62 @@ describe('html table handles', () => {
         title: null,
       scope: 'row',
       primaryActionId: null,
+    });
+  });
+
+  it('derives context menu render state from context menu state', () => {
+    const menu: HtmlTableContextMenuState = {
+      visible: true,
+      open: true,
+      scope: 'row',
+      anchor: {
+        left: 10,
+        top: 90,
+      },
+      actions: [],
+      groups: [
+        {
+          id: 'insert',
+          label: 'Insert',
+          actions: [],
+        },
+        {
+          id: 'danger',
+          label: 'Danger',
+          actions: [],
+        },
+      ],
+      primaryAction: {
+        id: 'addRowAfter',
+        label: 'Add row after',
+        scope: 'row',
+        enabled: true,
+      },
+    };
+
+    expect(getHtmlTableContextMenuRenderState(menu)).toEqual({
+      visible: true,
+      left: 10,
+      top: 90,
+      scope: 'row',
+      primaryActionId: 'addRowAfter',
+      groupCount: 2,
+    });
+
+    expect(
+      getHtmlTableContextMenuRenderState({
+        ...menu,
+        open: false,
+        anchor: null,
+        primaryAction: null,
+      }),
+    ).toEqual({
+      visible: false,
+      left: null,
+      top: null,
+      scope: 'row',
+      primaryActionId: null,
+      groupCount: 2,
     });
   });
 });

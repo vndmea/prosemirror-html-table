@@ -3,7 +3,11 @@ import type { EditorView } from '@tiptap/pm/view';
 import { addColumnAfter as addCoreColumnAfter, addRowAfter as addCoreRowAfter } from 'prosemirror-html-table';
 
 import type { HtmlTableTiptapOptions } from './options.js';
+import type { HtmlTableContextActionId } from './html-table-actions.js';
 import {
+  getHtmlTableContextMenuState,
+  runHtmlTableContextMenuAction,
+  type HtmlTableContextMenuState,
   getHtmlTableContextTriggerButtonState,
   type HtmlTableContextTriggerButtonState,
 } from './html-table-context-menu.js';
@@ -46,6 +50,15 @@ export interface HtmlTableContextTriggerRenderState {
   title: string | null;
   scope: HtmlTableSelectionScope | null;
   primaryActionId: string | null;
+}
+
+export interface HtmlTableContextMenuRenderState {
+  visible: boolean;
+  left: number | null;
+  top: number | null;
+  scope: HtmlTableSelectionScope | null;
+  primaryActionId: string | null;
+  groupCount: number;
 }
 
 export function isTableHandleVisible(
@@ -148,6 +161,19 @@ export function getHtmlTableContextTriggerRenderState(
   };
 }
 
+export function getHtmlTableContextMenuRenderState(
+  menu: HtmlTableContextMenuState,
+): HtmlTableContextMenuRenderState {
+  return {
+    visible: Boolean(menu.open && menu.anchor),
+    left: menu.anchor?.left ?? null,
+    top: menu.anchor?.top ?? null,
+    scope: menu.scope,
+    primaryActionId: menu.primaryAction?.id ?? null,
+    groupCount: menu.groups.length,
+  };
+}
+
 export function createHtmlTableHandlePlugin(options: HtmlTableTiptapOptions): Plugin {
   return new Plugin({
     key: htmlTableHandlePluginKey,
@@ -162,6 +188,7 @@ class HtmlTableHandleOverlayView {
   private readonly options: HtmlTableTiptapOptions;
   private readonly root: HTMLDivElement;
   private readonly contextTriggerButton: HTMLButtonElement;
+  private readonly contextMenu: HTMLDivElement;
   private readonly tableHandle: HTMLButtonElement;
   private readonly rowSelectionOverlay: HTMLDivElement;
   private readonly columnSelectionOverlay: HTMLDivElement;
@@ -192,6 +219,7 @@ class HtmlTableHandleOverlayView {
     this.root.setAttribute('role', 'presentation');
     this.root.hidden = true;
     this.contextTriggerButton = this.createContextTriggerButton();
+    this.contextMenu = this.createContextMenu();
     this.tableHandle = this.createTableHandle();
     this.rowSelectionOverlay = this.root.ownerDocument.createElement('div');
     this.rowSelectionOverlay.className = 'html-table-overlay__selection-band html-table-overlay__selection-band--row';
@@ -209,6 +237,7 @@ class HtmlTableHandleOverlayView {
     this.addColumnButton = this.createExtendButton('column');
     this.root.append(
       this.contextTriggerButton,
+      this.contextMenu,
       this.tableHandle,
       this.rowSelectionOverlay,
       this.columnSelectionOverlay,
@@ -257,12 +286,14 @@ class HtmlTableHandleOverlayView {
     const columnHandleTop = Math.max(MIN_HANDLE_INSET, tableTop - COLUMN_HANDLE_OFFSET);
     const selectionInfo = getTableSelectionInfo(this.view.state.doc, this.view.state.selection);
     const contextTrigger = getHtmlTableContextTriggerButtonState(this.view.state, interaction);
+    const contextMenu = getHtmlTableContextMenuState(this.view.state, interaction);
 
     this.syncHandleCount('row', geometry.rows.length);
     this.syncHandleCount('column', geometry.columns.length);
     this.syncResizeHandleCount(this.options.resizable ? geometry.columns.length : 0);
     this.syncSelectionContextState(interaction, activeTable.tablePos, geometry, tableLeft, tableTop, selectionInfo);
     this.syncContextTriggerButton(contextTrigger, context.wrapper, wrapperRect);
+    this.syncContextMenu(contextMenu, context.wrapper, wrapperRect);
     this.syncTableHandle(interaction, activeTable.tablePos, rowHandleLeft, columnHandleTop);
     this.syncSelectionOverlay(interaction, activeTable.tablePos, geometry, tableLeft, tableTop);
     this.syncCellSelectionHandle(activeTable.tablePos, geometry, tableLeft, tableTop, selectionInfo);
@@ -503,6 +534,36 @@ class HtmlTableHandleOverlayView {
     )}px`;
   }
 
+  private syncContextMenu(
+    menu: HtmlTableContextMenuState,
+    wrapper: HTMLElement,
+    wrapperRect: DOMRect,
+  ): void {
+    const renderState = getHtmlTableContextMenuRenderState(menu);
+
+    this.contextMenu.hidden = !renderState.visible;
+    this.contextMenu.dataset.scope = renderState.scope ?? '';
+    this.contextMenu.dataset.primaryAction = renderState.primaryActionId ?? '';
+
+    if (!renderState.visible || renderState.left === null || renderState.top === null) {
+      this.contextMenu.replaceChildren();
+      this.contextMenu.style.removeProperty('left');
+      this.contextMenu.style.removeProperty('top');
+      return;
+    }
+
+    this.contextMenu.style.left = `${Math.max(
+      MIN_HANDLE_INSET,
+      wrapper.scrollLeft + renderState.left - wrapperRect.left + HANDLE_CROSS_AXIS_SIZE,
+    )}px`;
+    this.contextMenu.style.top = `${Math.max(
+      MIN_HANDLE_INSET,
+      wrapper.scrollTop + renderState.top - wrapperRect.top + HANDLE_CROSS_AXIS_SIZE,
+    )}px`;
+
+    this.contextMenu.replaceChildren(...this.buildContextMenuGroups(menu));
+  }
+
   private syncCellSelectionHandle(
     tablePos: number,
     geometry: ReturnType<typeof measureHtmlTableGeometry>,
@@ -575,6 +636,15 @@ class HtmlTableHandleOverlayView {
     button.setAttribute('aria-label', 'Context actions');
     button.addEventListener('mousedown', (event) => this.handleContextTriggerMouseDown(event));
     return button;
+  }
+
+  private createContextMenu(): HTMLDivElement {
+    const menu = this.root.ownerDocument.createElement('div');
+    menu.className = 'html-table-overlay__context-menu';
+    menu.hidden = true;
+    menu.setAttribute('role', 'menu');
+    menu.addEventListener('mousedown', (event) => this.handleContextMenuMouseDown(event));
+    return menu;
   }
 
   private createResizeHandle(): HTMLButtonElement {
@@ -673,6 +743,27 @@ class HtmlTableHandleOverlayView {
         contextMenuOpen: !interaction.contextMenuOpen,
       }),
     );
+    this.view.focus();
+  }
+
+  private handleContextMenuMouseDown(event: MouseEvent): void {
+    const target =
+      event.target instanceof HTMLElement ? event.target.closest('button[data-action-id]') as HTMLButtonElement | null : null;
+    const actionId = target?.dataset.actionId;
+    if (!actionId) {
+      event.preventDefault();
+      event.stopPropagation();
+      this.view.focus();
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    const interaction = getHtmlTableInteractionState(this.view.state);
+    runHtmlTableContextMenuAction(this.view.state, interaction, actionId as HtmlTableContextActionId, (transaction) => {
+      this.view.dispatch(transaction);
+    });
     this.view.focus();
   }
 
@@ -896,5 +987,34 @@ class HtmlTableHandleOverlayView {
     if (index < 0 || index >= totalColumns) return false;
     if (this.options.lastColumnResizable) return true;
     return index < totalColumns - 1;
+  }
+
+  private buildContextMenuGroups(menu: HtmlTableContextMenuState): HTMLElement[] {
+    return menu.groups.map((group) => {
+      const groupElement = this.root.ownerDocument.createElement('div');
+      groupElement.className = 'html-table-overlay__context-menu-group';
+      groupElement.dataset.group = group.id;
+
+      const label = this.root.ownerDocument.createElement('div');
+      label.className = 'html-table-overlay__context-menu-group-label';
+      label.textContent = group.label;
+      groupElement.append(label);
+
+      for (const action of group.actions) {
+        const button = this.root.ownerDocument.createElement('button');
+        button.type = 'button';
+        button.className = 'html-table-overlay__context-menu-action';
+        button.dataset.actionId = action.id;
+        button.disabled = !action.enabled;
+        button.textContent = action.label;
+        button.setAttribute('role', 'menuitem');
+        button.setAttribute('aria-pressed', action.active ? 'true' : 'false');
+        button.classList.toggle('is-active', Boolean(action.active));
+        button.classList.toggle('is-destructive', Boolean(action.destructive));
+        groupElement.append(button);
+      }
+
+      return groupElement;
+    });
   }
 }

@@ -315,6 +315,100 @@
   box-shadow: 0 5px 14px rgba(37, 99, 235, 0.2);
 }
 
+.pmht-demo .editor-panel .html-table-overlay__context-trigger {
+  position: absolute;
+  z-index: 4;
+  min-width: 0;
+  width: 1.35rem;
+  height: 1.35rem;
+  padding: 0;
+  border: 1px solid rgba(37, 99, 235, 0.3);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow: 0 6px 16px rgba(15, 23, 42, 0.14);
+  color: #2563eb;
+  font-size: 0.8rem;
+  font-weight: 700;
+  line-height: 1;
+  pointer-events: auto;
+  transform: translate(-50%, -50%);
+}
+
+.pmht-demo .editor-panel .html-table-overlay__context-trigger[aria-expanded="true"] {
+  background: #2563eb;
+  border-color: #1d4ed8;
+  box-shadow: 0 8px 18px rgba(37, 99, 235, 0.28);
+  color: #ffffff;
+}
+
+.pmht-demo .editor-panel .html-table-overlay__context-menu {
+  position: absolute;
+  z-index: 4;
+  display: grid;
+  gap: 0.45rem;
+  min-width: 12rem;
+  max-width: 16rem;
+  padding: 0.55rem;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  border-radius: 0.9rem;
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow: 0 16px 36px rgba(15, 23, 42, 0.18);
+  pointer-events: auto;
+}
+
+.pmht-demo .editor-panel .html-table-overlay__context-menu-group {
+  display: grid;
+  gap: 0.28rem;
+}
+
+.pmht-demo .editor-panel .html-table-overlay__context-menu-group:not(:last-child) {
+  padding-bottom: 0.45rem;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.9);
+}
+
+.pmht-demo .editor-panel .html-table-overlay__context-menu-group-label {
+  color: #64748b;
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.pmht-demo .editor-panel .html-table-overlay__context-menu-action {
+  width: 100%;
+  min-width: 0;
+  padding: 0.42rem 0.55rem;
+  border: 0;
+  border-radius: 0.6rem;
+  background: transparent;
+  color: #0f172a;
+  font-size: 0.78rem;
+  font-weight: 600;
+  line-height: 1.2;
+  text-align: left;
+  pointer-events: auto;
+}
+
+.pmht-demo .editor-panel .html-table-overlay__context-menu-action:hover:not(:disabled),
+.pmht-demo .editor-panel .html-table-overlay__context-menu-action.is-active {
+  background: rgba(37, 99, 235, 0.1);
+  color: #1d4ed8;
+}
+
+.pmht-demo .editor-panel .html-table-overlay__context-menu-action.is-destructive {
+  color: #b91c1c;
+}
+
+.pmht-demo .editor-panel .html-table-overlay__context-menu-action.is-destructive:hover:not(:disabled) {
+  background: rgba(220, 38, 38, 0.08);
+  color: #991b1b;
+}
+
+.pmht-demo .editor-panel .html-table-overlay__context-menu-action:disabled {
+  color: #94a3b8;
+  cursor: default;
+}
+
 .pmht-demo .editor-panel .html-table-overlay--resizing,
 .pmht-demo .editor-panel .html-table-overlay--resizing * {
   cursor: col-resize;
