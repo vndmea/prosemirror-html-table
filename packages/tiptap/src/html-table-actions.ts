@@ -30,6 +30,8 @@ import {
   setColgroup,
   sortBodyRowsByColumn,
   toggleHeaderCell,
+  toggleHeaderColumn,
+  toggleHeaderRow,
   type HtmlTableCommandOptions,
 } from 'prosemirror-html-table';
 
@@ -51,6 +53,7 @@ export type HtmlTableContextActionId =
   | 'moveRowUp'
   | 'moveRowDown'
   | 'duplicateRow'
+  | 'toggleHeaderRow'
   | 'clearRowContent'
   | 'moveRowToHead'
   | 'moveRowToBody'
@@ -61,6 +64,7 @@ export type HtmlTableContextActionId =
   | 'moveColumnLeft'
   | 'moveColumnRight'
   | 'duplicateColumn'
+  | 'toggleHeaderColumn'
   | 'clearColumnContent'
   | 'sortBodyRowsAsc'
   | 'sortBodyRowsDesc'
@@ -145,6 +149,7 @@ export function getHtmlTableContextActions(
   }
 
   if (scope === 'row') {
+    const rowHeaderActive = areSelectedCellsHeader(selectionInfo);
     return [
       createAction('addRowBefore', scope, addRowBefore(options), state),
       createAction('addRowAfter', scope, addRowAfter(options), state),
@@ -152,6 +157,13 @@ export function getHtmlTableContextActions(
       createAction('moveRowUp', scope, moveRowUp(options), state),
       createAction('moveRowDown', scope, moveRowDown(options), state),
       createAction('duplicateRow', scope, duplicateRow(options), state),
+      createAction(
+        'toggleHeaderRow',
+        scope,
+        toggleHeaderRow(options),
+        state,
+        rowHeaderActive === undefined ? {} : { active: rowHeaderActive },
+      ),
       createAction('clearRowContent', scope, clearRowContent(options), state),
       createAction('moveRowToHead', scope, moveRowToHead(options), state),
       createAction('moveRowToBody', scope, moveRowToBody(options), state),
@@ -160,6 +172,7 @@ export function getHtmlTableContextActions(
   }
 
   if (scope === 'column') {
+    const columnHeaderActive = areSelectedCellsHeader(selectionInfo);
     return [
       createAction('addColumnBefore', scope, addColumnBefore(options), state),
       createAction('addColumnAfter', scope, addColumnAfter(options), state),
@@ -167,6 +180,13 @@ export function getHtmlTableContextActions(
       createAction('moveColumnLeft', scope, moveColumnLeft(options), state),
       createAction('moveColumnRight', scope, moveColumnRight(options), state),
       createAction('duplicateColumn', scope, duplicateColumn(options), state),
+      createAction(
+        'toggleHeaderColumn',
+        scope,
+        toggleHeaderColumn(options),
+        state,
+        columnHeaderActive === undefined ? {} : { active: columnHeaderActive },
+      ),
       createAction('clearColumnContent', scope, clearColumnContent(options), state),
       createAction('sortBodyRowsAsc', scope, sortBodyRowsByColumn({ direction: 'asc', ...options }), state),
       createAction('sortBodyRowsDesc', scope, sortBodyRowsByColumn({ direction: 'desc', ...options }), state),
@@ -175,6 +195,7 @@ export function getHtmlTableContextActions(
 
   const textAlign = getCommonSelectedCellAttribute(state, selectionInfo, 'textAlign');
   const verticalAlign = getCommonSelectedCellAttribute(state, selectionInfo, 'verticalAlign');
+  const headerCellActive = areSelectedCellsHeader(selectionInfo);
 
   return [
     createAction('setCellTextAlignLeft', scope, setCellTextAlign('left', options), state, {
@@ -197,7 +218,13 @@ export function getHtmlTableContextActions(
     }),
     createAction('clearSelectedCells', scope, clearSelectedCells(options), state),
     createAction('mergeOrSplitCells', scope, mergeOrSplit(options), state),
-    createAction('toggleHeaderCell', scope, toggleHeaderCell(options), state),
+    createAction(
+      'toggleHeaderCell',
+      scope,
+      toggleHeaderCell(options),
+      state,
+      headerCellActive === undefined ? {} : { active: headerCellActive },
+    ),
   ];
 }
 
@@ -226,6 +253,8 @@ export function getHtmlTableContextActionCommand(
       return moveRowDown(options);
     case 'duplicateRow':
       return duplicateRow(options);
+    case 'toggleHeaderRow':
+      return toggleHeaderRow(options);
     case 'clearRowContent':
       return clearRowContent(options);
     case 'moveRowToHead':
@@ -246,6 +275,8 @@ export function getHtmlTableContextActionCommand(
       return moveColumnRight(options);
     case 'duplicateColumn':
       return duplicateColumn(options);
+    case 'toggleHeaderColumn':
+      return toggleHeaderColumn(options);
     case 'clearColumnContent':
       return clearColumnContent(options);
     case 'sortBodyRowsAsc':
@@ -433,6 +464,16 @@ function getCommonSelectedCellAttribute(
   return commonValue;
 }
 
+function areSelectedCellsHeader(
+  selectionInfo: ReturnType<typeof getTableSelectionInfo> | null,
+): boolean | undefined {
+  if (!selectionInfo?.cells.length) {
+    return undefined;
+  }
+
+  return selectionInfo.cells.every((cell) => cell.node.type.name === 'htmlTableHeaderCell');
+}
+
 const ACTION_LABELS: Record<HtmlTableContextActionId, string> = {
   deleteTable: 'Delete table',
   toggleColgroup: 'Toggle colgroup',
@@ -444,6 +485,7 @@ const ACTION_LABELS: Record<HtmlTableContextActionId, string> = {
   moveRowUp: 'Move row up',
   moveRowDown: 'Move row down',
   duplicateRow: 'Duplicate row',
+  toggleHeaderRow: 'Toggle header row',
   clearRowContent: 'Clear row',
   moveRowToHead: 'Move row to header',
   moveRowToBody: 'Move row to body',
@@ -454,6 +496,7 @@ const ACTION_LABELS: Record<HtmlTableContextActionId, string> = {
   moveColumnLeft: 'Move column left',
   moveColumnRight: 'Move column right',
   duplicateColumn: 'Duplicate column',
+  toggleHeaderColumn: 'Toggle header column',
   clearColumnContent: 'Clear column',
   sortBodyRowsAsc: 'Sort ascending',
   sortBodyRowsDesc: 'Sort descending',
@@ -479,6 +522,7 @@ const ACTION_GROUPS: Record<HtmlTableContextActionId, HtmlTableContextActionGrou
   moveRowUp: 'reorder',
   moveRowDown: 'reorder',
   duplicateRow: 'structure',
+  toggleHeaderRow: 'structure',
   clearRowContent: 'content',
   moveRowToHead: 'section',
   moveRowToBody: 'section',
@@ -489,6 +533,7 @@ const ACTION_GROUPS: Record<HtmlTableContextActionId, HtmlTableContextActionGrou
   moveColumnLeft: 'reorder',
   moveColumnRight: 'reorder',
   duplicateColumn: 'structure',
+  toggleHeaderColumn: 'structure',
   clearColumnContent: 'content',
   sortBodyRowsAsc: 'structure',
   sortBodyRowsDesc: 'structure',

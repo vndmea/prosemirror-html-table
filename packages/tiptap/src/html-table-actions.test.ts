@@ -80,6 +80,7 @@ describe('html table context actions', () => {
       'moveRowUp',
       'moveRowDown',
       'duplicateRow',
+      'toggleHeaderRow',
       'clearRowContent',
       'moveRowToHead',
       'moveRowToBody',
@@ -110,6 +111,7 @@ describe('html table context actions', () => {
       'moveColumnLeft',
       'moveColumnRight',
       'duplicateColumn',
+      'toggleHeaderColumn',
       'clearColumnContent',
       'sortBodyRowsAsc',
       'sortBodyRowsDesc',
@@ -195,6 +197,96 @@ describe('html table context actions', () => {
     );
     expect(verticalActions.find((action) => action.id === 'setCellVerticalAlignMiddle')?.active).toBe(true);
     expect(verticalActions.find((action) => action.id === 'setCellVerticalAlignTop')?.active).toBeFalsy();
+  });
+
+  it('marks toggleHeaderCell as active when the current cell selection is header cells', () => {
+    const table = createHtmlTableNode(schema, { rows: 2, cols: 2 });
+    const doc = schema.nodes.doc!.create(null, [table]);
+    const cellPositions = findNodePositions(doc, 'htmlTableCell');
+    const state = EditorState.create({
+      schema,
+      doc,
+      selection: CellSelection.create(doc, cellPositions[0]!),
+      plugins: [createHtmlTableInteractionPlugin()],
+    });
+
+    let headerCellState = state;
+    const toggled = getHtmlTableContextActionCommand({
+      id: 'toggleHeaderCell',
+      label: 'Toggle header cell',
+      scope: 'cell',
+      enabled: true,
+    })(state, (transaction) => {
+      headerCellState = state.apply(transaction);
+    });
+
+    expect(toggled).toBe(true);
+    headerCellState = headerCellState.apply(
+      headerCellState.tr.setSelection(CellSelection.create(headerCellState.doc, cellPositions[0]!)),
+    );
+
+    const actions = getHtmlTableContextActions(headerCellState, getHtmlTableInteractionState(headerCellState));
+    expect(actions.find((action) => action.id === 'toggleHeaderCell')?.active).toBe(true);
+  });
+
+  it('marks row and column header toggle actions as active when the selection is fully header cells', () => {
+    const table = createHtmlTableNode(schema, { rows: 2, cols: 2 });
+    const doc = schema.nodes.doc!.create(null, [table]);
+    const cellPositions = findNodePositions(doc, 'htmlTableCell');
+    const state = EditorState.create({
+      schema,
+      doc,
+      selection: CellSelection.create(doc, cellPositions[0]!),
+      plugins: [createHtmlTableInteractionPlugin()],
+    });
+
+    let rowHeaderState = state.apply(createRowSelectionTransaction(state, 0, table, 0)!);
+    const toggledRow = getHtmlTableContextActionCommand({
+      id: 'toggleHeaderRow',
+      label: 'Toggle header row',
+      scope: 'row',
+      enabled: true,
+    })(rowHeaderState, (transaction) => {
+      rowHeaderState = rowHeaderState.apply(transaction);
+    });
+    expect(toggledRow).toBe(true);
+    rowHeaderState = rowHeaderState.apply(
+      rowHeaderState.tr.setSelection(CellSelection.create(rowHeaderState.doc, cellPositions[0]!)),
+    );
+    rowHeaderState = rowHeaderState.apply(
+      createRowSelectionTransaction(
+        rowHeaderState,
+        0,
+        rowHeaderState.doc.firstChild as typeof table,
+        0,
+      )!,
+    );
+    const rowActions = getHtmlTableContextActions(rowHeaderState, getHtmlTableInteractionState(rowHeaderState));
+    expect(rowActions.find((action) => action.id === 'toggleHeaderRow')?.active).toBe(true);
+
+    let columnHeaderState = state.apply(createColumnSelectionTransaction(state, 0, table, 0)!);
+    const toggledColumn = getHtmlTableContextActionCommand({
+      id: 'toggleHeaderColumn',
+      label: 'Toggle header column',
+      scope: 'column',
+      enabled: true,
+    })(columnHeaderState, (transaction) => {
+      columnHeaderState = columnHeaderState.apply(transaction);
+    });
+    expect(toggledColumn).toBe(true);
+    columnHeaderState = columnHeaderState.apply(
+      columnHeaderState.tr.setSelection(CellSelection.create(columnHeaderState.doc, cellPositions[0]!)),
+    );
+    columnHeaderState = columnHeaderState.apply(
+      createColumnSelectionTransaction(
+        columnHeaderState,
+        0,
+        columnHeaderState.doc.firstChild as typeof table,
+        0,
+      )!,
+    );
+    const columnActions = getHtmlTableContextActions(columnHeaderState, getHtmlTableInteractionState(columnHeaderState));
+    expect(columnActions.find((action) => action.id === 'toggleHeaderColumn')?.active).toBe(true);
   });
 
   it('resolves executable commands from context actions', () => {

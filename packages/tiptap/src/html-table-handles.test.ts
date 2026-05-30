@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { HtmlTableInteractionState } from './html-table-interaction.js';
 import {
+  getHtmlTableCellContextTriggerRenderState,
   getHtmlTableContextMenuRenderState,
   getHtmlTableContextTriggerRenderState,
   getHtmlTableSelectionAnchor,
@@ -337,13 +338,61 @@ describe('html table handles', () => {
     });
   });
 
-  it('keeps the context menu open for trigger and menu clicks, and closes it for outside targets', () => {
+  it('derives cell context trigger render state from cell menu state', () => {
+    const menu: HtmlTableContextMenuState = {
+      visible: true,
+      open: true,
+      scope: 'cell',
+      anchor: {
+        left: 10,
+        top: 90,
+      },
+      actions: [],
+      groups: [],
+      primaryAction: {
+        id: 'clearSelectedCells',
+        label: 'Clear selected cells',
+        scope: 'cell',
+        enabled: true,
+      },
+    };
+
+    expect(getHtmlTableCellContextTriggerRenderState(menu)).toEqual({
+      visible: true,
+      expanded: true,
+      label: 'Cell actions',
+      title: 'Cell actions: Clear selected cells',
+      primaryActionId: 'clearSelectedCells',
+    });
+
+    expect(
+      getHtmlTableCellContextTriggerRenderState({
+        ...menu,
+        scope: 'row',
+        open: false,
+      }),
+    ).toEqual({
+      visible: false,
+      expanded: false,
+      label: null,
+      title: null,
+      primaryActionId: null,
+    });
+  });
+
+  it('keeps the context menu open for trigger, cell handle, and menu clicks, and closes it for outside targets', () => {
     const triggerChild = {} as EventTarget;
+    const cellHandleChild = {} as EventTarget;
     const menuChild = {} as EventTarget;
     const outside = {} as EventTarget;
     const trigger = {
       contains(candidate: unknown) {
         return candidate === this || candidate === triggerChild;
+      },
+    } as HTMLButtonElement;
+    const cellHandle = {
+      contains(candidate: unknown) {
+        return candidate === this || candidate === cellHandleChild;
       },
     } as HTMLButtonElement;
     const menu = {
@@ -352,12 +401,14 @@ describe('html table handles', () => {
       },
     } as HTMLDivElement;
 
-    expect(shouldCloseHtmlTableContextMenuForTarget(trigger, trigger, menu)).toBe(false);
-    expect(shouldCloseHtmlTableContextMenuForTarget(triggerChild, trigger, menu)).toBe(false);
-    expect(shouldCloseHtmlTableContextMenuForTarget(menu, trigger, menu)).toBe(false);
-    expect(shouldCloseHtmlTableContextMenuForTarget(menuChild, trigger, menu)).toBe(false);
-    expect(shouldCloseHtmlTableContextMenuForTarget(outside, trigger, menu)).toBe(true);
-    expect(shouldCloseHtmlTableContextMenuForTarget(null, trigger, menu)).toBe(true);
+    expect(shouldCloseHtmlTableContextMenuForTarget(trigger, trigger, cellHandle, menu)).toBe(false);
+    expect(shouldCloseHtmlTableContextMenuForTarget(triggerChild, trigger, cellHandle, menu)).toBe(false);
+    expect(shouldCloseHtmlTableContextMenuForTarget(cellHandle, trigger, cellHandle, menu)).toBe(false);
+    expect(shouldCloseHtmlTableContextMenuForTarget(cellHandleChild, trigger, cellHandle, menu)).toBe(false);
+    expect(shouldCloseHtmlTableContextMenuForTarget(menu, trigger, cellHandle, menu)).toBe(false);
+    expect(shouldCloseHtmlTableContextMenuForTarget(menuChild, trigger, cellHandle, menu)).toBe(false);
+    expect(shouldCloseHtmlTableContextMenuForTarget(outside, trigger, cellHandle, menu)).toBe(true);
+    expect(shouldCloseHtmlTableContextMenuForTarget(null, trigger, cellHandle, menu)).toBe(true);
   });
 
   it('uses Escape as the context menu dismiss key', () => {

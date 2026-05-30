@@ -61,6 +61,14 @@ export interface HtmlTableContextMenuRenderState {
   groupCount: number;
 }
 
+export interface HtmlTableCellContextTriggerRenderState {
+  visible: boolean;
+  expanded: boolean;
+  label: string | null;
+  title: string | null;
+  primaryActionId: string | null;
+}
+
 export function isTableHandleVisible(
   allowTableNodeSelection: boolean,
   interaction: HtmlTableInteractionState,
@@ -176,14 +184,26 @@ export function getHtmlTableContextMenuRenderState(
 
 export function shouldCloseHtmlTableContextMenuForTarget(
   target: EventTarget | null,
-  triggerButton: HTMLButtonElement,
-  menu: HTMLDivElement,
+  ...elements: Array<Pick<Element, 'contains'> | null>
 ): boolean {
-  return !containsEventTarget(triggerButton, target) && !containsEventTarget(menu, target);
+  return !elements.some((element) => element && containsEventTarget(element, target));
 }
 
 export function isHtmlTableContextMenuDismissKey(key: string): boolean {
   return key === 'Escape';
+}
+
+export function getHtmlTableCellContextTriggerRenderState(
+  menu: HtmlTableContextMenuState,
+): HtmlTableCellContextTriggerRenderState {
+  const visible = menu.visible && menu.scope === 'cell';
+  return {
+    visible,
+    expanded: visible && menu.open,
+    label: visible ? 'Cell actions' : null,
+    title: visible && menu.primaryAction ? `Cell actions: ${menu.primaryAction.label}` : visible ? 'Cell actions' : null,
+    primaryActionId: visible ? menu.primaryAction?.id ?? null : null,
+  };
 }
 
 function containsEventTarget(
@@ -266,6 +286,7 @@ class HtmlTableHandleOverlayView {
     this.cellSelectionHandle.hidden = true;
     this.cellSelectionHandle.setAttribute('aria-label', 'Selected cells handle');
     this.cellSelectionHandle.title = 'Selected cells handle';
+    this.cellSelectionHandle.addEventListener('mousedown', (event) => this.handleCellSelectionHandleMouseDown(event));
     this.addRowButton = this.createExtendButton('row');
     this.addColumnButton = this.createExtendButton('column');
     this.root.append(
@@ -333,7 +354,7 @@ class HtmlTableHandleOverlayView {
     this.syncContextMenu(contextMenu, context.wrapper, wrapperRect);
     this.syncTableHandle(interaction, activeTable.tablePos, rowHandleLeft, columnHandleTop);
     this.syncSelectionOverlay(interaction, activeTable.tablePos, geometry, tableLeft, tableTop);
-    this.syncCellSelectionHandle(activeTable.tablePos, geometry, tableLeft, tableTop, selectionInfo);
+    this.syncCellSelectionHandle(contextMenu, activeTable.tablePos, geometry, tableLeft, tableTop, selectionInfo);
     this.syncExtendButtons(tableLeft, tableTop, geometry);
 
     for (const row of geometry.rows) {
@@ -602,6 +623,7 @@ class HtmlTableHandleOverlayView {
   }
 
   private syncCellSelectionHandle(
+    menu: HtmlTableContextMenuState,
     tablePos: number,
     geometry: ReturnType<typeof measureHtmlTableGeometry>,
     tableLeft: number,
@@ -609,6 +631,7 @@ class HtmlTableHandleOverlayView {
     selectionInfo: ReturnType<typeof getTableSelectionInfo> | null,
   ): void {
     const interaction = getHtmlTableInteractionState(this.view.state);
+    const renderState = getHtmlTableCellContextTriggerRenderState(menu);
     if (interaction.tableSelected) {
       this.cellSelectionHandle.hidden = true;
       return;
@@ -640,6 +663,10 @@ class HtmlTableHandleOverlayView {
     this.cellSelectionHandle.hidden = false;
     this.cellSelectionHandle.style.left = `${selectionRight - 1}px`;
     this.cellSelectionHandle.style.top = `${selectionTop + (selectionBottom - selectionTop) / 2}px`;
+    this.cellSelectionHandle.dataset.primaryAction = renderState.primaryActionId ?? '';
+    this.cellSelectionHandle.setAttribute('aria-expanded', renderState.expanded ? 'true' : 'false');
+    this.cellSelectionHandle.setAttribute('aria-label', renderState.label ?? 'Cell actions');
+    this.cellSelectionHandle.title = renderState.title ?? renderState.label ?? 'Cell actions';
   }
 
   private createHandle(axis: 'row' | 'column'): HTMLButtonElement {
@@ -804,13 +831,37 @@ class HtmlTableHandleOverlayView {
     this.view.focus();
   }
 
+  private handleCellSelectionHandleMouseDown(event: MouseEvent): void {
+    event.preventDefault();
+    event.stopPropagation();
+    const interaction = getHtmlTableInteractionState(this.view.state);
+    const menu = getHtmlTableContextMenuState(this.view.state, interaction);
+    const renderState = getHtmlTableCellContextTriggerRenderState(menu);
+    if (!renderState.visible) {
+      this.view.focus();
+      return;
+    }
+
+    this.view.dispatch(
+      this.view.state.tr.setMeta(htmlTableInteractionPluginKey, {
+        contextMenuOpen: !interaction.contextMenuOpen,
+      }),
+    );
+    this.view.focus();
+  }
+
   private handleDocumentMouseDown(event: MouseEvent): void {
     const interaction = getHtmlTableInteractionState(this.view.state);
     if (!interaction.contextMenuOpen) {
       return;
     }
 
-    if (!shouldCloseHtmlTableContextMenuForTarget(event.target, this.contextTriggerButton, this.contextMenu)) {
+    if (!shouldCloseHtmlTableContextMenuForTarget(
+      event.target,
+      this.contextTriggerButton,
+      this.cellSelectionHandle,
+      this.contextMenu,
+    )) {
       return;
     }
 
