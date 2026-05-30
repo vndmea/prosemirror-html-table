@@ -4,6 +4,7 @@ import type { HtmlTableInteractionState } from './html-table-interaction.js';
 import {
   canRestoreHtmlTableContextMenuFocus,
   getHtmlTableCellContextTriggerRenderState,
+  getHtmlTableContextMenuAriaControls,
   getHtmlTableContextMenuRenderState,
   getNextHtmlTableContextMenuActionIndex,
   getHtmlTableContextTriggerRenderState,
@@ -362,6 +363,11 @@ describe('html table handles', () => {
     expect(isHtmlTableContextMenuExpandedForScope(menu, 'row')).toBe(true);
     expect(isHtmlTableContextMenuExpandedForScope(menu, 'table')).toBe(false);
     expect(isHtmlTableContextMenuExpandedForScope({ ...menu, open: false }, 'row')).toBe(false);
+  });
+
+  it('only exposes aria-controls when the related context menu is expanded', () => {
+    expect(getHtmlTableContextMenuAriaControls('pmht-menu-1', true)).toBe('pmht-menu-1');
+    expect(getHtmlTableContextMenuAriaControls('pmht-menu-1', false)).toBeNull();
   });
 
   it('derives cell context trigger render state from cell menu state', () => {

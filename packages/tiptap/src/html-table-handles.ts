@@ -31,6 +31,7 @@ const MIN_HANDLE_INSET = 8;
 const EXTEND_BUTTON_OFFSET = 14;
 const HANDLE_CROSS_AXIS_SIZE = 12;
 const HANDLE_MAIN_AXIS_INSET = 8;
+let htmlTableContextMenuIdCounter = 0;
 
 export const htmlTableHandlePluginKey = new PluginKey('html-table-handle-overlay');
 
@@ -189,6 +190,13 @@ export function isHtmlTableContextMenuExpandedForScope(
   return menu.open && menu.scope === scope;
 }
 
+export function getHtmlTableContextMenuAriaControls(
+  menuId: string,
+  expanded: boolean,
+): string | null {
+  return expanded ? menuId : null;
+}
+
 export function shouldCloseHtmlTableContextMenuForTarget(
   target: EventTarget | null,
   ...elements: Array<Pick<Element, 'contains'> | null>
@@ -309,6 +317,7 @@ class HtmlTableHandleOverlayView {
   private view: EditorView;
   private readonly options: HtmlTableTiptapOptions;
   private readonly root: HTMLDivElement;
+  private readonly contextMenuId: string;
   private readonly contextTriggerButton: HTMLButtonElement;
   private readonly contextMenu: HTMLDivElement;
   private readonly tableHandle: HTMLButtonElement;
@@ -345,6 +354,7 @@ class HtmlTableHandleOverlayView {
     this.root.dataset.htmlTableOverlay = 'true';
     this.root.setAttribute('role', 'presentation');
     this.root.hidden = true;
+    this.contextMenuId = `html-table-overlay-menu-${htmlTableContextMenuIdCounter += 1}`;
     this.contextTriggerButton = this.createContextTriggerButton();
     this.contextMenu = this.createContextMenu();
     this.tableHandle = this.createTableHandle();
@@ -452,10 +462,16 @@ class HtmlTableHandleOverlayView {
         interaction.selectedAxis.index === row.index &&
         interaction.selectedAxis.tablePos === activeTable.tablePos;
       const isRowMenuOpen = isRowSelected && isHtmlTableContextMenuExpandedForScope(contextMenu, 'row');
+      const rowControls = getHtmlTableContextMenuAriaControls(this.contextMenuId, isRowMenuOpen);
       handle.hidden = interaction.tableSelected || (!isRowHovered && !isRowSelected);
       handle.tabIndex = handle.hidden ? -1 : 0;
       handle.setAttribute('aria-haspopup', 'menu');
       handle.setAttribute('aria-expanded', isRowMenuOpen ? 'true' : 'false');
+      if (rowControls) {
+        handle.setAttribute('aria-controls', rowControls);
+      } else {
+        handle.removeAttribute('aria-controls');
+      }
       handle.classList.toggle(
         'is-hovered',
         isRowHovered,
@@ -487,10 +503,16 @@ class HtmlTableHandleOverlayView {
         interaction.selectedAxis.index === column.index &&
         interaction.selectedAxis.tablePos === activeTable.tablePos;
       const isColumnMenuOpen = isColumnSelected && isHtmlTableContextMenuExpandedForScope(contextMenu, 'column');
+      const columnControls = getHtmlTableContextMenuAriaControls(this.contextMenuId, isColumnMenuOpen);
       handle.hidden = interaction.tableSelected || (!isColumnHovered && !isColumnSelected);
       handle.tabIndex = handle.hidden ? -1 : 0;
       handle.setAttribute('aria-haspopup', 'menu');
       handle.setAttribute('aria-expanded', isColumnMenuOpen ? 'true' : 'false');
+      if (columnControls) {
+        handle.setAttribute('aria-controls', columnControls);
+      } else {
+        handle.removeAttribute('aria-controls');
+      }
       handle.classList.toggle(
         'is-hovered',
         isColumnHovered,
@@ -614,11 +636,17 @@ class HtmlTableHandleOverlayView {
     const isHovered = interaction.hovered?.kind === 'table' && interaction.hovered.tablePos === tablePos;
     const isSelected = interaction.tableSelected && interaction.activeTable?.tablePos === tablePos;
     const isMenuOpen = isSelected && isHtmlTableContextMenuExpandedForScope(menu, 'table');
+    const controls = getHtmlTableContextMenuAriaControls(this.contextMenuId, isMenuOpen);
 
     this.tableHandle.hidden = !visible;
     this.tableHandle.tabIndex = visible ? 0 : -1;
     this.tableHandle.setAttribute('aria-haspopup', 'menu');
     this.tableHandle.setAttribute('aria-expanded', isMenuOpen ? 'true' : 'false');
+    if (controls) {
+      this.tableHandle.setAttribute('aria-controls', controls);
+    } else {
+      this.tableHandle.removeAttribute('aria-controls');
+    }
     this.tableHandle.style.left = `${left}px`;
     this.tableHandle.style.top = `${top}px`;
     this.tableHandle.style.width = `${HANDLE_CROSS_AXIS_SIZE}px`;
@@ -657,12 +685,18 @@ class HtmlTableHandleOverlayView {
     wrapperRect: DOMRect,
   ): void {
     const renderState = getHtmlTableContextTriggerRenderState(trigger);
+    const controls = getHtmlTableContextMenuAriaControls(this.contextMenuId, renderState.expanded);
 
     this.contextTriggerButton.hidden = !renderState.visible;
     this.contextTriggerButton.tabIndex = renderState.visible ? 0 : -1;
     this.contextTriggerButton.dataset.scope = renderState.scope ?? '';
     this.contextTriggerButton.dataset.primaryAction = renderState.primaryActionId ?? '';
     this.contextTriggerButton.setAttribute('aria-expanded', renderState.expanded ? 'true' : 'false');
+    if (controls) {
+      this.contextTriggerButton.setAttribute('aria-controls', controls);
+    } else {
+      this.contextTriggerButton.removeAttribute('aria-controls');
+    }
     this.contextTriggerButton.textContent = renderState.label ? '...' : '';
     this.contextTriggerButton.setAttribute('aria-label', renderState.label ?? 'Context actions');
     this.contextTriggerButton.title = renderState.title ?? renderState.label ?? '';
@@ -746,6 +780,7 @@ class HtmlTableHandleOverlayView {
   ): void {
     const interaction = getHtmlTableInteractionState(this.view.state);
     const renderState = getHtmlTableCellContextTriggerRenderState(menu);
+    const controls = getHtmlTableContextMenuAriaControls(this.contextMenuId, renderState.expanded);
     if (interaction.tableSelected) {
       this.cellSelectionHandle.hidden = true;
       this.cellSelectionHandle.tabIndex = -1;
@@ -785,6 +820,11 @@ class HtmlTableHandleOverlayView {
     this.cellSelectionHandle.dataset.primaryAction = renderState.primaryActionId ?? '';
     this.cellSelectionHandle.setAttribute('aria-haspopup', 'menu');
     this.cellSelectionHandle.setAttribute('aria-expanded', renderState.expanded ? 'true' : 'false');
+    if (controls) {
+      this.cellSelectionHandle.setAttribute('aria-controls', controls);
+    } else {
+      this.cellSelectionHandle.removeAttribute('aria-controls');
+    }
     this.cellSelectionHandle.setAttribute('aria-label', renderState.label ?? 'Cell actions');
     this.cellSelectionHandle.title = renderState.title ?? renderState.label ?? 'Cell actions';
     this.cellSelectionHandle.classList.toggle('is-menu-open', renderState.expanded);
@@ -831,6 +871,7 @@ class HtmlTableHandleOverlayView {
   private createContextMenu(): HTMLDivElement {
     const menu = this.root.ownerDocument.createElement('div');
     menu.className = 'html-table-overlay__context-menu';
+    menu.id = this.contextMenuId;
     menu.hidden = true;
     menu.setAttribute('role', 'menu');
     menu.addEventListener('mousedown', (event) => this.handleContextMenuMouseDown(event));
