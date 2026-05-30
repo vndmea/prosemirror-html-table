@@ -99,6 +99,11 @@ export interface HtmlTableContextMenuHeaderState {
   detail: string | null;
 }
 
+export interface HtmlTableContextMenuAccessibleState {
+  labelledBy: string | null;
+  describedBy: string | null;
+}
+
 export type HtmlTableContextMenuPlacement =
   | 'right-start'
   | 'right-center'
@@ -376,6 +381,16 @@ export function getHtmlTableContextMenuHeaderState(
   return {
     label,
     detail: menu.primaryAction?.label ?? null,
+  };
+}
+
+export function getHtmlTableContextMenuAccessibleState(
+  menuId: string,
+  header: HtmlTableContextMenuHeaderState,
+): HtmlTableContextMenuAccessibleState {
+  return {
+    labelledBy: header.label ? `${menuId}-title` : null,
+    describedBy: header.detail ? `${menuId}-detail` : null,
   };
 }
 
@@ -967,10 +982,22 @@ class HtmlTableHandleOverlayView {
   ): void {
     const renderState = getHtmlTableContextMenuRenderState(menu);
     const focusedActionId = this.getFocusedContextMenuActionId();
+    const headerState = getHtmlTableContextMenuHeaderState(menu);
+    const accessibleState = getHtmlTableContextMenuAccessibleState(this.contextMenuId, headerState);
 
     this.contextMenu.hidden = !renderState.visible;
     this.contextMenu.dataset.scope = renderState.scope ?? '';
     this.contextMenu.dataset.primaryAction = renderState.primaryActionId ?? '';
+    if (accessibleState.labelledBy) {
+      this.contextMenu.setAttribute('aria-labelledby', accessibleState.labelledBy);
+    } else {
+      this.contextMenu.removeAttribute('aria-labelledby');
+    }
+    if (accessibleState.describedBy) {
+      this.contextMenu.setAttribute('aria-describedby', accessibleState.describedBy);
+    } else {
+      this.contextMenu.removeAttribute('aria-describedby');
+    }
 
     if (!renderState.visible || renderState.left === null || renderState.top === null) {
       this.resetContextMenuTypeahead();
@@ -1712,12 +1739,14 @@ class HtmlTableHandleOverlayView {
 
       const title = this.root.ownerDocument.createElement('div');
       title.className = 'html-table-overlay__context-menu-header-title';
+      title.id = `${this.contextMenuId}-title`;
       title.textContent = headerState.label;
       header.append(title);
 
       if (headerState.detail) {
         const detail = this.root.ownerDocument.createElement('div');
         detail.className = 'html-table-overlay__context-menu-header-detail';
+        detail.id = `${this.contextMenuId}-detail`;
         detail.textContent = headerState.detail;
         header.append(detail);
       }

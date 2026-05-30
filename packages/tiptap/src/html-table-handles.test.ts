@@ -5,6 +5,7 @@ import {
   canRestoreHtmlTableContextMenuFocus,
   getHtmlTableCellContextTriggerRenderState,
   getHtmlTableContextMenuActionRenderState,
+  getHtmlTableContextMenuAccessibleState,
   getHtmlTableContextMenuAriaControls,
   getHtmlTableContextMenuHeaderState,
   getHtmlTableContextMenuPosition,
@@ -422,6 +423,24 @@ describe('html table handles', () => {
     })).toEqual({
       label: null,
       detail: null,
+    });
+  });
+
+  it('derives accessible label and description ids from the context menu header state', () => {
+    expect(getHtmlTableContextMenuAccessibleState('pmht-menu-1', {
+      label: 'Cell actions',
+      detail: 'Align center',
+    })).toEqual({
+      labelledBy: 'pmht-menu-1-title',
+      describedBy: 'pmht-menu-1-detail',
+    });
+
+    expect(getHtmlTableContextMenuAccessibleState('pmht-menu-1', {
+      label: null,
+      detail: null,
+    })).toEqual({
+      labelledBy: null,
+      describedBy: null,
     });
   });
 
