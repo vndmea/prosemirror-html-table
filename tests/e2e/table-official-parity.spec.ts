@@ -18,10 +18,6 @@ function tableHandle(page: Page) {
   return page.getByTestId('pmht-table-handle');
 }
 
-function rowHandle(page: Page, index: number) {
-  return page.getByTestId('pmht-row-handle').nth(index);
-}
-
 function columnHandle(page: Page, index: number) {
   return page.getByTestId('pmht-column-handle').nth(index);
 }

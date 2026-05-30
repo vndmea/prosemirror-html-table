@@ -7,6 +7,6 @@
       "tiptap-html-table": ["packages/tiptap/src/index.ts"]
     }
   },
-  "include": ["packages/**/*.ts", "test/**/*.ts", "*.config.ts"],
+  "include": ["packages/**/*.ts", "tests/**/*.ts", "*.config.ts"],
   "exclude": ["packages/*/dist", "node_modules"]
 }
