@@ -264,6 +264,7 @@ describe('html table context actions', () => {
 
     const actions = getHtmlTableContextActions(headerCellState, getHtmlTableInteractionState(headerCellState));
     expect(actions.find((action) => action.id === 'toggleHeaderCell')?.active).toBe(true);
+    expect(actions.find((action) => action.id === 'toggleHeaderCell')?.label).toBe('Unset header cell');
   });
 
   it('marks row and column header toggle actions as active when the selection is fully header cells', () => {
@@ -300,6 +301,7 @@ describe('html table context actions', () => {
     );
     const rowActions = getHtmlTableContextActions(rowHeaderState, getHtmlTableInteractionState(rowHeaderState));
     expect(rowActions.find((action) => action.id === 'toggleHeaderRow')?.active).toBe(true);
+    expect(rowActions.find((action) => action.id === 'toggleHeaderRow')?.label).toBe('Unset header row');
 
     let columnHeaderState = state.apply(createColumnSelectionTransaction(state, 0, table, 0)!);
     const toggledColumn = getHtmlTableContextActionCommand({
@@ -324,6 +326,7 @@ describe('html table context actions', () => {
     );
     const columnActions = getHtmlTableContextActions(columnHeaderState, getHtmlTableInteractionState(columnHeaderState));
     expect(columnActions.find((action) => action.id === 'toggleHeaderColumn')?.active).toBe(true);
+    expect(columnActions.find((action) => action.id === 'toggleHeaderColumn')?.label).toBe('Unset header column');
   });
 
   it('resolves executable commands from context actions', () => {
@@ -361,6 +364,33 @@ describe('html table context actions', () => {
 
     const actions = getHtmlTableContextActions(state, getHtmlTableInteractionState(state));
     expect(actions.find((action) => action.id === 'toggleCaption')?.active).toBe(true);
+    expect(actions.find((action) => action.id === 'toggleCaption')?.label).toBe('Remove caption');
+  });
+
+  it('uses additive labels for inactive table and header toggle actions', () => {
+    const table = createHtmlTableNode(schema, { rows: 2, cols: 2 });
+    const doc = schema.nodes.doc!.create(null, [table]);
+    const tableState = EditorState.create({
+      schema,
+      doc,
+      selection: NodeSelection.create(doc, 0),
+      plugins: [createHtmlTableInteractionPlugin()],
+    });
+    const tableActions = getHtmlTableContextActions(tableState, getHtmlTableInteractionState(tableState));
+    expect(tableActions.find((action) => action.id === 'toggleCaption')?.label).toBe('Add caption');
+    expect(tableActions.find((action) => action.id === 'toggleColgroup')?.label).toBe('Add colgroup');
+    expect(tableActions.find((action) => action.id === 'toggleHeadSection')?.label).toBe('Add header section');
+    expect(tableActions.find((action) => action.id === 'toggleFootSection')?.label).toBe('Add footer section');
+
+    const cellPositions = findNodePositions(doc, 'htmlTableCell');
+    const cellState = EditorState.create({
+      schema,
+      doc,
+      selection: CellSelection.create(doc, cellPositions[0]!),
+      plugins: [createHtmlTableInteractionPlugin()],
+    });
+    const cellActions = getHtmlTableContextActions(cellState, getHtmlTableInteractionState(cellState));
+    expect(cellActions.find((action) => action.id === 'toggleHeaderCell')?.label).toBe('Set header cell');
   });
 
   it('runs context actions through a single entry point and closes the context menu on success', () => {

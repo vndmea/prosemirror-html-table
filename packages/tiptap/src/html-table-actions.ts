@@ -446,11 +446,46 @@ function createAction(
 ): HtmlTableContextAction {
   return {
     id,
-    label: ACTION_LABELS[id],
+    label: getHtmlTableContextActionLabel(id, meta.active),
     scope,
     enabled: command(state),
     ...meta,
   };
+}
+
+function getHtmlTableContextActionLabel(
+  id: HtmlTableContextActionId,
+  active: boolean | undefined,
+): string {
+  if (id === 'toggleCaption') {
+    return active ? 'Remove caption' : 'Add caption';
+  }
+
+  if (id === 'toggleColgroup') {
+    return active ? 'Remove colgroup' : 'Add colgroup';
+  }
+
+  if (id === 'toggleHeadSection') {
+    return active ? 'Remove header section' : 'Add header section';
+  }
+
+  if (id === 'toggleFootSection') {
+    return active ? 'Remove footer section' : 'Add footer section';
+  }
+
+  if (id === 'toggleHeaderRow') {
+    return active ? 'Unset header row' : 'Set header row';
+  }
+
+  if (id === 'toggleHeaderColumn') {
+    return active ? 'Unset header column' : 'Set header column';
+  }
+
+  if (id === 'toggleHeaderCell') {
+    return active ? 'Unset header cell' : 'Set header cell';
+  }
+
+  return ACTION_LABELS[id];
 }
 
 function hasChild(table: NonNullable<HtmlTableInteractionState['activeTable']>['table'], typeName: string): boolean {

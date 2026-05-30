@@ -187,7 +187,7 @@ describe('html table context menu state', () => {
     expect(tableTrigger.visible).toBe(true);
     expect(tableTrigger.expanded).toBe(false);
     expect(tableTrigger.label).toBe('Table actions');
-    expect(tableTrigger.title).toBe('Table actions: Toggle header section');
+    expect(tableTrigger.title).toBe('Table actions: Add header section');
     expect(tableTrigger.anchor).toEqual({ left: 10, top: 20 });
 
     const cellPositions = findNodePositions(doc, 'htmlTableCell');
