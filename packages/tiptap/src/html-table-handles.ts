@@ -193,6 +193,42 @@ export function isHtmlTableContextMenuDismissKey(key: string): boolean {
   return key === 'Escape';
 }
 
+export function isHtmlTableContextMenuNavigationKey(key: string): boolean {
+  return key === 'ArrowDown' || key === 'ArrowUp' || key === 'Home' || key === 'End';
+}
+
+export function getNextHtmlTableContextMenuActionIndex(
+  currentIndex: number,
+  total: number,
+  key: string,
+): number {
+  if (total <= 0) {
+    return -1;
+  }
+
+  if (key === 'Home') {
+    return 0;
+  }
+
+  if (key === 'End') {
+    return total - 1;
+  }
+
+  if (currentIndex < 0 || currentIndex >= total) {
+    return key === 'ArrowUp' ? total - 1 : 0;
+  }
+
+  if (key === 'ArrowUp') {
+    return (currentIndex - 1 + total) % total;
+  }
+
+  if (key === 'ArrowDown') {
+    return (currentIndex + 1) % total;
+  }
+
+  return currentIndex;
+}
+
 export function getHtmlTableCellContextTriggerRenderState(
   menu: HtmlTableContextMenuState,
 ): HtmlTableCellContextTriggerRenderState {
@@ -278,6 +314,7 @@ class HtmlTableHandleOverlayView {
         startWidths: number[];
       }
     | null = null;
+  private lastContextMenuOpen = false;
   private readonly onDocumentMouseMove = (event: MouseEvent) => this.handleResizeMove(event);
   private readonly onDocumentMouseUp = () => this.finishResize();
   private readonly onDocumentMouseDown = (event: MouseEvent) => this.handleDocumentMouseDown(event);
@@ -618,6 +655,7 @@ class HtmlTableHandleOverlayView {
     wrapperRect: DOMRect,
   ): void {
     const renderState = getHtmlTableContextMenuRenderState(menu);
+    const focusedActionId = this.getFocusedContextMenuActionId();
 
     this.contextMenu.hidden = !renderState.visible;
     this.contextMenu.dataset.scope = renderState.scope ?? '';
@@ -627,6 +665,7 @@ class HtmlTableHandleOverlayView {
       this.contextMenu.replaceChildren();
       this.contextMenu.style.removeProperty('left');
       this.contextMenu.style.removeProperty('top');
+      this.lastContextMenuOpen = false;
       return;
     }
 
@@ -640,6 +679,7 @@ class HtmlTableHandleOverlayView {
     )}px`;
 
     this.contextMenu.replaceChildren(...this.buildContextMenuGroups(menu));
+    this.restoreContextMenuFocus(menu, focusedActionId);
   }
 
   private syncCellSelectionHandle(
@@ -728,6 +768,7 @@ class HtmlTableHandleOverlayView {
     menu.hidden = true;
     menu.setAttribute('role', 'menu');
     menu.addEventListener('mousedown', (event) => this.handleContextMenuMouseDown(event));
+    menu.addEventListener('keydown', (event) => this.handleContextMenuKeyDown(event));
     return menu;
   }
 
@@ -869,6 +910,24 @@ class HtmlTableHandleOverlayView {
       this.view.dispatch(transaction);
     });
     this.view.focus();
+  }
+
+  private handleContextMenuKeyDown(event: KeyboardEvent): void {
+    if (!isHtmlTableContextMenuNavigationKey(event.key)) {
+      return;
+    }
+
+    const enabledButtons = this.getEnabledContextMenuActionButtons();
+    if (enabledButtons.length === 0) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    const currentIndex = enabledButtons.findIndex((button) => button === this.root.ownerDocument.activeElement);
+    const nextIndex = getNextHtmlTableContextMenuActionIndex(currentIndex, enabledButtons.length, event.key);
+    enabledButtons[nextIndex]?.focus();
   }
 
   private handleCellSelectionHandleMouseDown(event: MouseEvent): void {
@@ -1162,13 +1221,56 @@ class HtmlTableHandleOverlayView {
         button.textContent = action.label;
         button.setAttribute('role', 'menuitem');
         button.setAttribute('aria-pressed', action.active ? 'true' : 'false');
+        button.setAttribute('aria-current', menu.primaryAction?.id === action.id ? 'true' : 'false');
         button.classList.toggle('is-active', Boolean(action.active));
         button.classList.toggle('is-destructive', Boolean(action.destructive));
+        button.classList.toggle('is-primary', menu.primaryAction?.id === action.id);
         groupElement.append(button);
       }
 
       return groupElement;
     });
+  }
+
+  private getFocusedContextMenuActionId(): string | null {
+    const activeElement = this.root.ownerDocument.activeElement;
+    return activeElement instanceof HTMLButtonElement && this.contextMenu.contains(activeElement)
+      ? activeElement.dataset.actionId ?? null
+      : null;
+  }
+
+  private getEnabledContextMenuActionButtons(): HTMLButtonElement[] {
+    return Array.from(this.contextMenu.querySelectorAll<HTMLButtonElement>('button[data-action-id]')).filter(
+      (button) => !button.disabled,
+    );
+  }
+
+  private restoreContextMenuFocus(menu: HtmlTableContextMenuState, focusedActionId: string | null): void {
+    const enabledButtons = this.getEnabledContextMenuActionButtons();
+    if (enabledButtons.length === 0) {
+      this.lastContextMenuOpen = menu.open;
+      return;
+    }
+
+    if (focusedActionId) {
+      const focusedButton = enabledButtons.find((button) => button.dataset.actionId === focusedActionId);
+      if (focusedButton) {
+        focusedButton.focus();
+        this.lastContextMenuOpen = menu.open;
+        return;
+      }
+    }
+
+    if (menu.open && !this.lastContextMenuOpen) {
+      const primaryActionId = menu.primaryAction?.id ?? null;
+      const primaryButton =
+        (primaryActionId
+          ? enabledButtons.find((button) => button.dataset.actionId === primaryActionId)
+          : null) ?? enabledButtons[0];
+      primaryButton?.focus();
+    }
+
+    this.lastContextMenuOpen = menu.open;
   }
 
   private closeContextMenu(): void {

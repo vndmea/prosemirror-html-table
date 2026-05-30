@@ -4,10 +4,12 @@ import type { HtmlTableInteractionState } from './html-table-interaction.js';
 import {
   getHtmlTableCellContextTriggerRenderState,
   getHtmlTableContextMenuRenderState,
+  getNextHtmlTableContextMenuActionIndex,
   getHtmlTableContextTriggerRenderState,
   getHtmlTableSelectionAnchor,
   getHtmlTableSelectionScope,
   isHtmlTableContextMenuDismissKey,
+  isHtmlTableContextMenuNavigationKey,
   isTableHandleVisible,
   shouldToggleHtmlTableContextMenuFromTableHandle,
   shouldToggleHtmlTableContextMenuFromAxisHandle,
@@ -417,6 +419,24 @@ describe('html table handles', () => {
     expect(isHtmlTableContextMenuDismissKey('Escape')).toBe(true);
     expect(isHtmlTableContextMenuDismissKey('Enter')).toBe(false);
     expect(isHtmlTableContextMenuDismissKey('Tab')).toBe(false);
+  });
+
+  it('recognizes context menu navigation keys', () => {
+    expect(isHtmlTableContextMenuNavigationKey('ArrowDown')).toBe(true);
+    expect(isHtmlTableContextMenuNavigationKey('ArrowUp')).toBe(true);
+    expect(isHtmlTableContextMenuNavigationKey('Home')).toBe(true);
+    expect(isHtmlTableContextMenuNavigationKey('End')).toBe(true);
+    expect(isHtmlTableContextMenuNavigationKey('Escape')).toBe(false);
+  });
+
+  it('derives the next focusable context menu action index for keyboard navigation', () => {
+    expect(getNextHtmlTableContextMenuActionIndex(-1, 3, 'ArrowDown')).toBe(0);
+    expect(getNextHtmlTableContextMenuActionIndex(-1, 3, 'ArrowUp')).toBe(2);
+    expect(getNextHtmlTableContextMenuActionIndex(0, 3, 'ArrowDown')).toBe(1);
+    expect(getNextHtmlTableContextMenuActionIndex(0, 3, 'ArrowUp')).toBe(2);
+    expect(getNextHtmlTableContextMenuActionIndex(1, 3, 'Home')).toBe(0);
+    expect(getNextHtmlTableContextMenuActionIndex(1, 3, 'End')).toBe(2);
+    expect(getNextHtmlTableContextMenuActionIndex(1, 0, 'ArrowDown')).toBe(-1);
   });
 
   it('toggles the context menu directly from selected row and column handles', () => {
