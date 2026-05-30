@@ -374,6 +374,26 @@ export function getHtmlTableContextMenuPosition(
   };
 }
 
+export function getHtmlTableContextMenuTransformOrigin(
+  placement: HtmlTableContextMenuPlacement,
+): string {
+  switch (placement) {
+    case 'left-start':
+      return 'right top';
+    case 'left-center':
+      return 'right center';
+    case 'bottom-center':
+      return 'center top';
+    case 'top-center':
+      return 'center bottom';
+    case 'right-start':
+      return 'left top';
+    case 'right-center':
+    default:
+      return 'left center';
+  }
+}
+
 export function getHtmlTableContextMenuHeaderState(
   menu: Pick<HtmlTableContextMenuState, 'scope' | 'primaryAction'>,
 ): HtmlTableContextMenuHeaderState {
@@ -403,6 +423,10 @@ export function shouldCloseHtmlTableContextMenuForTarget(
 
 export function isHtmlTableContextMenuDismissKey(key: string): boolean {
   return key === 'Escape';
+}
+
+export function isHtmlTableContextMenuExitKey(key: string): boolean {
+  return key === 'Tab';
 }
 
 export function isHtmlTableContextMenuNavigationKey(key: string): boolean {
@@ -1032,6 +1056,7 @@ class HtmlTableHandleOverlayView {
     this.contextMenu.style.left = `${position.left}px`;
     this.contextMenu.style.top = `${position.top}px`;
     this.contextMenu.dataset.placement = position.placement;
+    this.contextMenu.style.transformOrigin = getHtmlTableContextMenuTransformOrigin(position.placement);
     this.restoreContextMenuFocus(menu, focusedActionId);
   }
 
@@ -1374,6 +1399,11 @@ class HtmlTableHandleOverlayView {
 
   private handleContextMenuKeyDown(event: KeyboardEvent): void {
     const enabledButtons = this.getEnabledContextMenuActionButtons();
+    if (isHtmlTableContextMenuExitKey(event.key)) {
+      this.closeContextMenu(false);
+      return;
+    }
+
     if (enabledButtons.length === 0) {
       return;
     }

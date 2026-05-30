@@ -10,6 +10,7 @@ import {
   getHtmlTableContextMenuHeaderState,
   getHtmlTableContextMenuPosition,
   getHtmlTableContextMenuRenderState,
+  getHtmlTableContextMenuTransformOrigin,
   getNextHtmlTableContextMenuActionIndex,
   getNextHtmlTableContextMenuTypeaheadIndex,
   getHtmlTableOverlayHandleText,
@@ -18,6 +19,7 @@ import {
   getHtmlTableSelectionScope,
   isHtmlTableContextMenuExpandedForScope,
   isHtmlTableContextMenuDismissKey,
+  isHtmlTableContextMenuExitKey,
   isHtmlTableKeyboardClick,
   isHtmlTableContextMenuNavigationKey,
   isHtmlTableContextMenuTypeaheadKey,
@@ -403,6 +405,14 @@ describe('html table handles', () => {
     });
   });
 
+  it('derives transform origins from context menu placement', () => {
+    expect(getHtmlTableContextMenuTransformOrigin('right-start')).toBe('left top');
+    expect(getHtmlTableContextMenuTransformOrigin('right-center')).toBe('left center');
+    expect(getHtmlTableContextMenuTransformOrigin('left-center')).toBe('right center');
+    expect(getHtmlTableContextMenuTransformOrigin('bottom-center')).toBe('center top');
+    expect(getHtmlTableContextMenuTransformOrigin('top-center')).toBe('center bottom');
+  });
+
   it('derives a context menu header from scope and primary action', () => {
     expect(getHtmlTableContextMenuHeaderState({
       scope: 'column',
@@ -599,6 +609,12 @@ describe('html table handles', () => {
     expect(isHtmlTableContextMenuDismissKey('Escape')).toBe(true);
     expect(isHtmlTableContextMenuDismissKey('Enter')).toBe(false);
     expect(isHtmlTableContextMenuDismissKey('Tab')).toBe(false);
+  });
+
+  it('uses Tab as the context menu exit key', () => {
+    expect(isHtmlTableContextMenuExitKey('Tab')).toBe(true);
+    expect(isHtmlTableContextMenuExitKey('Escape')).toBe(false);
+    expect(isHtmlTableContextMenuExitKey('Enter')).toBe(false);
   });
 
   it('recognizes context menu navigation keys', () => {
