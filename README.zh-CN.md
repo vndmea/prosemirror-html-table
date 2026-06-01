@@ -1,10 +1,10 @@
 # prosemirror-html-table
 
-English | [简体中文](https://github.com/vndmea/prosemirror-html-table/blob/main/README.zh-CN.md)
+[English](https://github.com/vndmea/prosemirror-html-table/blob/main/README.md) | 简体中文
 
-A ProseMirror-first table engine for full HTML table structures.
+面向 ProseMirror 的完整 HTML 表格引擎。
 
-This project is designed for editors that need to preserve and manipulate richer HTML table semantics than the default ProseMirror/Tiptap table model, including:
+这个项目适用于需要保留和操作比默认 ProseMirror / Tiptap 表格模型更丰富 HTML 表格语义的编辑器，包括：
 
 - `caption`
 - `colgroup`
@@ -19,26 +19,26 @@ This project is designed for editors that need to preserve and manipulate richer
 ## Packages
 
 ```txt
-packages/core    ProseMirror schema helpers, table model types, grid utilities, and commands
-packages/tiptap  Tiptap v3 node extensions and command wrappers built on top of the core package
+packages/core    ProseMirror schema helper、表格模型类型、grid 工具和命令
+packages/tiptap  基于 core 包构建的 Tiptap v3 节点扩展和命令封装
 ```
 
 ## Playground
 
-A Vue 3 + Tiptap v3 playground is available in `examples/vue3-tiptap-table`.
+仓库提供了一个基于 Vue 3 + Tiptap v3 的 playground，位置在 `examples/vue3-tiptap-table`。
 
-Online:
+在线体验：
 
 [Playground](https://vndmea.github.io/prosemirror-html-table/)
 
-Local:
+本地运行：
 
 ```bash
 npm install
 npm run dev --workspace vue3-tiptap-table-demo
 ```
 
-The playground includes a full HTML table with `caption`, `colgroup`, `thead`, `tbody`, and `tfoot`, plus toolbar buttons for row/column editing, header toggles, cell navigation, and table selection commands.
+playground 内置了一个完整 HTML 表格示例，包含 `caption`、`colgroup`、`thead`、`tbody` 和 `tfoot`，同时提供了行列编辑、表头切换、单元格导航和表格选择相关的工具栏按钮。
 
 ## Install
 
@@ -46,7 +46,7 @@ The playground includes a full HTML table with `caption`, `colgroup`, `thead`, `
 npm install prosemirror-html-table
 ```
 
-For Tiptap projects:
+如果你在 Tiptap 项目中使用：
 
 ```bash
 npm install tiptap-html-table prosemirror-html-table
@@ -54,9 +54,9 @@ npm install tiptap-html-table prosemirror-html-table
 
 ## Current capabilities
 
-### Full HTML table structure
+### 完整 HTML 表格结构
 
-The schema foundation supports the full structural shape of HTML tables:
+schema 基础层支持完整的 HTML 表格结构：
 
 ```txt
 htmlTable
@@ -71,11 +71,11 @@ htmlTable
       └── htmlTableRow+
 ```
 
-Rows contain `htmlTableHeaderCell` and `htmlTableCell` nodes, which render as `th` and `td`.
+行节点内部包含 `htmlTableHeaderCell` 和 `htmlTableCell`，分别渲染为 `th` 和 `td`。
 
-### Section-aware grid model
+### 感知 section 的 grid 模型
 
-`createHtmlTableGrid` maps `thead`, `tbody`, and `tfoot` rows into one logical grid. It tracks row index, column index, section name, `rowspan`, `colspan`, and whether a slot is the anchor of a spanning cell.
+`createHtmlTableGrid` 会把 `thead`、`tbody` 和 `tfoot` 中的行映射为一个统一的逻辑 grid。它会跟踪行索引、列索引、section 名称、`rowspan`、`colspan`，以及某个 slot 是否为跨行跨列单元格的锚点。
 
 ```ts
 import { createHtmlTableGrid } from 'prosemirror-html-table';
@@ -85,7 +85,7 @@ const grid = createHtmlTableGrid(tableNode);
 
 ### Core commands
 
-The core package currently exposes these table commands:
+当前 core 包公开了这些表格命令：
 
 ```ts
 import {
@@ -114,7 +114,7 @@ import {
 } from 'prosemirror-html-table';
 ```
 
-Supported command set:
+当前支持的命令集合：
 
 ```txt
 insertHtmlTable
@@ -141,26 +141,26 @@ selectColumn
 selectTable
 ```
 
-These commands use the section-aware grid internally. They now cover dedicated cell selection, rectangular merge, merged-cell splitting, and full-table normalization through `fixTables`.
+这些命令内部都基于感知 section 的 grid。当前已经覆盖独立单元格选择、矩形合并、已合并单元格拆分，以及通过 `fixTables` 做整表规范化。
 
-Header commands convert between `htmlTableHeaderCell` and `htmlTableCell` while preserving cell attributes, content, and marks.
+表头相关命令会在 `htmlTableHeaderCell` 和 `htmlTableCell` 之间转换，同时保留单元格属性、内容和 marks。
 
-Selection commands use a dedicated `CellSelection` for cell, row, and column ranges, while whole-table selection still uses `NodeSelection`.
+选择命令对单元格、行和列范围使用专用的 `CellSelection`，整表选择仍然使用 `NodeSelection`。
 
-### Tiptap interaction layer
+### Tiptap 交互层
 
-The Tiptap package now includes:
+Tiptap 包目前包含：
 
 ```txt
-- custom table node view with optional wrapper
-- column resize handles
-- persisted colgroup / colwidth state
+- 支持可选 wrapper 的自定义 table node view
+- 列宽拖拽手柄
+- 持久化的 colgroup / colwidth 状态
 - selected-cell decorations
-- Tab / Shift-Tab navigation
-- Shift-Arrow cell-range expansion
+- Tab / Shift-Tab 导航
+- Shift-Arrow 单元格范围扩展
 ```
 
-Available options:
+可用选项：
 
 ```ts
 {
@@ -174,7 +174,7 @@ Available options:
 }
 ```
 
-### Tiptap usage
+### Tiptap 使用方式
 
 ```ts
 import { Editor } from '@tiptap/core';
@@ -182,7 +182,7 @@ import { HtmlTableExtensions } from 'tiptap-html-table';
 
 const editor = new Editor({
   extensions: [
-    // Add your document, paragraph, text, and other base extensions here.
+    // 在这里加入你的 document、paragraph、text 以及其他基础扩展。
     ...HtmlTableExtensions,
   ],
 });
@@ -216,7 +216,7 @@ editor.commands.fixHtmlTables();
 editor.commands.deleteHtmlTable();
 ```
 
-`goToNextHtmlTableCell` and `goToPreviousHtmlTableCell` support optional cycling:
+`goToNextHtmlTableCell` 和 `goToPreviousHtmlTableCell` 支持可选的循环导航：
 
 ```ts
 editor.commands.goToNextHtmlTableCell({ cycle: true });
@@ -224,13 +224,13 @@ editor.commands.goToNextHtmlTableCell({ cycle: true });
 
 ## Roadmap
 
-The next major areas are:
+下一阶段的主要方向：
 
 ```txt
-1. optional UI components for row and column controls
-2. richer keyboard shortcuts and copy/paste behavior
-3. copy/paste cell ranges
-4. row and column move / duplicate controls
+1. 可选的行列控制 UI 组件
+2. 更丰富的键盘快捷键和 copy/paste 行为
+3. 单元格范围 copy/paste
+4. 行列移动 / 复制控制
 ```
 
 ## Development
@@ -243,7 +243,7 @@ npm test
 npm run build
 ```
 
-Run the Vue demo:
+运行 Vue demo：
 
 ```bash
 npm run dev --workspace vue3-tiptap-table-demo
