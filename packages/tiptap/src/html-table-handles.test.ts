@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import type { HtmlTableInteractionState } from './html-table-interaction.js';
 import {
   canRestoreHtmlTableContextMenuFocus,
+  isHtmlTableInteractionLockedByResize,
   isHtmlTableAxisHandleVisible,
   getHtmlTableCellContextTriggerRenderState,
   getHtmlTableContextMenuActionRenderState,
@@ -280,6 +281,35 @@ describe('html table handles', () => {
           columnIndex: 0,
         },
       }, 5, selection, true),
+    ).toBe(false);
+  });
+
+  it('locks overlay interactions only for the actively resized table', () => {
+    const base = createInteractionState({
+      activeTable: {
+        tablePos: 5,
+        table: {} as never,
+      },
+    });
+
+    expect(isHtmlTableInteractionLockedByResize(base, 5)).toBe(false);
+    expect(
+      isHtmlTableInteractionLockedByResize({
+        ...base,
+        resizing: {
+          tablePos: 5,
+          columnIndex: 0,
+        },
+      }, 5),
+    ).toBe(true);
+    expect(
+      isHtmlTableInteractionLockedByResize({
+        ...base,
+        resizing: {
+          tablePos: 5,
+          columnIndex: 0,
+        },
+      }, 7),
     ).toBe(false);
   });
 

@@ -207,6 +207,13 @@ export function shouldHideHtmlTableExtendButtons(
   return interaction.contextMenuOpen || Boolean(interaction.resizing);
 }
 
+export function isHtmlTableInteractionLockedByResize(
+  interaction: HtmlTableInteractionState,
+  tablePos: number | null,
+): boolean {
+  return tablePos !== null && interaction.resizing?.tablePos === tablePos;
+}
+
 export function isHtmlTableContextMenuExpandedForScope(
   menu: HtmlTableContextMenuState,
   scope: HtmlTableSelectionScope,
@@ -908,7 +915,13 @@ class HtmlTableHandleOverlayView {
     const index = Number(handle?.dataset.index);
     const interaction = getHtmlTableInteractionState(this.view.state);
     const activeTable = interaction.activeTable;
-    if (!handle || !activeTable || (axis !== 'row' && axis !== 'column') || !Number.isInteger(index)) {
+    if (
+      !handle ||
+      !activeTable ||
+      (axis !== 'row' && axis !== 'column') ||
+      !Number.isInteger(index) ||
+      isHtmlTableInteractionLockedByResize(interaction, activeTable.tablePos)
+    ) {
       return;
     }
 
@@ -933,7 +946,13 @@ class HtmlTableHandleOverlayView {
     const index = Number(handle?.dataset.index);
     const interaction = getHtmlTableInteractionState(this.view.state);
     const activeTable = interaction.activeTable;
-    if (!handle || !activeTable || (axis !== 'row' && axis !== 'column') || !Number.isInteger(index)) {
+    if (
+      !handle ||
+      !activeTable ||
+      (axis !== 'row' && axis !== 'column') ||
+      !Number.isInteger(index) ||
+      isHtmlTableInteractionLockedByResize(interaction, activeTable.tablePos)
+    ) {
       return;
     }
 
@@ -998,7 +1017,7 @@ class HtmlTableHandleOverlayView {
 
     const interaction = getHtmlTableInteractionState(this.view.state);
     const activeTable = interaction.activeTable;
-    if (!activeTable) {
+    if (!activeTable || isHtmlTableInteractionLockedByResize(interaction, activeTable.tablePos)) {
       return;
     }
 
@@ -1015,7 +1034,7 @@ class HtmlTableHandleOverlayView {
 
     const interaction = getHtmlTableInteractionState(this.view.state);
     const activeTable = interaction.activeTable;
-    if (!activeTable) {
+    if (!activeTable || isHtmlTableInteractionLockedByResize(interaction, activeTable.tablePos)) {
       return;
     }
 
@@ -1060,6 +1079,10 @@ class HtmlTableHandleOverlayView {
 
   private toggleContextTriggerMenu(): void {
     const interaction = getHtmlTableInteractionState(this.view.state);
+    if (isHtmlTableInteractionLockedByResize(interaction, interaction.activeTable?.tablePos ?? null)) {
+      this.view.focus();
+      return;
+    }
     const trigger = getHtmlTableContextTriggerButtonState(this.view.state, interaction);
     if (!trigger.visible) {
       this.view.focus();
@@ -1100,6 +1123,10 @@ class HtmlTableHandleOverlayView {
 
   private toggleCellSelectionMenu(): void {
     const interaction = getHtmlTableInteractionState(this.view.state);
+    if (isHtmlTableInteractionLockedByResize(interaction, interaction.activeTable?.tablePos ?? null)) {
+      this.view.focus();
+      return;
+    }
     const menu = getHtmlTableContextMenuState(this.view.state, interaction);
     const renderState = getHtmlTableCellContextTriggerRenderState(menu);
     if (!renderState.visible) {
@@ -1183,7 +1210,12 @@ class HtmlTableHandleOverlayView {
     const button = event.currentTarget as HTMLButtonElement | null;
     const axis = button?.dataset.axis;
     const extendTarget = this.getExtendButtonTarget();
-    if (!button || !extendTarget || (axis !== 'row' && axis !== 'column')) {
+    if (
+      !button ||
+      !extendTarget ||
+      (axis !== 'row' && axis !== 'column') ||
+      isHtmlTableInteractionLockedByResize(getHtmlTableInteractionState(this.view.state), extendTarget.tablePos)
+    ) {
       return;
     }
 
@@ -1206,7 +1238,12 @@ class HtmlTableHandleOverlayView {
     const button = event.currentTarget as HTMLButtonElement | null;
     const axis = button?.dataset.axis;
     const extendTarget = this.getExtendButtonTarget();
-    if (!button || !extendTarget || (axis !== 'row' && axis !== 'column')) {
+    if (
+      !button ||
+      !extendTarget ||
+      (axis !== 'row' && axis !== 'column') ||
+      isHtmlTableInteractionLockedByResize(getHtmlTableInteractionState(this.view.state), extendTarget.tablePos)
+    ) {
       return;
     }
 

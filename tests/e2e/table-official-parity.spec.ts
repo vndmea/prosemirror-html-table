@@ -194,6 +194,18 @@ test.describe('official table parity', () => {
     await expect(columnSelectionBand(page)).toBeHidden();
   });
 
+  test('selected table handle stays visible after mouse leave', async ({ page }) => {
+    await gotoDemo(page);
+    await firstBodyCell(page).hover();
+
+    await clickCenter(page, tableHandle(page));
+    await page.locator('.hero').hover();
+
+    await expect(tableHandle(page)).toBeVisible();
+    await expect(rowSelectionBand(page)).toBeHidden();
+    await expect(columnSelectionBand(page)).toBeHidden();
+  });
+
   test('table menu toggles footer section while keeping table-scoped behavior', async ({ page }) => {
     await gotoDemo(page);
     await firstBodyCell(page).hover();
