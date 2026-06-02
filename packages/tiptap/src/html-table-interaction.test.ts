@@ -231,6 +231,67 @@ describe('html table interaction plugin', () => {
     });
   });
 
+  it('clamps context trigger anchors to the visible wrapper bounds when the table is scrolled', () => {
+    const tableReference = {
+      tablePos: 0,
+      table: createHtmlTableNode(schema, { rows: 2, cols: 3 }),
+    };
+    const geometry = {
+      ...createGeometry(),
+      tableRect: {
+        left: -110,
+        top: 20,
+        right: 250,
+        bottom: 120,
+        width: 360,
+        height: 100,
+      },
+      wrapperRect: {
+        left: 10,
+        top: 20,
+        right: 210,
+        bottom: 120,
+        width: 200,
+        height: 100,
+      },
+      visibleTableRect: {
+        left: 10,
+        top: 20,
+        right: 210,
+        bottom: 120,
+        width: 200,
+        height: 100,
+      },
+      scrollLeft: 120,
+    };
+
+    expect(
+      getHtmlTableContextTriggerState(
+        tableReference,
+        true,
+        { kind: null, index: null, tablePos: null },
+        geometry,
+      ),
+    ).toEqual({
+      visible: true,
+      left: 10,
+      top: 20,
+    });
+
+    expect(
+      getHtmlTableContextTriggerState(
+        tableReference,
+        false,
+        { kind: 'row', index: 1, tablePos: 0 },
+        geometry,
+      ),
+    ).toEqual({
+      visible: true,
+      left: 10,
+      top: 90,
+    });
+  });
+
   it('opens the context menu only while the trigger is visible and closes it on selection changes', () => {
     const table = createHtmlTableNode(schema, { rows: 2, cols: 2 });
     const doc = schema.nodes.doc!.create(null, [table]);
@@ -324,6 +385,24 @@ function createGeometry() {
       width: 200,
       height: 100,
     },
+    wrapperRect: {
+      left: 10,
+      top: 20,
+      right: 210,
+      bottom: 120,
+      width: 200,
+      height: 100,
+    },
+    visibleTableRect: {
+      left: 10,
+      top: 20,
+      right: 210,
+      bottom: 120,
+      width: 200,
+      height: 100,
+    },
+    scrollLeft: 0,
+    scrollTop: 0,
     columns: [
       { index: 0, left: 0, width: 80 },
       { index: 1, left: 80, width: 120 },

@@ -310,6 +310,40 @@ test.describe('official table parity', () => {
     expect(Math.abs(handleBox.y + handleBox.height / 2 - tableBox.y)).toBeLessThan(24);
   });
 
+  test('horizontal scroll remeasures an already visible table handle without extra hover', async ({ page }) => {
+    await page.setViewportSize({ width: 780, height: 900 });
+    await gotoDemo(page);
+
+    await firstBodyCell(page).hover();
+    await expect(tableHandle(page)).toBeVisible();
+    const beforeScrollBox = await tableHandle(page).boundingBox();
+    if (!beforeScrollBox) {
+      throw new Error('Could not resolve table handle geometry before scroll remeasure.');
+    }
+
+    await expandTableForHorizontalScroll(page);
+    await page.evaluate(() => {
+      const wrapper = document.querySelector('[data-testid="pmht-table-wrapper"]') as HTMLElement | null;
+      if (wrapper) {
+        wrapper.scrollLeft = wrapper.scrollWidth;
+      }
+    });
+
+    const wrapperBox = await tableWrapper(page).boundingBox();
+    await expect.poll(async () => {
+      const box = await tableHandle(page).boundingBox();
+      return box ? box.x + box.width / 2 : null;
+    }).not.toBeNull();
+
+    const afterScrollBox = await tableHandle(page).boundingBox();
+    if (!wrapperBox || !afterScrollBox) {
+      throw new Error('Could not resolve table handle geometry after scroll remeasure.');
+    }
+
+    expect(afterScrollBox.x + afterScrollBox.width / 2).toBeLessThan(beforeScrollBox.x + beforeScrollBox.width / 2);
+    expect(Math.abs(afterScrollBox.x + afterScrollBox.width / 2 - wrapperBox.x)).toBeLessThan(24);
+  });
+
   test('row handle keeps row scope explicit through selection and menu actions', async ({ page }) => {
     await gotoDemo(page);
 
@@ -1043,6 +1077,48 @@ test.describe('official table parity', () => {
     expect(Math.abs(handleCenterX - selectionRight)).toBeLessThan(24);
     expect(handleCenterY).toBeGreaterThanOrEqual(selectionTop - 8);
     expect(handleCenterY).toBeLessThanOrEqual(selectionBottom + 8);
+  });
+
+  test('horizontal scroll remeasures an existing cell selection handle without reselection', async ({ page }) => {
+    await page.setViewportSize({ width: 780, height: 900 });
+    await gotoDemo(page);
+
+    await expandTableForHorizontalScroll(page);
+
+    await page.evaluate(() => {
+      const wrapper = document.querySelector('[data-testid="pmht-table-wrapper"]') as HTMLElement | null;
+      if (wrapper) {
+        wrapper.scrollLeft = wrapper.scrollWidth;
+      }
+    });
+
+    const bodyCellLocator = table(page).locator('tbody tr').first().locator('td,th');
+    const totalColumns = await bodyCellLocator.count();
+    const selectedCell = bodyCellLocator.nth(totalColumns - 1);
+
+    await clickCenter(page, selectedCell);
+    await expect(cellHandle(page)).toBeVisible();
+
+    const beforeScrollBox = await cellHandle(page).boundingBox();
+    if (!beforeScrollBox) {
+      throw new Error('Could not resolve cell handle geometry before secondary scroll.');
+    }
+
+    await page.evaluate(() => {
+      const wrapper = document.querySelector('[data-testid="pmht-table-wrapper"]') as HTMLElement | null;
+      if (wrapper) {
+        wrapper.scrollLeft = Math.max(0, wrapper.scrollLeft - 120);
+      }
+    });
+
+    const wrapperBox = await tableWrapper(page).boundingBox();
+    const afterScrollBox = await cellHandle(page).boundingBox();
+    if (!wrapperBox || !afterScrollBox) {
+      throw new Error('Could not resolve cell handle geometry after secondary scroll.');
+    }
+
+    expect(afterScrollBox.x + afterScrollBox.width / 2).toBeGreaterThan(beforeScrollBox.x + beforeScrollBox.width / 2);
+    expect(Math.abs(afterScrollBox.x + afterScrollBox.width / 2 - (wrapperBox.x + wrapperBox.width))).toBeLessThan(24);
   });
 
   test('after horizontal scroll, column selection band stays aligned to the visible selected column', async ({ page }) => {

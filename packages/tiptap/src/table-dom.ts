@@ -29,6 +29,10 @@ export interface HtmlTableRowGeometry {
 
 export interface HtmlTableGeometry {
   tableRect: HtmlTableRect;
+  wrapperRect: HtmlTableRect;
+  visibleTableRect: HtmlTableRect;
+  scrollLeft: number;
+  scrollTop: number;
   columns: HtmlTableColumnGeometry[];
   rows: HtmlTableRowGeometry[];
 }
@@ -139,13 +143,19 @@ export function measureRenderedRowBoundaries(table: HTMLTableElement): number[] 
   return boundaries;
 }
 
-export function measureHtmlTableGeometry(table: HTMLTableElement): HtmlTableGeometry {
+export function measureHtmlTableGeometry(table: HTMLTableElement, wrapper?: HTMLElement): HtmlTableGeometry {
   const tableRect = getRenderedGridRect(table);
+  const wrapperRect = wrapper ? toRect(wrapper.getBoundingClientRect()) : tableRect;
+  const visibleTableRect = getVisibleTableRect(tableRect, wrapperRect);
   const columnBoundaries = measureRenderedColumnBoundaries(table);
   const rowBoundaries = measureRenderedRowBoundaries(table);
 
   return {
     tableRect,
+    wrapperRect,
+    visibleTableRect,
+    scrollLeft: wrapper?.scrollLeft ?? 0,
+    scrollTop: wrapper?.scrollTop ?? 0,
     columns: Array.from({ length: Math.max(0, columnBoundaries.length - 1) }, (_value, index) => ({
       index,
       left: columnBoundaries[index] ?? 0,
@@ -234,7 +244,7 @@ export function getSelectedRenderedHtmlTableContext(view: EditorView): HtmlTable
 
 export function getSelectedRenderedHtmlTableGeometry(view: EditorView): HtmlTableGeometry | undefined {
   const context = getSelectedRenderedHtmlTableContext(view);
-  return context ? measureHtmlTableGeometry(context.dom) : undefined;
+  return context ? measureHtmlTableGeometry(context.dom, context.wrapper) : undefined;
 }
 
 function resolveTablePos(view: EditorView, dom: HTMLElement): number | undefined {
@@ -288,5 +298,21 @@ function toRect(rect: DOMRect | DOMRectReadOnly): HtmlTableRect {
     bottom: rect.bottom,
     width: rect.width,
     height: rect.height,
+  };
+}
+
+function getVisibleTableRect(tableRect: HtmlTableRect, wrapperRect: HtmlTableRect): HtmlTableRect {
+  const left = Math.max(tableRect.left, wrapperRect.left);
+  const top = Math.max(tableRect.top, wrapperRect.top);
+  const right = Math.min(tableRect.right, wrapperRect.right);
+  const bottom = Math.min(tableRect.bottom, wrapperRect.bottom);
+
+  return {
+    left,
+    top,
+    right: Math.max(left, right),
+    bottom: Math.max(top, bottom),
+    width: Math.max(0, right - left),
+    height: Math.max(0, bottom - top),
   };
 }

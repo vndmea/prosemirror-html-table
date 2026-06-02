@@ -57,6 +57,8 @@ import {
   getHtmlTableOverlayPositionState,
   getHtmlTableSelectionAnchor,
   getHtmlTableSelectionScope,
+  getHtmlTableVisibleOverlayRect,
+  getHtmlTableVisibleSelectionRect,
   type HtmlTableContextMenuPlacement,
   type HtmlTableContextMenuPosition,
   type HtmlTableSelectionAnchor,
@@ -330,6 +332,10 @@ class HtmlTableHandleOverlayView {
     const {
       tableLeft,
       tableTop,
+      visibleTableLeft,
+      visibleTableTop,
+      visibleTableWidth,
+      visibleTableHeight,
       rowHandleLeft,
       columnHandleTop,
     } = overlayPositionState;
@@ -346,7 +352,7 @@ class HtmlTableHandleOverlayView {
     this.syncTableHandle(interaction, contextMenu, activeTable.tablePos, rowHandleLeft, columnHandleTop);
     this.syncSelectionOverlay(interaction, activeTable.tablePos, geometry, tableLeft, tableTop);
     this.syncCellSelectionHandle(contextMenu, activeTable.tablePos, geometry, tableLeft, tableTop, selectionInfo);
-    this.syncExtendButtons(interaction, tableLeft, tableTop, geometry);
+    this.syncExtendButtons(interaction, visibleTableLeft, visibleTableTop, visibleTableWidth, visibleTableHeight);
 
     for (const row of geometry.rows) {
       const handle = this.rowHandles[row.index];
@@ -447,8 +453,8 @@ class HtmlTableHandleOverlayView {
       resizeHandle.title = `Resize column ${column.index + 1}`;
       resizeHandle.style.width = `${Math.max(4, this.options.handleWidth)}px`;
       resizeHandle.style.left = `${tableLeft + column.left + column.width}px`;
-      resizeHandle.style.top = `${tableTop}px`;
-      resizeHandle.style.height = `${geometry.tableRect.height}px`;
+      resizeHandle.style.top = `${visibleTableTop}px`;
+      resizeHandle.style.height = `${visibleTableHeight}px`;
       resizeHandle.hidden = !this.isColumnResizable(column.index, geometry.columns.length);
       resizeHandle.classList.toggle(
         'is-active',
@@ -524,21 +530,47 @@ class HtmlTableHandleOverlayView {
       selectedAxis?.kind === 'column' && selectedAxis.index !== null ? geometry.columns[selectedAxis.index] : null;
 
     if (selectedRow) {
-      this.rowSelectionOverlay.hidden = false;
-      this.rowSelectionOverlay.style.left = `${tableLeft}px`;
-      this.rowSelectionOverlay.style.top = `${tableTop + selectedRow.top}px`;
-      this.rowSelectionOverlay.style.width = `${geometry.tableRect.width}px`;
-      this.rowSelectionOverlay.style.height = `${selectedRow.height}px`;
+      const rect = getHtmlTableVisibleSelectionRect(
+        geometry,
+        tableLeft,
+        tableTop,
+        0,
+        Math.max(0, geometry.columns.length - 1),
+        selectedRow.index,
+        selectedRow.index,
+      );
+      if (!rect) {
+        this.rowSelectionOverlay.hidden = true;
+      } else {
+        this.rowSelectionOverlay.hidden = false;
+        this.rowSelectionOverlay.style.left = `${rect.left}px`;
+        this.rowSelectionOverlay.style.top = `${rect.top}px`;
+        this.rowSelectionOverlay.style.width = `${rect.width}px`;
+        this.rowSelectionOverlay.style.height = `${rect.height}px`;
+      }
     } else {
       this.rowSelectionOverlay.hidden = true;
     }
 
     if (selectedColumn) {
-      this.columnSelectionOverlay.hidden = false;
-      this.columnSelectionOverlay.style.left = `${tableLeft + selectedColumn.left}px`;
-      this.columnSelectionOverlay.style.top = `${tableTop}px`;
-      this.columnSelectionOverlay.style.width = `${selectedColumn.width}px`;
-      this.columnSelectionOverlay.style.height = `${geometry.tableRect.height}px`;
+      const rect = getHtmlTableVisibleSelectionRect(
+        geometry,
+        tableLeft,
+        tableTop,
+        selectedColumn.index,
+        selectedColumn.index,
+        0,
+        Math.max(0, geometry.rows.length - 1),
+      );
+      if (!rect) {
+        this.columnSelectionOverlay.hidden = true;
+      } else {
+        this.columnSelectionOverlay.hidden = false;
+        this.columnSelectionOverlay.style.left = `${rect.left}px`;
+        this.columnSelectionOverlay.style.top = `${rect.top}px`;
+        this.columnSelectionOverlay.style.width = `${rect.width}px`;
+        this.columnSelectionOverlay.style.height = `${rect.height}px`;
+      }
     } else {
       this.columnSelectionOverlay.hidden = true;
     }
@@ -688,24 +720,25 @@ class HtmlTableHandleOverlayView {
       return;
     }
 
-    const leftColumn = geometry.columns[selectionInfo.left];
-    const rightColumn = geometry.columns[selectionInfo.right];
-    const topRow = geometry.rows[selectionInfo.top];
-    const bottomRow = geometry.rows[selectionInfo.bottom];
-    if (!leftColumn || !rightColumn || !topRow || !bottomRow) {
+    const rect = getHtmlTableVisibleSelectionRect(
+      geometry,
+      tableLeft,
+      tableTop,
+      selectionInfo.left,
+      selectionInfo.right,
+      selectionInfo.top,
+      selectionInfo.bottom,
+    );
+    if (!rect) {
       this.cellSelectionHandle.hidden = true;
       this.cellSelectionHandle.tabIndex = -1;
       return;
     }
 
-    const selectionTop = tableTop + topRow.top;
-    const selectionBottom = tableTop + bottomRow.top + bottomRow.height;
-    const selectionRight = tableLeft + rightColumn.left + rightColumn.width;
-
     this.cellSelectionHandle.hidden = false;
     this.cellSelectionHandle.tabIndex = renderState.visible ? 0 : -1;
-    this.cellSelectionHandle.style.left = `${selectionRight - 1}px`;
-    this.cellSelectionHandle.style.top = `${selectionTop + (selectionBottom - selectionTop) / 2}px`;
+    this.cellSelectionHandle.style.left = `${rect.right - 1}px`;
+    this.cellSelectionHandle.style.top = `${rect.top + rect.height / 2}px`;
     this.cellSelectionHandle.dataset.primaryAction = renderState.primaryActionId ?? '';
     this.cellSelectionHandle.setAttribute('aria-haspopup', 'menu');
     this.cellSelectionHandle.setAttribute('aria-expanded', renderState.expanded ? 'true' : 'false');
@@ -1174,7 +1207,7 @@ class HtmlTableHandleOverlayView {
 
     activeResize.currentWidths = nextWidths;
     this.applyPreviewWidths(context.dom, nextWidths);
-    const geometry = measureHtmlTableGeometry(context.dom);
+    const geometry = measureHtmlTableGeometry(context.dom, context.wrapper);
     this.dispatchInteractionMeta({
       geometry,
       resizing: {
@@ -1195,7 +1228,7 @@ class HtmlTableHandleOverlayView {
       return;
     }
 
-    const resizedGeometry = measureHtmlTableGeometry(context.dom);
+    const resizedGeometry = measureHtmlTableGeometry(context.dom, context.wrapper);
     const widths = activeResize.currentWidths.map((width) => Math.max(this.options.cellMinWidth, Math.round(width)));
     const transaction = createColumnResizeTransaction(this.view.state, activeResize.tablePos, table, widths)
       .setMeta(htmlTableInteractionPluginKey, {
@@ -1246,21 +1279,22 @@ class HtmlTableHandleOverlayView {
 
   private syncExtendButtons(
     interaction: HtmlTableInteractionState,
-    tableLeft: number,
-    tableTop: number,
-    geometry: ReturnType<typeof measureHtmlTableGeometry>,
+    visibleTableLeft: number,
+    visibleTableTop: number,
+    visibleTableWidth: number,
+    visibleTableHeight: number,
   ): void {
     const hidden = interaction.contextMenuOpen || Boolean(interaction.resizing);
 
     this.addRowButton.hidden = hidden;
     this.addRowButton.tabIndex = hidden ? -1 : 0;
-    this.addRowButton.style.left = `${tableLeft + geometry.tableRect.width / 2}px`;
-    this.addRowButton.style.top = `${tableTop + geometry.tableRect.height + EXTEND_BUTTON_OFFSET}px`;
+    this.addRowButton.style.left = `${visibleTableLeft + visibleTableWidth / 2}px`;
+    this.addRowButton.style.top = `${visibleTableTop + visibleTableHeight + EXTEND_BUTTON_OFFSET}px`;
 
     this.addColumnButton.hidden = hidden;
     this.addColumnButton.tabIndex = hidden ? -1 : 0;
-    this.addColumnButton.style.left = `${tableLeft + geometry.tableRect.width + EXTEND_BUTTON_OFFSET}px`;
-    this.addColumnButton.style.top = `${tableTop + geometry.tableRect.height / 2}px`;
+    this.addColumnButton.style.left = `${visibleTableLeft + visibleTableWidth + EXTEND_BUTTON_OFFSET}px`;
+    this.addColumnButton.style.top = `${visibleTableTop + visibleTableHeight / 2}px`;
   }
 
   private dispatchInteractionMeta(meta: {

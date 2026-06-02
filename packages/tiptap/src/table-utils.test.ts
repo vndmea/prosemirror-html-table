@@ -15,6 +15,7 @@ import {
   measureRenderedColumnBoundaries,
   measureRenderedRowBoundaries,
 } from './table-utils.js';
+import { measureHtmlTableGeometry } from './table-dom.js';
 import { defaultHtmlTableTiptapOptions } from './options.js';
 
 const schema = new Schema({
@@ -116,6 +117,65 @@ describe('table width utilities', () => {
     );
 
     expect(measureRenderedRowBoundaries(table)).toEqual([0, 32, 84]);
+  });
+
+  it('measures wrapper and visible table bounds for overlay positioning', () => {
+    const table = createMeasuredTable(
+      20,
+      380,
+      [
+        [{ left: 20, right: 140 }, { left: 140, right: 380 }],
+        [{ left: 20, right: 140 }, { left: 140, right: 380 }],
+      ],
+      [
+        { top: 40, bottom: 72 },
+        { top: 72, bottom: 124 },
+      ],
+      40,
+      124,
+    );
+    const wrapper = {
+      scrollLeft: 96,
+      scrollTop: 0,
+      getBoundingClientRect: () => createRect(60, 260, 20, 148),
+    } as unknown as HTMLElement;
+
+    expect(measureHtmlTableGeometry(table, wrapper)).toEqual({
+      tableRect: {
+        left: 20,
+        top: 40,
+        right: 380,
+        bottom: 124,
+        width: 360,
+        height: 84,
+      },
+      wrapperRect: {
+        left: 60,
+        top: 20,
+        right: 260,
+        bottom: 148,
+        width: 200,
+        height: 128,
+      },
+      visibleTableRect: {
+        left: 60,
+        top: 40,
+        right: 260,
+        bottom: 124,
+        width: 200,
+        height: 84,
+      },
+      scrollLeft: 96,
+      scrollTop: 0,
+      columns: [
+        { index: 0, left: 0, width: 120 },
+        { index: 1, left: 120, width: 240 },
+      ],
+      rows: [
+        { index: 0, top: 0, height: 32 },
+        { index: 1, top: 32, height: 52 },
+      ],
+    });
   });
 
   it('builds resize transactions that preserve cell selections', () => {

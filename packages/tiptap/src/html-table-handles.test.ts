@@ -193,6 +193,24 @@ describe('html table handles', () => {
         width: 240,
         height: 80,
       },
+      wrapperRect: {
+        left: 0,
+        top: 0,
+        right: 240,
+        bottom: 80,
+        width: 240,
+        height: 80,
+      },
+      visibleTableRect: {
+        left: 0,
+        top: 0,
+        right: 240,
+        bottom: 80,
+        width: 240,
+        height: 80,
+      },
+      scrollLeft: 0,
+      scrollTop: 0,
       columns: [
         { index: 0, left: 0, width: 100 },
         { index: 1, left: 100, width: 140 },
@@ -252,6 +270,83 @@ describe('html table handles', () => {
     ).toEqual({
       left: 259,
       top: 50,
+    });
+  });
+
+  it('clamps selection anchors to the visible wrapper bounds when the table is scrolled', () => {
+    const geometry: HtmlTableGeometry = {
+      tableRect: {
+        left: -120,
+        top: 20,
+        right: 240,
+        bottom: 100,
+        width: 360,
+        height: 80,
+      },
+      wrapperRect: {
+        left: 40,
+        top: 20,
+        right: 240,
+        bottom: 100,
+        width: 200,
+        height: 80,
+      },
+      visibleTableRect: {
+        left: 40,
+        top: 20,
+        right: 240,
+        bottom: 100,
+        width: 200,
+        height: 80,
+      },
+      scrollLeft: 160,
+      scrollTop: 0,
+      columns: [
+        { index: 0, left: 0, width: 120 },
+        { index: 1, left: 120, width: 120 },
+        { index: 2, left: 240, width: 120 },
+      ],
+      rows: [
+        { index: 0, top: 0, height: 40 },
+        { index: 1, top: 40, height: 40 },
+      ],
+    };
+    const base = createInteractionState({
+      activeTable: {
+        tablePos: 5,
+        table: {} as never,
+      },
+    });
+
+    expect(getHtmlTableSelectionAnchor({ ...base, tableSelected: true }, 5, geometry, -120, 20, null)).toEqual({
+      left: 40,
+      top: 20,
+    });
+    expect(
+      getHtmlTableSelectionAnchor({
+        ...base,
+        selectedAxis: {
+          kind: 'row',
+          index: 1,
+          tablePos: 5,
+        },
+        selectedAxisExplicit: true,
+      }, 5, geometry, -120, 20, null),
+    ).toEqual({
+      left: 40,
+      top: 80,
+    });
+    expect(
+      getHtmlTableSelectionAnchor(base, 5, geometry, -120, 20, {
+        tablePos: 5,
+        left: 2,
+        right: 2,
+        top: 0,
+        bottom: 1,
+      } as never),
+    ).toEqual({
+      left: 239,
+      top: 60,
     });
   });
 

@@ -1,5 +1,5 @@
 import type { HtmlTableInteractionState } from './html-table-interaction.js';
-import type { HtmlTableGeometry } from './table-dom.js';
+import type { HtmlTableGeometry, HtmlTableRect } from './table-dom.js';
 import { getTableSelectionInfo } from './table-utils.js';
 
 export type HtmlTableSelectionScope = 'table' | 'row' | 'column' | 'cell';
@@ -26,6 +26,10 @@ export interface HtmlTableContextMenuPosition {
 export interface HtmlTableOverlayPositionState {
   tableLeft: number;
   tableTop: number;
+  visibleTableLeft: number;
+  visibleTableTop: number;
+  visibleTableWidth: number;
+  visibleTableHeight: number;
   rowHandleLeft: number;
   columnHandleTop: number;
 }
@@ -67,47 +71,65 @@ export function getHtmlTableSelectionAnchor(
   selectionInfo: ReturnType<typeof getTableSelectionInfo> | null,
 ): HtmlTableSelectionAnchor | null {
   const scope = getHtmlTableSelectionScope(interaction, tablePos, selectionInfo);
+  const visibleTableRect = getHtmlTableVisibleOverlayRect(geometry, tableLeft, tableTop);
   if (scope === 'table') {
     return {
-      left: tableLeft,
-      top: tableTop,
+      left: visibleTableRect.left,
+      top: visibleTableRect.top,
     };
   }
 
   if (scope === 'row' && interaction.selectedAxis.index !== null) {
-    const row = geometry.rows[interaction.selectedAxis.index];
-    if (!row) return null;
+    const rect = getHtmlTableVisibleSelectionRect(
+      geometry,
+      tableLeft,
+      tableTop,
+      0,
+      Math.max(0, geometry.columns.length - 1),
+      interaction.selectedAxis.index,
+      interaction.selectedAxis.index,
+    );
+    if (!rect) return null;
     return {
-      left: tableLeft,
-      top: tableTop + row.top + row.height / 2,
+      left: rect.left,
+      top: rect.top + rect.height / 2,
     };
   }
 
   if (scope === 'column' && interaction.selectedAxis.index !== null) {
-    const column = geometry.columns[interaction.selectedAxis.index];
-    if (!column) return null;
+    const rect = getHtmlTableVisibleSelectionRect(
+      geometry,
+      tableLeft,
+      tableTop,
+      interaction.selectedAxis.index,
+      interaction.selectedAxis.index,
+      0,
+      Math.max(0, geometry.rows.length - 1),
+    );
+    if (!rect) return null;
     return {
-      left: tableLeft + column.left + column.width / 2,
-      top: tableTop,
+      left: rect.left + rect.width / 2,
+      top: rect.top,
     };
   }
 
   if (scope === 'cell' && selectionInfo) {
-    const leftColumn = geometry.columns[selectionInfo.left];
-    const rightColumn = geometry.columns[selectionInfo.right];
-    const topRow = geometry.rows[selectionInfo.top];
-    const bottomRow = geometry.rows[selectionInfo.bottom];
-    if (!leftColumn || !rightColumn || !topRow || !bottomRow) {
+    const rect = getHtmlTableVisibleSelectionRect(
+      geometry,
+      tableLeft,
+      tableTop,
+      selectionInfo.left,
+      selectionInfo.right,
+      selectionInfo.top,
+      selectionInfo.bottom,
+    );
+    if (!rect) {
       return null;
     }
 
-    const selectionTop = tableTop + topRow.top;
-    const selectionBottom = tableTop + bottomRow.top + bottomRow.height;
-    const selectionRight = tableLeft + rightColumn.left + rightColumn.width;
-
     return {
-      left: selectionRight - 1,
-      top: selectionTop + (selectionBottom - selectionTop) / 2,
+      left: rect.right - 1,
+      top: rect.top + rect.height / 2,
     };
   }
 
@@ -204,12 +226,18 @@ export function getHtmlTableOverlayPositionState(
 ): HtmlTableOverlayPositionState {
   const tableLeft = geometry.tableRect.left - hostRect.left;
   const tableTop = geometry.tableRect.top - hostRect.top;
+  const visibleTableLeft = geometry.visibleTableRect.left - hostRect.left;
+  const visibleTableTop = geometry.visibleTableRect.top - hostRect.top;
 
   return {
     tableLeft,
     tableTop,
-    rowHandleLeft: Math.max(minHandleInset, tableLeft - rowHandleOffset),
-    columnHandleTop: Math.max(minHandleInset, tableTop - columnHandleOffset),
+    visibleTableLeft,
+    visibleTableTop,
+    visibleTableWidth: geometry.visibleTableRect.width,
+    visibleTableHeight: geometry.visibleTableRect.height,
+    rowHandleLeft: Math.max(minHandleInset, visibleTableLeft - rowHandleOffset),
+    columnHandleTop: Math.max(minHandleInset, visibleTableTop - columnHandleOffset),
   };
 }
 
@@ -224,5 +252,97 @@ export function getHtmlTableOverlayViewportBounds(
     top: inset - hostRect.top,
     right: viewportWidth - hostRect.left - inset,
     bottom: viewportHeight - hostRect.top - inset,
+  };
+}
+
+export function getHtmlTableVisibleSelectionRect(
+  geometry: HtmlTableGeometry,
+  tableLeft: number,
+  tableTop: number,
+  leftColumnIndex: number,
+  rightColumnIndex: number,
+  topRowIndex: number,
+  bottomRowIndex: number,
+): HtmlTableRect | null {
+  const selectionRect = getHtmlTableSelectionRect(
+    geometry,
+    tableLeft,
+    tableTop,
+    leftColumnIndex,
+    rightColumnIndex,
+    topRowIndex,
+    bottomRowIndex,
+  );
+  if (!selectionRect) {
+    return null;
+  }
+
+  return clampHtmlTableRect(selectionRect, getHtmlTableVisibleOverlayRect(geometry, tableLeft, tableTop));
+}
+
+export function getHtmlTableVisibleOverlayRect(
+  geometry: HtmlTableGeometry,
+  tableLeft: number,
+  tableTop: number,
+): HtmlTableRect {
+  return {
+    left: tableLeft + (geometry.visibleTableRect.left - geometry.tableRect.left),
+    top: tableTop + (geometry.visibleTableRect.top - geometry.tableRect.top),
+    right: tableLeft + (geometry.visibleTableRect.right - geometry.tableRect.left),
+    bottom: tableTop + (geometry.visibleTableRect.bottom - geometry.tableRect.top),
+    width: geometry.visibleTableRect.width,
+    height: geometry.visibleTableRect.height,
+  };
+}
+
+function getHtmlTableSelectionRect(
+  geometry: HtmlTableGeometry,
+  tableLeft: number,
+  tableTop: number,
+  leftColumnIndex: number,
+  rightColumnIndex: number,
+  topRowIndex: number,
+  bottomRowIndex: number,
+): HtmlTableRect | null {
+  const leftColumn = geometry.columns[leftColumnIndex];
+  const rightColumn = geometry.columns[rightColumnIndex];
+  const topRow = geometry.rows[topRowIndex];
+  const bottomRow = geometry.rows[bottomRowIndex];
+  if (!leftColumn || !rightColumn || !topRow || !bottomRow) {
+    return null;
+  }
+
+  const left = tableLeft + leftColumn.left;
+  const top = tableTop + topRow.top;
+  const right = tableLeft + rightColumn.left + rightColumn.width;
+  const bottom = tableTop + bottomRow.top + bottomRow.height;
+
+  return {
+    left,
+    top,
+    right,
+    bottom,
+    width: Math.max(0, right - left),
+    height: Math.max(0, bottom - top),
+  };
+}
+
+function clampHtmlTableRect(rect: HtmlTableRect, visibleRect: HtmlTableRect): HtmlTableRect | null {
+  const left = Math.max(rect.left, visibleRect.left);
+  const top = Math.max(rect.top, visibleRect.top);
+  const right = Math.min(rect.right, visibleRect.right);
+  const bottom = Math.min(rect.bottom, visibleRect.bottom);
+
+  if (right <= left || bottom <= top) {
+    return null;
+  }
+
+  return {
+    left,
+    top,
+    right,
+    bottom,
+    width: right - left,
+    height: bottom - top,
   };
 }

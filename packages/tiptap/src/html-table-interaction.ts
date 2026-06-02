@@ -277,10 +277,18 @@ function deriveContextTriggerState(
   }
 
   if (tableSelected) {
+    if (geometry.visibleTableRect.width <= 0 || geometry.visibleTableRect.height <= 0) {
+      return {
+        visible: false,
+        left: null,
+        top: null,
+      };
+    }
+
     return {
       visible: true,
-      left: geometry.tableRect.left,
-      top: geometry.tableRect.top,
+      left: geometry.visibleTableRect.left,
+      top: geometry.visibleTableRect.top,
     };
   }
 
@@ -294,32 +302,56 @@ function deriveContextTriggerState(
 
   if (selectedAxis.kind === 'row' && selectedAxis.index !== null) {
     const row = geometry.rows[selectedAxis.index];
-    return row
-      ? {
-          visible: true,
-          left: geometry.tableRect.left,
-          top: geometry.tableRect.top + row.top + row.height / 2,
-        }
-      : {
-          visible: false,
-          left: null,
-          top: null,
-        };
+    if (!row) {
+      return {
+        visible: false,
+        left: null,
+        top: null,
+      };
+    }
+
+    const top = Math.max(geometry.visibleTableRect.top, geometry.tableRect.top + row.top);
+    const bottom = Math.min(geometry.visibleTableRect.bottom, geometry.tableRect.top + row.top + row.height);
+    if (bottom <= top || geometry.visibleTableRect.width <= 0) {
+      return {
+        visible: false,
+        left: null,
+        top: null,
+      };
+    }
+
+    return {
+      visible: true,
+      left: geometry.visibleTableRect.left,
+      top: top + (bottom - top) / 2,
+    };
   }
 
   if (selectedAxis.kind === 'column' && selectedAxis.index !== null) {
     const column = geometry.columns[selectedAxis.index];
-    return column
-      ? {
-          visible: true,
-          left: geometry.tableRect.left + column.left + column.width / 2,
-          top: geometry.tableRect.top,
-        }
-      : {
-          visible: false,
-          left: null,
-          top: null,
-        };
+    if (!column) {
+      return {
+        visible: false,
+        left: null,
+        top: null,
+      };
+    }
+
+    const left = Math.max(geometry.visibleTableRect.left, geometry.tableRect.left + column.left);
+    const right = Math.min(geometry.visibleTableRect.right, geometry.tableRect.left + column.left + column.width);
+    if (right <= left || geometry.visibleTableRect.height <= 0) {
+      return {
+        visible: false,
+        left: null,
+        top: null,
+      };
+    }
+
+    return {
+      visible: true,
+      left: left + (right - left) / 2,
+      top: geometry.visibleTableRect.top,
+    };
   }
 
   return {
@@ -415,7 +447,7 @@ class HtmlTableInteractionView {
       return;
     }
 
-    const geometry = measureHtmlTableGeometry(tableContext.dom);
+    const geometry = measureHtmlTableGeometry(tableContext.dom, tableContext.wrapper);
     const nextHover = getHoverState(tableContext.tablePos, geometry, event.clientX, event.clientY, event.target);
     const current = getHtmlTableInteractionState(this.view.state);
 
@@ -459,10 +491,11 @@ class HtmlTableInteractionView {
   }
 
   private syncSelectionGeometry(): void {
-    const selectionTable = getSelectionTableReference(this.view.state.selection);
     const current = getHtmlTableInteractionState(this.view.state);
+    const selectionTable = getSelectionTableReference(this.view.state.selection);
+    const measuredTable = selectionTable ?? current.activeTable;
 
-    if (!selectionTable) {
+    if (!measuredTable) {
       if (current.activeTable || current.geometry) {
         this.dispatchInteractionMeta({
           hovered: current.hovered,
@@ -476,20 +509,20 @@ class HtmlTableInteractionView {
       return;
     }
 
-    const domContext = getRenderedHtmlTableContext(this.view, selectionTable.tablePos);
+    const domContext = getRenderedHtmlTableContext(this.view, measuredTable.tablePos);
     if (!domContext) return;
 
-    const geometry = measureHtmlTableGeometry(domContext.dom);
+    const geometry = measureHtmlTableGeometry(domContext.dom, domContext.wrapper);
     if (
-      isSameReference(current.activeTable, selectionTable)
+      isSameReference(current.activeTable, measuredTable)
       && isSameGeometry(current.geometry, geometry)
     ) {
       return;
     }
 
     this.dispatchInteractionMeta({
-      hovered: current.hovered?.tablePos === selectionTable.tablePos ? current.hovered : null,
-      hoveredTable: selectionTable,
+      hovered: current.hovered?.tablePos === measuredTable.tablePos ? current.hovered : null,
+      hoveredTable: measuredTable,
       geometry,
     });
   }
@@ -653,6 +686,16 @@ function isSameGeometry(current: HtmlTableGeometry | null, next: HtmlTableGeomet
     current.tableRect.top !== next.tableRect.top ||
     current.tableRect.width !== next.tableRect.width ||
     current.tableRect.height !== next.tableRect.height ||
+    current.wrapperRect.left !== next.wrapperRect.left ||
+    current.wrapperRect.top !== next.wrapperRect.top ||
+    current.wrapperRect.width !== next.wrapperRect.width ||
+    current.wrapperRect.height !== next.wrapperRect.height ||
+    current.visibleTableRect.left !== next.visibleTableRect.left ||
+    current.visibleTableRect.top !== next.visibleTableRect.top ||
+    current.visibleTableRect.width !== next.visibleTableRect.width ||
+    current.visibleTableRect.height !== next.visibleTableRect.height ||
+    current.scrollLeft !== next.scrollLeft ||
+    current.scrollTop !== next.scrollTop ||
     current.columns.length !== next.columns.length ||
     current.rows.length !== next.rows.length
   ) {
@@ -689,7 +732,7 @@ function getCellSelectionDragContext(
   const tableContext = findHtmlTableAtDOM(view, targetElement);
   if (!tableContext) return null;
 
-  const geometry = measureHtmlTableGeometry(tableContext.dom);
+  const geometry = measureHtmlTableGeometry(tableContext.dom, tableContext.wrapper);
   const pointX = clientX ?? targetElement?.getBoundingClientRect().left ?? null;
   const pointY = clientY ?? targetElement?.getBoundingClientRect().top ?? null;
   if (pointX === null || pointY === null) return null;
