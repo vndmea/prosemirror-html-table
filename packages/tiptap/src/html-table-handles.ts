@@ -195,8 +195,9 @@ class HtmlTableHandleOverlayView {
   private readonly cellSelectionHandle: HTMLButtonElement;
   private readonly addRowButton: HTMLButtonElement;
   private readonly addColumnButton: HTMLButtonElement;
-  private currentHost: HTMLElement | null = null;
-  private currentHostPositionManaged = false;
+  private currentOverlayMount: HTMLElement | null = null;
+  private currentOverlayHost: HTMLDivElement | null = null;
+  private currentOverlayMountPositionManaged = false;
   private renderedTablePos: number | null = null;
   private renderedGeometry: ReturnType<typeof measureHtmlTableGeometry> | null = null;
   private rowHandles: HTMLButtonElement[] = [];
@@ -290,8 +291,9 @@ class HtmlTableHandleOverlayView {
     this.root.ownerDocument.removeEventListener('mouseup', this.onDocumentMouseUpCapture, true);
     this.root.ownerDocument.removeEventListener('click', this.onDocumentClickCapture, true);
     this.root.ownerDocument.removeEventListener('keydown', this.onDocumentKeyDown);
-    this.currentHost = null;
-    this.currentHostPositionManaged = false;
+    this.currentOverlayMount = null;
+    this.currentOverlayHost = null;
+    this.currentOverlayMountPositionManaged = false;
     this.renderedTablePos = null;
     this.renderedGeometry = null;
     this.root.remove();
@@ -318,9 +320,8 @@ class HtmlTableHandleOverlayView {
     this.renderedTablePos = activeTable.tablePos;
     this.renderedGeometry = geometry;
 
-    const overlayHost = this.getOverlayHost();
-    this.attach(overlayHost);
-
+    const overlayMount = this.getOverlayMount();
+    const overlayHost = this.attach(overlayMount);
     const hostRect = overlayHost.getBoundingClientRect();
     const overlayPositionState = getHtmlTableOverlayPositionState(
       geometry,
@@ -1272,30 +1273,49 @@ class HtmlTableHandleOverlayView {
     this.view.dispatch(this.view.state.tr.setMeta(htmlTableInteractionPluginKey, meta));
   }
 
-  private attach(wrapper: HTMLElement): void {
-    if (this.currentHost === wrapper && this.root.parentElement === wrapper) {
-      return;
+  private attach(mount: HTMLElement): HTMLDivElement {
+    if (
+      this.currentOverlayMount === mount
+      && this.currentOverlayHost
+      && this.root.parentElement === this.currentOverlayHost
+    ) {
+      return this.currentOverlayHost;
     }
 
     this.detach();
-    if (this.root.ownerDocument.defaultView?.getComputedStyle(wrapper).position === 'static') {
-      wrapper.style.position = 'relative';
-      this.currentHostPositionManaged = true;
+    if (this.root.ownerDocument.defaultView?.getComputedStyle(mount).position === 'static') {
+      mount.style.position = 'relative';
+      this.currentOverlayMountPositionManaged = true;
     }
-    wrapper.append(this.root);
-    this.currentHost = wrapper;
+
+    const overlayHost = this.root.ownerDocument.createElement('div');
+    overlayHost.className = 'html-table-overlay-host';
+    overlayHost.dataset.htmlTableOverlayHost = 'true';
+    overlayHost.setAttribute('role', 'presentation');
+    overlayHost.style.position = 'absolute';
+    overlayHost.style.inset = '0';
+    overlayHost.style.zIndex = '5';
+    overlayHost.style.pointerEvents = 'none';
+    overlayHost.append(this.root);
+
+    mount.append(overlayHost);
+    this.currentOverlayMount = mount;
+    this.currentOverlayHost = overlayHost;
+    return overlayHost;
   }
 
   private detach(): void {
     this.root.hidden = true;
     this.root.remove();
+    this.currentOverlayHost?.remove();
     this.renderedTablePos = null;
     this.renderedGeometry = null;
-    if (this.currentHost && this.currentHostPositionManaged) {
-      this.currentHost.style.removeProperty('position');
+    if (this.currentOverlayMount && this.currentOverlayMountPositionManaged) {
+      this.currentOverlayMount.style.removeProperty('position');
     }
-    this.currentHost = null;
-    this.currentHostPositionManaged = false;
+    this.currentOverlayMount = null;
+    this.currentOverlayHost = null;
+    this.currentOverlayMountPositionManaged = false;
   }
 
   private isColumnResizable(index: number, totalColumns: number): boolean {
@@ -1305,7 +1325,7 @@ class HtmlTableHandleOverlayView {
     return index < totalColumns - 1;
   }
 
-  private getOverlayHost(): HTMLElement {
+  private getOverlayMount(): HTMLElement {
     return (this.view.dom.parentElement ?? this.view.dom) as HTMLElement;
   }
 
