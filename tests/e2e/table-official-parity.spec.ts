@@ -390,6 +390,19 @@ test.describe('official table parity', () => {
     expect(Math.abs(handleBox.x + handleBox.width / 2 - tableBox.x)).toBeLessThan(24);
   });
 
+  test('selected row handle stays visible after mouse leave', async ({ page }) => {
+    await gotoDemo(page);
+    await bodyRowCell(page, 1, 0).hover();
+
+    await clickCenter(page, rowHandle(page, 2));
+    await expect(rowSelectionBand(page)).toBeVisible();
+
+    await page.locator('.hero').hover();
+    await expect(rowHandle(page, 2)).toBeVisible();
+    await expect(rowHandle(page, 0)).toBeHidden();
+    await expect(rowHandle(page, 1)).toBeHidden();
+  });
+
   test('row add-after action targets the captured row snapshot', async ({ page }) => {
     await gotoDemo(page);
     await firstBodyCell(page).hover();
@@ -590,6 +603,18 @@ test.describe('official table parity', () => {
 
     expect(Math.abs(handleBox.x + handleBox.width / 2 - cellBox.x - cellBox.width / 2)).toBeLessThan(20);
     expect(Math.abs(handleBox.y + handleBox.height / 2 - tableBox.y)).toBeLessThan(24);
+  });
+
+  test('selected column handle stays visible after mouse leave', async ({ page }) => {
+    await gotoDemo(page);
+    await secondBodyCell(page).hover();
+
+    await clickCenter(page, columnHandle(page, 1));
+    await expect(columnSelectionBand(page)).toBeVisible();
+
+    await page.locator('.hero').hover();
+    await expect(columnHandle(page, 1)).toBeVisible();
+    await expect(columnHandle(page, 0)).toBeHidden();
   });
 
   test('column add-after action targets the captured column snapshot', async ({ page }) => {
@@ -1195,9 +1220,21 @@ test.describe('official table parity', () => {
 
     await clickCenter(page, addRowButton(page));
     await expect(table(page).locator('tbody tr')).toHaveCount(initialRowCount + 1);
+    await expect(rowSelectionBand(page)).toBeVisible();
+    await expect(columnSelectionBand(page)).toBeHidden();
+    await expect(bodyRowCell(page, initialRowCount, 0)).toHaveText('');
+
+    const insertedRowHandleIndex = (await table(page).locator('thead tr').count()) + initialRowCount;
+    await page.locator('.hero').hover();
+    await expect(rowHandle(page, insertedRowHandleIndex)).toBeVisible();
 
     await clickCenter(page, addColumnButton(page));
     await expect(table(page).locator('thead tr').first().locator('th,td')).toHaveCount(initialColumnCount + 1);
+    await expect(columnSelectionBand(page)).toBeVisible();
+    await expect(rowSelectionBand(page)).toBeHidden();
+    await expect(bodyRowCell(page, 0, initialColumnCount)).toHaveText('');
+    await page.locator('.hero').hover();
+    await expect(columnHandle(page, initialColumnCount)).toBeVisible();
   });
 
   test('extend buttons hide while a context menu is open and return after it closes', async ({ page }) => {

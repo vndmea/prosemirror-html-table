@@ -1257,8 +1257,52 @@ class HtmlTableHandleOverlayView {
     });
     if (!applied || !commandTransaction) return;
 
+    const finalizedTransaction = this.applyExtendButtonSelection(
+      axis,
+      tablePos,
+      geometry,
+      targetRowIndex,
+      commandState,
+      commandTransaction,
+    );
+
     this.view.focus();
-    this.view.dispatch(commandTransaction);
+    this.view.dispatch(finalizedTransaction);
+  }
+
+  private applyExtendButtonSelection(
+    axis: 'row' | 'column',
+    tablePos: number,
+    geometry: ReturnType<typeof measureHtmlTableGeometry>,
+    targetRowIndex: number,
+    commandState: EditorView['state'],
+    commandTransaction: Transaction,
+  ): Transaction {
+    const nextState = commandState.apply(commandTransaction);
+    const nextTable = nextState.doc.nodeAt(tablePos);
+    if (!nextTable || nextTable.type.name !== 'htmlTable') {
+      return commandTransaction;
+    }
+
+    const nextIndex = axis === 'row' ? targetRowIndex + 1 : Math.max(0, geometry.columns.length);
+    const selectionTransaction =
+      axis === 'row'
+        ? createRowSelectionTransaction(nextState, tablePos, nextTable, nextIndex)
+        : createColumnSelectionTransaction(nextState, tablePos, nextTable, nextIndex);
+    if (!selectionTransaction) {
+      return commandTransaction;
+    }
+
+    commandTransaction.setSelection(selectionTransaction.selection);
+    commandTransaction.setMeta(htmlTableInteractionPluginKey, {
+      selectedAxis: {
+        kind: axis,
+        index: nextIndex,
+        tablePos,
+      },
+      selectedAxisExplicit: true,
+    });
+    return commandTransaction;
   }
 
   private handleResizeMove(event: MouseEvent): void {
