@@ -189,11 +189,19 @@ export function deleteColumn(options: HtmlTableCommandOptions = {}): Command {
       grid.width - 1,
     );
 
-    return replaceTable(
+    const nextTable = normalizeHtmlTable(
+      context.table.copy(Fragment.fromArray(tableChildren)),
+      getNormalizeOptions(options),
+    );
+    const nextColumnIndex = Math.max(0, Math.min(targetColumn, grid.width - 2));
+
+    return replaceTableAndSelectCell(
       state,
       dispatch,
       context,
-      normalizeHtmlTable(context.table.copy(Fragment.fromArray(tableChildren)), getNormalizeOptions(options)),
+      nextTable,
+      context.cell.rowIndex,
+      nextColumnIndex,
     );
   };
 }

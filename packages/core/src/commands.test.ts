@@ -128,6 +128,19 @@ function getSelectedCellType(state: EditorState): string | undefined {
   return undefined;
 }
 
+function getSelectedCellNode(state: EditorState): ProseMirrorNode | undefined {
+  const { $from } = state.selection;
+
+  for (let depth = $from.depth; depth > 0; depth -= 1) {
+    const node = $from.node(depth);
+    if (node.type.name === 'htmlTableHeaderCell' || node.type.name === 'htmlTableCell') {
+      return node;
+    }
+  }
+
+  return undefined;
+}
+
 function findNodePositions(doc: ProseMirrorNode, typeName: string): number[] {
   const positions: number[] = [];
 
@@ -807,6 +820,46 @@ describe('html table commands', () => {
     expect(body.child(2).textContent).toBe('c30');
   });
 
+  it('keeps selection inside the same logical tbody row after sorting', () => {
+    const table = schema.nodes.htmlTable!.create(null, [
+      schema.nodes.htmlTableHead!.create(null, [
+        schema.nodes.htmlTableRow!.create(null, [
+          schema.nodes.htmlTableHeaderCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('Name'))]),
+          schema.nodes.htmlTableHeaderCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('Score'))]),
+        ]),
+      ]),
+      schema.nodes.htmlTableBody!.create(null, [
+        schema.nodes.htmlTableRow!.create(null, [
+          schema.nodes.htmlTableCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('c'))]),
+          schema.nodes.htmlTableCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('30'))]),
+        ]),
+        schema.nodes.htmlTableRow!.create(null, [
+          schema.nodes.htmlTableCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('a'))]),
+          schema.nodes.htmlTableCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('10'))]),
+        ]),
+        schema.nodes.htmlTableRow!.create(null, [
+          schema.nodes.htmlTableCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('b'))]),
+          schema.nodes.htmlTableCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('20'))]),
+        ]),
+      ]),
+    ]);
+    const doc = schema.nodes.doc!.create(null, [table]);
+    const bodyCellPositions = findNodePositions(doc, 'htmlTableCell');
+    const state = EditorState.create({
+      schema,
+      doc,
+      selection: CellSelection.create(doc, bodyCellPositions[0]!),
+    });
+    const nextState = applyCommand(state, sortBodyRowsByColumn());
+    const body = getBody(getTable(nextState.doc));
+
+    expect(body.child(0).textContent).toBe('a10');
+    expect(body.child(1).textContent).toBe('b20');
+    expect(body.child(2).textContent).toBe('c30');
+    expect(getSelectedCellType(nextState)).toBe('htmlTableCell');
+    expect(getSelectedCellNode(nextState)?.textContent).toBe('c');
+  });
+
   it('sorts only the active tbody section when the selection is inside it', () => {
     const table = schema.nodes.htmlTable!.create(null, [
       schema.nodes.htmlTableBody!.create(null, [
@@ -926,6 +979,47 @@ describe('html table commands', () => {
     const body = getBody(getTable(nextState.doc));
 
     expect(body.child(0).textContent).toBe('BAC');
+  });
+
+  it('keeps selection inside the moved column after reordering across sections', () => {
+    const table = schema.nodes.htmlTable!.create(null, [
+      schema.nodes.htmlTableHead!.create(null, [
+        schema.nodes.htmlTableRow!.create(null, [
+          schema.nodes.htmlTableHeaderCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('H1'))]),
+          schema.nodes.htmlTableHeaderCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('H2'))]),
+          schema.nodes.htmlTableHeaderCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('H3'))]),
+        ]),
+      ]),
+      schema.nodes.htmlTableBody!.create(null, [
+        schema.nodes.htmlTableRow!.create(null, [
+          schema.nodes.htmlTableCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('A1'))]),
+          schema.nodes.htmlTableCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('A2'))]),
+          schema.nodes.htmlTableCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('A3'))]),
+        ]),
+      ]),
+      schema.nodes.htmlTableFoot!.create(null, [
+        schema.nodes.htmlTableRow!.create(null, [
+          schema.nodes.htmlTableCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('F1'))]),
+          schema.nodes.htmlTableCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('F2'))]),
+          schema.nodes.htmlTableCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('F3'))]),
+        ]),
+      ]),
+    ]);
+    const doc = schema.nodes.doc!.create(null, [table]);
+    const headerPositions = findNodePositions(doc, 'htmlTableHeaderCell');
+    const state = EditorState.create({
+      schema,
+      doc,
+      selection: CellSelection.create(doc, headerPositions[1]!),
+    });
+    const nextState = applyCommand(state, moveColumnRight());
+    const nextTable = getTable(nextState.doc);
+
+    expect(getSection(nextTable, 'htmlTableHead')?.child(0).textContent).toBe('H1H3H2');
+    expect(getBody(nextTable).child(0).textContent).toBe('A1A3A2');
+    expect(getSection(nextTable, 'htmlTableFoot')?.child(0).textContent).toBe('F1F3F2');
+    expect(getSelectedCellType(nextState)).toBe('htmlTableHeaderCell');
+    expect(getSelectedCellNode(nextState)?.textContent).toBe('H2');
   });
 
   it('does not move a column when merged cells are present', () => {
@@ -1082,12 +1176,26 @@ describe('html table commands', () => {
     expect(firstCell.type.name).toBe('htmlTableCell');
   });
 
+  it('keeps the selection inside the toggled cell after toggling a header cell', () => {
+    const nextState = applyCommand(createStateWithTable(2, 2), toggleHeaderCell());
+
+    expect(getSelectedCellType(nextState)).toBe('htmlTableCell');
+    expect(getSelectedCellNode(nextState)?.textContent).toBe('');
+  });
+
   it('toggles the selected row between header and body cell types', () => {
     const nextState = applyCommand(createStateWithTable(2, 2), toggleHeaderRow());
     const firstRow = getBody(getTable(nextState.doc)).child(0);
 
     expect(firstRow.child(0).type.name).toBe('htmlTableCell');
     expect(firstRow.child(1).type.name).toBe('htmlTableCell');
+  });
+
+  it('keeps the selection inside the toggled row after toggling a header row', () => {
+    const nextState = applyCommand(createStateWithTable(2, 2), toggleHeaderRow());
+
+    expect(getSelectedCellType(nextState)).toBe('htmlTableCell');
+    expect(getSelectedCellNode(nextState)?.textContent).toBe('');
   });
 
   it('toggles the selected column between header and body cell types', () => {
@@ -1097,6 +1205,14 @@ describe('html table commands', () => {
     expect(body.child(0).child(0).type.name).toBe('htmlTableHeaderCell');
     expect(body.child(1).child(0).type.name).toBe('htmlTableHeaderCell');
     expect(body.child(1).child(1).type.name).toBe('htmlTableCell');
+  });
+
+  it('keeps the selection inside a valid cell after toggling a column header state', () => {
+    const state = createStateWithTable(2, 2);
+    const nextState = applyCommand(state, toggleHeaderColumn());
+
+    expect(getSelectedCellType(nextState)).toBe('htmlTableHeaderCell');
+    expect(getSelectedCellNode(nextState)?.textContent).toBe('');
   });
 
   it('moves the selection to the next and previous table cells', () => {
@@ -1213,6 +1329,103 @@ describe('html table commands', () => {
     expect(splitState.selection).toBeInstanceOf(TextSelection);
     expect(splitState.selection.from).toBeGreaterThan(splitCellPos);
     expect(splitState.selection.from).toBeLessThan(splitCellPos + firstCellNodeSize);
+  });
+
+  it('splits a rowspan and colspan cell back into a valid rectangular grid', () => {
+    const table = schema.nodes.htmlTable!.create(null, [
+      schema.nodes.htmlTableBody!.create(null, [
+        schema.nodes.htmlTableRow!.create(null, [
+          schema.nodes.htmlTableCell!.create({ colspan: 2, rowspan: 2 }, [
+            schema.nodes.paragraph!.create(null, schema.text('A')),
+          ]),
+          schema.nodes.htmlTableCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('B'))]),
+        ]),
+        schema.nodes.htmlTableRow!.create(null, [
+          schema.nodes.htmlTableCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('C'))]),
+        ]),
+      ]),
+    ]);
+    const state = createStateForTable(table);
+    const nextState = applyCommand(state, splitCell());
+    const body = getBody(getTable(nextState.doc));
+
+    expect(body.child(0).childCount).toBe(3);
+    expect(body.child(1).childCount).toBe(3);
+    expect(body.child(0).child(0).attrs.colspan).toBe(1);
+    expect(body.child(0).child(0).attrs.rowspan).toBe(1);
+    expect(getSelectedCellNode(nextState)?.textContent).toBe('A');
+  });
+
+  it('keeps selection inside the duplicated column across head body and foot sections', () => {
+    const table = schema.nodes.htmlTable!.create(null, [
+      schema.nodes.htmlTableHead!.create(null, [
+        schema.nodes.htmlTableRow!.create(null, [
+          schema.nodes.htmlTableHeaderCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('H1'))]),
+          schema.nodes.htmlTableHeaderCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('H2'))]),
+        ]),
+      ]),
+      schema.nodes.htmlTableBody!.create(null, [
+        schema.nodes.htmlTableRow!.create(null, [
+          schema.nodes.htmlTableCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('A1'))]),
+          schema.nodes.htmlTableCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('A2'))]),
+        ]),
+      ]),
+      schema.nodes.htmlTableFoot!.create(null, [
+        schema.nodes.htmlTableRow!.create(null, [
+          schema.nodes.htmlTableCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('F1'))]),
+          schema.nodes.htmlTableCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('F2'))]),
+        ]),
+      ]),
+    ]);
+    const state = createStateForTable(table);
+    const nextState = applyCommand(state, duplicateColumn());
+    const nextTable = getTable(nextState.doc);
+
+    expect(getSection(nextTable, 'htmlTableHead')?.child(0).childCount).toBe(3);
+    expect(getBody(nextTable).child(0).childCount).toBe(3);
+    expect(getSection(nextTable, 'htmlTableFoot')?.child(0).childCount).toBe(3);
+    expect(getSelectedCellNode(nextState)?.textContent).toBe('H1');
+  });
+
+  it('keeps selection inside a valid remaining cell after deleting a column across sections', () => {
+    const table = schema.nodes.htmlTable!.create(null, [
+      schema.nodes.htmlTableHead!.create(null, [
+        schema.nodes.htmlTableRow!.create(null, [
+          schema.nodes.htmlTableHeaderCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('H1'))]),
+          schema.nodes.htmlTableHeaderCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('H2'))]),
+          schema.nodes.htmlTableHeaderCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('H3'))]),
+        ]),
+      ]),
+      schema.nodes.htmlTableBody!.create(null, [
+        schema.nodes.htmlTableRow!.create(null, [
+          schema.nodes.htmlTableCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('A1'))]),
+          schema.nodes.htmlTableCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('A2'))]),
+          schema.nodes.htmlTableCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('A3'))]),
+        ]),
+      ]),
+      schema.nodes.htmlTableFoot!.create(null, [
+        schema.nodes.htmlTableRow!.create(null, [
+          schema.nodes.htmlTableCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('F1'))]),
+          schema.nodes.htmlTableCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('F2'))]),
+          schema.nodes.htmlTableCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('F3'))]),
+        ]),
+      ]),
+    ]);
+    const doc = schema.nodes.doc!.create(null, [table]);
+    const headerPositions = findNodePositions(doc, 'htmlTableHeaderCell');
+    const state = EditorState.create({
+      schema,
+      doc,
+      selection: CellSelection.create(doc, headerPositions[1]!),
+    });
+    const nextState = applyCommand(state, deleteColumn());
+    const nextTable = getTable(nextState.doc);
+
+    expect(getSection(nextTable, 'htmlTableHead')?.child(0).childCount).toBe(2);
+    expect(getBody(nextTable).child(0).childCount).toBe(2);
+    expect(getSection(nextTable, 'htmlTableFoot')?.child(0).childCount).toBe(2);
+    expect(getSelectedCellType(nextState)).toBe('htmlTableHeaderCell');
+    expect(getSelectedCellNode(nextState)?.textContent).toBe('H3');
   });
 
   it('normalizes malformed table structure and clamps invalid spans', () => {
