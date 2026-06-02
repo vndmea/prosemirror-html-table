@@ -131,6 +131,22 @@ async function clickMenuAction(page: Page, label: string) {
   await clickCenter(page, contextMenuAction(page, label));
 }
 
+async function expandTableForHorizontalScroll(page: Page, columnsToAdd = 5) {
+  for (let index = 0; index < columnsToAdd; index += 1) {
+    await firstBodyCell(page).hover();
+    await openColumnMenu(page, 0);
+    await clickMenuAction(page, 'Add column after');
+    await expect(contextMenu(page)).toBeHidden();
+  }
+
+  await expect.poll(async () => {
+    return page.evaluate(() => {
+      const wrapper = document.querySelector('[data-testid="pmht-table-wrapper"]') as HTMLElement | null;
+      return wrapper ? wrapper.scrollWidth > wrapper.clientWidth : false;
+    });
+  }).toBe(true);
+}
+
 test.describe('official table parity', () => {
   test('table handle stays table-scoped when selecting the table', async ({ page }) => {
     await gotoDemo(page);
@@ -220,6 +236,29 @@ test.describe('official table parity', () => {
     await expect(columnSelectionBand(page)).toBeHidden();
   });
 
+  test('table menu lifecycle keeps table scope stable across inside click, Escape, and outside click', async ({ page }) => {
+    await gotoDemo(page);
+    await firstBodyCell(page).hover();
+
+    await clickCenter(page, tableHandle(page));
+    await clickCenter(page, tableHandle(page));
+    await expect(contextMenu(page)).toBeVisible();
+    await expect(contextMenu(page)).toHaveAttribute('data-scope', 'table');
+    await expect(rowSelectionBand(page)).toBeHidden();
+    await expect(columnSelectionBand(page)).toBeHidden();
+
+    await contextMenu(page).click({ position: { x: 16, y: 16 } });
+    await expect(contextMenu(page)).toBeVisible();
+
+    await page.keyboard.press('Escape');
+    await expect(contextMenu(page)).toBeHidden();
+
+    await clickCenter(page, tableHandle(page));
+    await expect(contextMenu(page)).toBeVisible();
+    await page.locator('.hero').click();
+    await expect(contextMenu(page)).toBeHidden();
+  });
+
   test('row handle keeps row scope explicit through selection and menu actions', async ({ page }) => {
     await gotoDemo(page);
 
@@ -292,6 +331,29 @@ test.describe('official table parity', () => {
     await expect(footerRows(page)).toHaveCount(initialFootRowCount + 1);
     await expect(bodyRowCell(page, 0, 0)).toHaveText('Inspect connector');
     await expect(table(page).locator('tfoot').locator('td,th').filter({ hasText: /^Open panel$/ })).toHaveCount(1);
+  });
+
+  test('row menu lifecycle keeps row scope stable across inside click, Escape, and outside click', async ({ page }) => {
+    await gotoDemo(page);
+    await firstBodyCell(page).hover();
+
+    await openRowMenu(page, 1);
+    await expect(contextMenu(page)).toHaveAttribute('data-scope', 'row');
+    await expect(rowSelectionBand(page)).toBeVisible();
+    await expect(columnSelectionBand(page)).toBeHidden();
+
+    await contextMenu(page).click({ position: { x: 16, y: 16 } });
+    await expect(contextMenu(page)).toBeVisible();
+    await expect(rowSelectionBand(page)).toBeVisible();
+
+    await page.keyboard.press('Escape');
+    await expect(contextMenu(page)).toBeHidden();
+    await expect(rowSelectionBand(page)).toBeVisible();
+
+    await openRowMenu(page, 1);
+    await expect(contextMenu(page)).toBeVisible();
+    await page.locator('.hero').click();
+    await expect(contextMenu(page)).toBeHidden();
   });
 
   test('column handle selects the whole column and keeps the menu aligned after scroll', async ({ page }) => {
@@ -393,6 +455,29 @@ test.describe('official table parity', () => {
     await expect(table(page).locator('thead tr').first().locator('th,td').nth(1)).toHaveText('Task');
     await expect(bodyRowCell(page, 0, 0)).toHaveText('Open panel');
     await expect(bodyRowCell(page, 0, 1)).toHaveText('Open panel');
+  });
+
+  test('column menu lifecycle keeps column scope stable across inside click, Escape, and outside click', async ({ page }) => {
+    await gotoDemo(page);
+    await firstBodyCell(page).hover();
+
+    await openColumnMenu(page, 0);
+    await expect(contextMenu(page)).toHaveAttribute('data-scope', 'column');
+    await expect(columnSelectionBand(page)).toBeVisible();
+    await expect(rowSelectionBand(page)).toBeHidden();
+
+    await contextMenu(page).click({ position: { x: 16, y: 16 } });
+    await expect(contextMenu(page)).toBeVisible();
+    await expect(columnSelectionBand(page)).toBeVisible();
+
+    await page.keyboard.press('Escape');
+    await expect(contextMenu(page)).toBeHidden();
+    await expect(columnSelectionBand(page)).toBeVisible();
+
+    await openColumnMenu(page, 0);
+    await expect(contextMenu(page)).toBeVisible();
+    await page.locator('.hero').click();
+    await expect(contextMenu(page)).toBeHidden();
   });
 
   test('cell menu actions keep the rectangular selection active', async ({ page }) => {
@@ -515,6 +600,44 @@ test.describe('official table parity', () => {
     await expect(contextMenu(page)).toBeHidden();
     await expect(rowSelectionBand(page)).toBeHidden();
     await expect(columnSelectionBand(page)).toBeHidden();
+  });
+
+  test('after horizontal scroll, cell handle stays aligned to the visible selected cell', async ({ page }) => {
+    await page.setViewportSize({ width: 780, height: 900 });
+    await gotoDemo(page);
+
+    await expandTableForHorizontalScroll(page);
+
+    await page.evaluate(() => {
+      const wrapper = document.querySelector('[data-testid="pmht-table-wrapper"]') as HTMLElement | null;
+      if (wrapper) {
+        wrapper.scrollLeft = wrapper.scrollWidth;
+      }
+    });
+
+    const bodyCellLocator = table(page).locator('tbody tr').first().locator('td,th');
+    const totalColumns = await bodyCellLocator.count();
+    const lastCell = bodyCellLocator.nth(totalColumns - 1);
+
+    await clickCenter(page, lastCell);
+    await expect(selectedCells(page)).toHaveCount(1);
+    await expect(cellHandle(page)).toBeVisible();
+
+    const handleBox = await cellHandle(page).boundingBox();
+    const lastBox = await lastCell.boundingBox();
+    if (!handleBox || !lastBox) {
+      throw new Error('Could not resolve selected cell handle geometry after scroll.');
+    }
+
+    const selectionTop = lastBox.y;
+    const selectionBottom = lastBox.y + lastBox.height;
+    const selectionRight = lastBox.x + lastBox.width;
+    const handleCenterY = handleBox.y + handleBox.height / 2;
+    const handleCenterX = handleBox.x + handleBox.width / 2;
+
+    expect(Math.abs(handleCenterX - selectionRight)).toBeLessThan(24);
+    expect(handleCenterY).toBeGreaterThanOrEqual(selectionTop - 8);
+    expect(handleCenterY).toBeLessThanOrEqual(selectionBottom + 8);
   });
 
   test('extend buttons stay anchored to the table edges without creating vertical overflow', async ({ page }) => {
