@@ -128,7 +128,83 @@ export function isTableHandleVisible(
   interaction: HtmlTableInteractionState,
   tablePos: number,
 ): boolean {
-  return allowTableNodeSelection && interaction.activeTable?.tablePos === tablePos;
+  return (
+    allowTableNodeSelection &&
+    interaction.activeTable?.tablePos === tablePos &&
+    interaction.resizing?.tablePos !== tablePos
+  );
+}
+
+export function isHtmlTableAxisHandleVisible(
+  interaction: HtmlTableInteractionState,
+  axis: 'row' | 'column',
+  tablePos: number,
+  index: number,
+): boolean {
+  const selected =
+    Boolean(interaction.selectedAxisExplicit) &&
+    interaction.selectedAxis.kind === axis &&
+    interaction.selectedAxis.index === index &&
+    interaction.selectedAxis.tablePos === tablePos;
+  const hovered = isHtmlTableAxisHandleHovered(interaction, axis, tablePos, index);
+
+  if (interaction.tableSelected || interaction.resizing?.tablePos === tablePos) {
+    return false;
+  }
+
+  if (interaction.contextMenuOpen && !selected) {
+    return false;
+  }
+
+  return hovered || selected;
+}
+
+export function isHtmlTableResizeHandleVisible(
+  interaction: HtmlTableInteractionState,
+  tablePos: number,
+  columnIndex: number,
+  resizable: boolean,
+): boolean {
+  if (!resizable) {
+    return false;
+  }
+
+  if (interaction.contextMenuOpen) {
+    return false;
+  }
+
+  if (interaction.resizing?.tablePos !== tablePos) {
+    return true;
+  }
+
+  return interaction.resizing.columnIndex === columnIndex;
+}
+
+export function isHtmlTableCellHandleVisible(
+  interaction: HtmlTableInteractionState,
+  tablePos: number,
+  selectionInfo: ReturnType<typeof getTableSelectionInfo> | null,
+  renderVisible: boolean,
+): boolean {
+  if (!renderVisible) {
+    return false;
+  }
+
+  if (interaction.tableSelected || interaction.resizing?.tablePos === tablePos) {
+    return false;
+  }
+
+  if (!selectionInfo || selectionInfo.tablePos !== tablePos) {
+    return false;
+  }
+
+  return !(Boolean(interaction.selectedAxisExplicit) && interaction.selectedAxis.kind);
+}
+
+export function shouldHideHtmlTableExtendButtons(
+  interaction: HtmlTableInteractionState,
+): boolean {
+  return interaction.contextMenuOpen || Boolean(interaction.resizing);
 }
 
 export function isHtmlTableContextMenuExpandedForScope(
@@ -378,7 +454,7 @@ class HtmlTableHandleOverlayView {
         isRowMenuOpen ? contextMenu.primaryAction?.label ?? null : null,
       );
       const rowControls = getHtmlTableContextMenuAriaControls(this.contextMenuId, isRowMenuOpen);
-      handle.hidden = interaction.tableSelected || (!isRowHovered && !isRowSelected);
+      handle.hidden = !isHtmlTableAxisHandleVisible(interaction, 'row', activeTable.tablePos, row.index);
       handle.tabIndex = handle.hidden ? -1 : 0;
       handle.setAttribute('aria-label', rowText.label);
       handle.title = rowText.title;
@@ -424,7 +500,7 @@ class HtmlTableHandleOverlayView {
         isColumnMenuOpen ? contextMenu.primaryAction?.label ?? null : null,
       );
       const columnControls = getHtmlTableContextMenuAriaControls(this.contextMenuId, isColumnMenuOpen);
-      handle.hidden = interaction.tableSelected || (!isColumnHovered && !isColumnSelected);
+      handle.hidden = !isHtmlTableAxisHandleVisible(interaction, 'column', activeTable.tablePos, column.index);
       handle.tabIndex = handle.hidden ? -1 : 0;
       handle.setAttribute('aria-label', columnText.label);
       handle.title = columnText.title;
@@ -455,7 +531,12 @@ class HtmlTableHandleOverlayView {
       resizeHandle.style.left = `${tableLeft + column.left + column.width}px`;
       resizeHandle.style.top = `${visibleTableTop}px`;
       resizeHandle.style.height = `${visibleTableHeight}px`;
-      resizeHandle.hidden = !this.isColumnResizable(column.index, geometry.columns.length);
+      resizeHandle.hidden = !isHtmlTableResizeHandleVisible(
+        interaction,
+        activeTable.tablePos,
+        column.index,
+        this.isColumnResizable(column.index, geometry.columns.length),
+      );
       resizeHandle.classList.toggle(
         'is-active',
         interaction.resizing?.tablePos === activeTable.tablePos && interaction.resizing.columnIndex === column.index,
@@ -702,19 +783,7 @@ class HtmlTableHandleOverlayView {
     const interaction = getHtmlTableInteractionState(this.view.state);
     const renderState = getHtmlTableCellContextTriggerRenderState(menu);
     const controls = getHtmlTableContextMenuAriaControls(this.contextMenuId, renderState.expanded);
-    if (interaction.tableSelected) {
-      this.cellSelectionHandle.hidden = true;
-      this.cellSelectionHandle.tabIndex = -1;
-      return;
-    }
-
     if (!selectionInfo || selectionInfo.tablePos !== tablePos) {
-      this.cellSelectionHandle.hidden = true;
-      this.cellSelectionHandle.tabIndex = -1;
-      return;
-    }
-
-    if (Boolean(interaction.selectedAxisExplicit) && interaction.selectedAxis.kind) {
       this.cellSelectionHandle.hidden = true;
       this.cellSelectionHandle.tabIndex = -1;
       return;
@@ -735,8 +804,9 @@ class HtmlTableHandleOverlayView {
       return;
     }
 
-    this.cellSelectionHandle.hidden = false;
-    this.cellSelectionHandle.tabIndex = renderState.visible ? 0 : -1;
+    const visible = isHtmlTableCellHandleVisible(interaction, tablePos, selectionInfo, renderState.visible);
+    this.cellSelectionHandle.hidden = !visible;
+    this.cellSelectionHandle.tabIndex = visible ? 0 : -1;
     this.cellSelectionHandle.style.left = `${rect.right - 1}px`;
     this.cellSelectionHandle.style.top = `${rect.top + rect.height / 2}px`;
     this.cellSelectionHandle.dataset.primaryAction = renderState.primaryActionId ?? '';
@@ -1284,7 +1354,7 @@ class HtmlTableHandleOverlayView {
     visibleTableWidth: number,
     visibleTableHeight: number,
   ): void {
-    const hidden = interaction.contextMenuOpen || Boolean(interaction.resizing);
+    const hidden = shouldHideHtmlTableExtendButtons(interaction);
 
     this.addRowButton.hidden = hidden;
     this.addRowButton.tabIndex = hidden ? -1 : 0;

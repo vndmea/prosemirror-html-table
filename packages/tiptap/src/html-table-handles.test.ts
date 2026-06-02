@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import type { HtmlTableInteractionState } from './html-table-interaction.js';
 import {
   canRestoreHtmlTableContextMenuFocus,
+  isHtmlTableAxisHandleVisible,
   getHtmlTableCellContextTriggerRenderState,
   getHtmlTableContextMenuActionRenderState,
   getHtmlTableContextMenuAccessibleState,
@@ -19,13 +20,16 @@ import {
   isHtmlTableAxisHandleHovered,
   getHtmlTableSelectionAnchor,
   getHtmlTableSelectionScope,
+  isHtmlTableCellHandleVisible,
   isHtmlTableContextMenuExpandedForScope,
   isHtmlTableContextMenuDismissKey,
   isHtmlTableContextMenuExitKey,
   isHtmlTableKeyboardClick,
   isHtmlTableContextMenuNavigationKey,
   isHtmlTableContextMenuTypeaheadKey,
+  isHtmlTableResizeHandleVisible,
   isTableHandleVisible,
+  shouldHideHtmlTableExtendButtons,
   shouldToggleHtmlTableContextMenuFromTableHandle,
   shouldToggleHtmlTableContextMenuFromAxisHandle,
   shouldCloseHtmlTableContextMenuForTarget,
@@ -138,6 +142,162 @@ describe('html table handles', () => {
     });
 
     expect(isTableHandleVisible(false, interaction, 5)).toBe(false);
+  });
+
+  it('hides the table handle while the active table is being resized', () => {
+    const interaction = createInteractionState({
+      activeTable: {
+        tablePos: 5,
+        table: {} as never,
+      },
+      resizing: {
+        tablePos: 5,
+        columnIndex: 1,
+      },
+    });
+
+    expect(isTableHandleVisible(true, interaction, 5)).toBe(false);
+  });
+
+  it('keeps selected axis handles visible, but suppresses hover-only handles during menus and resize', () => {
+    const hovered = createInteractionState({
+      activeTable: {
+        tablePos: 5,
+        table: {} as never,
+      },
+      hovered: {
+        kind: 'cell',
+        tablePos: 5,
+        rowIndex: 1,
+        columnIndex: 0,
+      },
+    });
+    const selected = createInteractionState({
+      activeTable: {
+        tablePos: 5,
+        table: {} as never,
+      },
+      selectedAxis: {
+        kind: 'row',
+        index: 1,
+        tablePos: 5,
+      },
+      selectedAxisExplicit: true,
+    });
+
+    expect(isHtmlTableAxisHandleVisible(hovered, 'row', 5, 1)).toBe(true);
+    expect(
+      isHtmlTableAxisHandleVisible({
+        ...hovered,
+        contextMenuOpen: true,
+      }, 'row', 5, 1),
+    ).toBe(false);
+    expect(
+      isHtmlTableAxisHandleVisible({
+        ...selected,
+        contextMenuOpen: true,
+      }, 'row', 5, 1),
+    ).toBe(true);
+    expect(
+      isHtmlTableAxisHandleVisible({
+        ...selected,
+        resizing: {
+          tablePos: 5,
+          columnIndex: 0,
+        },
+      }, 'row', 5, 1),
+    ).toBe(false);
+  });
+
+  it('shows only the active resize handle during resize and hides resizers while menus are open', () => {
+    const base = createInteractionState({
+      activeTable: {
+        tablePos: 5,
+        table: {} as never,
+      },
+    });
+
+    expect(isHtmlTableResizeHandleVisible(base, 5, 0, true)).toBe(true);
+    expect(
+      isHtmlTableResizeHandleVisible({
+        ...base,
+        contextMenuOpen: true,
+      }, 5, 0, true),
+    ).toBe(false);
+    expect(
+      isHtmlTableResizeHandleVisible({
+        ...base,
+        resizing: {
+          tablePos: 5,
+          columnIndex: 1,
+        },
+      }, 5, 0, true),
+    ).toBe(false);
+    expect(
+      isHtmlTableResizeHandleVisible({
+        ...base,
+        resizing: {
+          tablePos: 5,
+          columnIndex: 1,
+        },
+      }, 5, 1, true),
+    ).toBe(true);
+  });
+
+  it('shows the cell handle only for visible cell selections without axis or resize lock', () => {
+    const base = createInteractionState({
+      activeTable: {
+        tablePos: 5,
+        table: {} as never,
+      },
+    });
+    const selection = {
+      tablePos: 5,
+      left: 0,
+      right: 1,
+      top: 0,
+      bottom: 0,
+    } as never;
+
+    expect(isHtmlTableCellHandleVisible(base, 5, selection, true)).toBe(true);
+    expect(isHtmlTableCellHandleVisible(base, 5, selection, false)).toBe(false);
+    expect(
+      isHtmlTableCellHandleVisible({
+        ...base,
+        selectedAxis: {
+          kind: 'column',
+          index: 0,
+          tablePos: 5,
+        },
+        selectedAxisExplicit: true,
+      }, 5, selection, true),
+    ).toBe(false);
+    expect(
+      isHtmlTableCellHandleVisible({
+        ...base,
+        resizing: {
+          tablePos: 5,
+          columnIndex: 0,
+        },
+      }, 5, selection, true),
+    ).toBe(false);
+  });
+
+  it('hides extend buttons while a context menu is open or resize is active', () => {
+    expect(shouldHideHtmlTableExtendButtons(createInteractionState())).toBe(false);
+    expect(
+      shouldHideHtmlTableExtendButtons(createInteractionState({
+        contextMenuOpen: true,
+      })),
+    ).toBe(true);
+    expect(
+      shouldHideHtmlTableExtendButtons(createInteractionState({
+        resizing: {
+          tablePos: 5,
+          columnIndex: 0,
+        },
+      })),
+    ).toBe(true);
   });
 
   it('derives table, row, column, and cell selection scopes for the overlay', () => {

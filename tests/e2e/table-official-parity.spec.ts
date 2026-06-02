@@ -1240,6 +1240,35 @@ test.describe('official table parity', () => {
     await expect(addRowButton(page)).toBeVisible();
     await expect(addColumnButton(page)).toBeVisible();
   });
+
+  test('resize hides other overlay handles until the drag completes', async ({ page }) => {
+    await gotoDemo(page);
+    await firstBodyCell(page).hover();
+    await dragBetweenCells(page, firstBodyCell(page), secondBodyCell(page));
+
+    const resizeHandle = page.getByTestId('pmht-resize-handle').first();
+    await expect(tableHandle(page)).toBeVisible();
+    await expect(cellHandle(page)).toBeVisible();
+    await expect(resizeHandle).toBeVisible();
+
+    const resizeBox = await resizeHandle.boundingBox();
+    if (!resizeBox) {
+      throw new Error('Could not resolve resize handle geometry for overlay lifecycle test.');
+    }
+
+    await page.mouse.move(resizeBox.x + resizeBox.width / 2, resizeBox.y + resizeBox.height / 2);
+    await page.mouse.down();
+
+    await expect(tableHandle(page)).toBeHidden();
+    await expect(cellHandle(page)).toBeHidden();
+
+    await page.mouse.move(resizeBox.x + resizeBox.width / 2 + 24, resizeBox.y + resizeBox.height / 2, { steps: 4 });
+    await page.mouse.up();
+
+    await expect(tableHandle(page)).toBeVisible();
+    await expect(cellHandle(page)).toBeVisible();
+    await expect(resizeHandle).toBeVisible();
+  });
 });
 
 function escapeRegExp(value: string): string {
