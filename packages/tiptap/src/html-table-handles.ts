@@ -348,7 +348,7 @@ class HtmlTableHandleOverlayView {
     this.syncTableHandle(interaction, contextMenu, activeTable.tablePos, rowHandleLeft, columnHandleTop);
     this.syncSelectionOverlay(interaction, activeTable.tablePos, geometry, tableLeft, tableTop);
     this.syncCellSelectionHandle(contextMenu, activeTable.tablePos, geometry, tableLeft, tableTop, selectionInfo);
-    this.syncExtendButtons(tableLeft, tableTop, geometry);
+    this.syncExtendButtons(interaction, tableLeft, tableTop, geometry);
 
     for (const row of geometry.rows) {
       const handle = this.rowHandles[row.index];
@@ -1247,17 +1247,20 @@ class HtmlTableHandleOverlayView {
   }
 
   private syncExtendButtons(
+    interaction: HtmlTableInteractionState,
     tableLeft: number,
     tableTop: number,
     geometry: ReturnType<typeof measureHtmlTableGeometry>,
   ): void {
-    this.addRowButton.hidden = false;
-    this.addRowButton.tabIndex = 0;
+    const hidden = interaction.contextMenuOpen || Boolean(interaction.resizing);
+
+    this.addRowButton.hidden = hidden;
+    this.addRowButton.tabIndex = hidden ? -1 : 0;
     this.addRowButton.style.left = `${tableLeft + geometry.tableRect.width / 2}px`;
     this.addRowButton.style.top = `${tableTop + geometry.tableRect.height + EXTEND_BUTTON_OFFSET}px`;
 
-    this.addColumnButton.hidden = false;
-    this.addColumnButton.tabIndex = 0;
+    this.addColumnButton.hidden = hidden;
+    this.addColumnButton.tabIndex = hidden ? -1 : 0;
     this.addColumnButton.style.left = `${tableLeft + geometry.tableRect.width + EXTEND_BUTTON_OFFSET}px`;
     this.addColumnButton.style.top = `${tableTop + geometry.tableRect.height / 2}px`;
   }

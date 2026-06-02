@@ -131,6 +131,14 @@ async function clickMenuAction(page: Page, label: string) {
   await clickCenter(page, contextMenuAction(page, label));
 }
 
+async function openTableMenu(page: Page) {
+  await firstBodyCell(page).hover();
+  await clickCenter(page, tableHandle(page));
+  await expect(contextMenu(page)).toBeHidden();
+  await clickCenter(page, tableHandle(page));
+  await expect(contextMenu(page)).toBeVisible();
+}
+
 async function expandTableForHorizontalScroll(page: Page, columnsToAdd = 5) {
   for (let index = 0; index < columnsToAdd; index += 1) {
     await firstBodyCell(page).hover();
@@ -257,6 +265,18 @@ test.describe('official table parity', () => {
     await expect(contextMenu(page)).toBeVisible();
     await page.locator('.hero').click();
     await expect(contextMenu(page)).toBeHidden();
+  });
+
+  test('table delete action removes the table and closes the menu', async ({ page }) => {
+    await gotoDemo(page);
+    await openTableMenu(page);
+    await expect(contextMenu(page)).toHaveAttribute('data-scope', 'table');
+
+    await clickMenuAction(page, 'Delete table');
+
+    await expect(contextMenu(page)).toBeHidden();
+    await expect(page.getByTestId('pmht-table')).toHaveCount(0);
+    await expect(page.getByTestId('pmht-table-handle')).toHaveCount(0);
   });
 
   test('row handle keeps row scope explicit through selection and menu actions', async ({ page }) => {
@@ -457,6 +477,22 @@ test.describe('official table parity', () => {
     await expect(bodyRowCell(page, 0, 1)).toHaveText('Open panel');
   });
 
+  test('column delete action targets the captured column snapshot', async ({ page }) => {
+    await gotoDemo(page);
+    await firstBodyCell(page).hover();
+
+    const initialColumnCount = await table(page).locator('thead tr').first().locator('th,td').count();
+    await openColumnMenu(page, 0);
+    await expect(contextMenu(page)).toHaveAttribute('data-scope', 'column');
+
+    await clickMenuAction(page, 'Delete column');
+
+    await expect(contextMenu(page)).toBeHidden();
+    await expect(table(page).locator('thead tr').first().locator('th,td')).toHaveCount(initialColumnCount - 1);
+    await expect(table(page).locator('thead tr').first().locator('th,td').nth(0)).toHaveText('Status');
+    await expect(bodyRowCell(page, 0, 0)).toHaveText('Done');
+  });
+
   test('column menu lifecycle keeps column scope stable across inside click, Escape, and outside click', async ({ page }) => {
     await gotoDemo(page);
     await firstBodyCell(page).hover();
@@ -513,6 +549,65 @@ test.describe('official table parity', () => {
     await expect(contextMenu(page)).toBeHidden();
     await expect(firstBodyRow(page).locator('th').first()).toHaveText('Open panel');
     await expect(selectedCells(page)).toHaveCount(1);
+  });
+
+  test('cell menu applies and clears background while keeping the selected range active', async ({ page }) => {
+    await gotoDemo(page);
+
+    await dragBetweenCells(page, firstBodyCell(page), secondBodyCell(page));
+    await expect(selectedCells(page)).toHaveCount(2);
+
+    await clickCenter(page, cellHandle(page));
+    await expect(contextMenu(page)).toBeVisible();
+    await clickMenuAction(page, 'Background blue');
+
+    await expect(contextMenu(page)).toBeHidden();
+    await expect(selectedCells(page)).toHaveCount(2);
+    await expect(firstBodyRow(page).locator('td,th').nth(0)).toHaveCSS('background-color', 'rgb(219, 234, 254)');
+    await expect(firstBodyRow(page).locator('td,th').nth(1)).toHaveCSS('background-color', 'rgb(219, 234, 254)');
+
+    await clickCenter(page, cellHandle(page));
+    await expect(contextMenu(page)).toBeVisible();
+    await clickMenuAction(page, 'Clear background');
+
+    await expect(contextMenu(page)).toBeHidden();
+    await expect(selectedCells(page)).toHaveCount(2);
+    await expect(firstBodyRow(page).locator('td,th').nth(0)).not.toHaveCSS('background-color', 'rgb(219, 234, 254)');
+    await expect(firstBodyRow(page).locator('td,th').nth(1)).not.toHaveCSS('background-color', 'rgb(219, 234, 254)');
+  });
+
+  test('cell menu applies vertical alignment while keeping the selected range active', async ({ page }) => {
+    await gotoDemo(page);
+
+    await dragBetweenCells(page, firstBodyCell(page), secondBodyCell(page));
+    await expect(selectedCells(page)).toHaveCount(2);
+
+    await clickCenter(page, cellHandle(page));
+    await expect(contextMenu(page)).toBeVisible();
+    await clickMenuAction(page, 'Align middle');
+
+    await expect(contextMenu(page)).toBeHidden();
+    await expect(selectedCells(page)).toHaveCount(2);
+    await expect(firstBodyRow(page).locator('td,th').nth(0)).toHaveCSS('vertical-align', 'middle');
+    await expect(firstBodyRow(page).locator('td,th').nth(1)).toHaveCSS('vertical-align', 'middle');
+  });
+
+  test('cell menu clears selected cell contents without removing structure', async ({ page }) => {
+    await gotoDemo(page);
+
+    const initialCellCount = await firstBodyRow(page).locator('td,th').count();
+    await dragBetweenCells(page, firstBodyCell(page), secondBodyCell(page));
+    await expect(selectedCells(page)).toHaveCount(2);
+
+    await clickCenter(page, cellHandle(page));
+    await expect(contextMenu(page)).toBeVisible();
+    await clickMenuAction(page, 'Clear selected cells');
+
+    await expect(contextMenu(page)).toBeHidden();
+    await expect(firstBodyRow(page).locator('td,th')).toHaveCount(initialCellCount);
+    await expect(selectedCells(page)).toHaveCount(2);
+    await expect(firstBodyRow(page).locator('td,th').nth(0)).toHaveText('');
+    await expect(firstBodyRow(page).locator('td,th').nth(1)).toHaveText('');
   });
 
   test('cell merge-or-split action keeps selection focus inside the split range', async ({ page }) => {
@@ -682,6 +777,47 @@ test.describe('official table parity', () => {
 
     await clickCenter(page, addColumnButton(page));
     await expect(table(page).locator('thead tr').first().locator('th,td')).toHaveCount(initialColumnCount + 1);
+  });
+
+  test('extend buttons hide while a context menu is open and return after it closes', async ({ page }) => {
+    await gotoDemo(page);
+    await firstBodyCell(page).hover();
+
+    await expect(addRowButton(page)).toBeVisible();
+    await expect(addColumnButton(page)).toBeVisible();
+
+    await openTableMenu(page);
+    await expect(addRowButton(page)).toBeHidden();
+    await expect(addColumnButton(page)).toBeHidden();
+
+    await page.keyboard.press('Escape');
+    await expect(contextMenu(page)).toBeHidden();
+    await expect(addRowButton(page)).toBeVisible();
+    await expect(addColumnButton(page)).toBeVisible();
+  });
+
+  test('extend buttons hide during resize and return after resize ends', async ({ page }) => {
+    await gotoDemo(page);
+    await firstBodyCell(page).hover();
+
+    const resizeHandle = page.getByTestId('pmht-resize-handle').first();
+    await expect(resizeHandle).toBeVisible();
+
+    const resizeBox = await resizeHandle.boundingBox();
+    if (!resizeBox) {
+      throw new Error('Could not resolve resize handle geometry for extend button lifecycle test.');
+    }
+
+    await page.mouse.move(resizeBox.x + resizeBox.width / 2, resizeBox.y + resizeBox.height / 2);
+    await page.mouse.down();
+    await expect(addRowButton(page)).toBeHidden();
+    await expect(addColumnButton(page)).toBeHidden();
+
+    await page.mouse.move(resizeBox.x + resizeBox.width / 2 + 32, resizeBox.y + resizeBox.height / 2, { steps: 4 });
+    await page.mouse.up();
+
+    await expect(addRowButton(page)).toBeVisible();
+    await expect(addColumnButton(page)).toBeVisible();
   });
 });
 
