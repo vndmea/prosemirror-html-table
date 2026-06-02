@@ -861,7 +861,13 @@ export class HtmlTableMenuController {
 
     const { state, interaction } = this.getContextMenuActionInvocation();
     runHtmlTableContextMenuAction(state, interaction, actionId as HtmlTableContextActionId, (transaction) => {
-      this.view.dispatch(transaction);
+      this.contextMenuContext = null;
+      this.restoreContextMenuFocusOnClose = false;
+      this.view.dispatch(
+        transaction.setMeta(htmlTableInteractionPluginKey, {
+          contextMenuOpen: false,
+        }),
+      );
     });
     this.view.focus();
   }
