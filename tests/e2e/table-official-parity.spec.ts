@@ -69,6 +69,10 @@ function secondBodyCell(page: Page) {
   return table(page).locator('tbody tr').first().locator('td,th').nth(1);
 }
 
+function firstBodyRow(page: Page) {
+  return bodyRows(page).first();
+}
+
 function bodyRows(page: Page) {
   return table(page).locator('tbody tr');
 }
@@ -176,6 +180,24 @@ test.describe('official table parity', () => {
     await expect(columnSelectionBand(page)).toBeHidden();
   });
 
+  test('table menu toggles colgroup while keeping table-scoped behavior', async ({ page }) => {
+    await gotoDemo(page);
+    await firstBodyCell(page).hover();
+
+    await clickCenter(page, tableHandle(page));
+    await clickCenter(page, tableHandle(page));
+    await expect(contextMenu(page)).toBeVisible();
+    await expect(contextMenu(page)).toHaveAttribute('data-scope', 'table');
+
+    const initialColgroupCount = await table(page).locator('colgroup').count();
+    await clickMenuAction(page, initialColgroupCount > 0 ? 'Remove colgroup' : 'Add colgroup');
+
+    await expect(contextMenu(page)).toBeHidden();
+    await expect(table(page).locator('colgroup')).toHaveCount(initialColgroupCount === 0 ? 1 : 0);
+    await expect(rowSelectionBand(page)).toBeHidden();
+    await expect(columnSelectionBand(page)).toBeHidden();
+  });
+
   test('row handle keeps row scope explicit through selection and menu actions', async ({ page }) => {
     await gotoDemo(page);
 
@@ -213,6 +235,22 @@ test.describe('official table parity', () => {
     await expect(contextMenu(page)).toBeHidden();
     await expect(bodyRowCell(page, 0, 0)).toHaveText('Inspect connector');
     await expect(bodyRowCell(page, 1, 0)).toHaveText('Open panel');
+    await expect(columnSelectionBand(page)).toBeHidden();
+  });
+
+  test('row delete action targets the captured row snapshot', async ({ page }) => {
+    await gotoDemo(page);
+    await firstBodyCell(page).hover();
+
+    const initialBodyRowCount = await bodyRows(page).count();
+    await openRowMenu(page, 1);
+    await expect(contextMenu(page)).toHaveAttribute('data-scope', 'row');
+
+    await clickMenuAction(page, 'Delete row');
+
+    await expect(contextMenu(page)).toBeHidden();
+    await expect(bodyRows(page)).toHaveCount(initialBodyRowCount - 1);
+    await expect(bodyRowCell(page, 0, 0)).toHaveText('Inspect connector');
     await expect(columnSelectionBand(page)).toBeHidden();
   });
 
@@ -282,6 +320,23 @@ test.describe('official table parity', () => {
     await expect(rowSelectionBand(page)).toBeHidden();
   });
 
+  test('column reorder action targets the captured column snapshot', async ({ page }) => {
+    await gotoDemo(page);
+    await firstBodyCell(page).hover();
+
+    await openColumnMenu(page, 0);
+    await expect(contextMenu(page)).toHaveAttribute('data-scope', 'column');
+
+    await clickMenuAction(page, 'Move column right');
+
+    await expect(contextMenu(page)).toBeHidden();
+    await expect(table(page).locator('thead tr').first().locator('th,td').nth(0)).toHaveText('Status');
+    await expect(table(page).locator('thead tr').first().locator('th,td').nth(1)).toHaveText('Task');
+    await expect(bodyRowCell(page, 0, 0)).toHaveText('Done');
+    await expect(bodyRowCell(page, 0, 1)).toHaveText('Open panel');
+    await expect(rowSelectionBand(page)).toBeHidden();
+  });
+
   test('cell menu actions keep the rectangular selection active', async ({ page }) => {
     await gotoDemo(page);
 
@@ -298,6 +353,23 @@ test.describe('official table parity', () => {
     await expect(selectedCells(page)).toHaveCount(2);
     await expect(table(page).locator('tbody tr').first().locator('td,th').nth(0)).toHaveCSS('text-align', 'center');
     await expect(table(page).locator('tbody tr').first().locator('td,th').nth(1)).toHaveCSS('text-align', 'center');
+  });
+
+  test('cell menu can toggle a body cell into a header cell while keeping cell scope', async ({ page }) => {
+    await gotoDemo(page);
+
+    await clickCenter(page, firstBodyCell(page));
+    await expect(selectedCells(page)).toHaveCount(1);
+
+    await clickCenter(page, cellHandle(page));
+    await expect(contextMenu(page)).toBeVisible();
+    await expect(contextMenu(page)).toHaveAttribute('data-scope', 'cell');
+
+    await clickMenuAction(page, 'Set header cell');
+
+    await expect(contextMenu(page)).toBeHidden();
+    await expect(firstBodyRow(page).locator('th').first()).toHaveText('Open panel');
+    await expect(selectedCells(page)).toHaveCount(1);
   });
 
   test('cell menu lifecycle keeps selection stable across inside click, Escape, and outside click', async ({ page }) => {
