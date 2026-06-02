@@ -16,7 +16,7 @@ import {
   getHtmlTableSelectionScope,
   type HtmlTableSelectionAnchor,
   type HtmlTableSelectionScope,
-} from './html-table-handles.js';
+} from './html-table-overlay-geometry.js';
 import { getTableSelectionInfo } from './table-utils.js';
 
 export interface HtmlTableContextMenuState {

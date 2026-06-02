@@ -18,6 +18,10 @@ function tableHandle(page: Page) {
   return page.getByTestId('pmht-table-handle');
 }
 
+function rowHandle(page: Page, index: number) {
+  return page.getByTestId('pmht-row-handle').nth(index);
+}
+
 function columnHandle(page: Page, index: number) {
   return page.getByTestId('pmht-column-handle').nth(index);
 }
@@ -98,6 +102,15 @@ async function openColumnMenu(page: Page, index: number) {
   await expect(contextMenu(page)).toBeVisible();
 }
 
+async function openRowMenu(page: Page, index: number) {
+  await clickCenter(page, rowHandle(page, index));
+  await expect(rowSelectionBand(page)).toBeVisible();
+  if (await contextMenu(page).isHidden()) {
+    await clickCenter(page, rowHandle(page, index));
+  }
+  await expect(contextMenu(page)).toBeVisible();
+}
+
 async function clickMenuAction(page: Page, label: string) {
   await clickCenter(page, contextMenuAction(page, label));
 }
@@ -127,6 +140,39 @@ test.describe('official table parity', () => {
     await clickCenter(page, tableHandle(page));
     await expect(contextMenu(page)).toBeVisible();
     await expect(contextMenu(page)).toHaveAttribute('data-scope', 'table');
+
+    const initialCaptionCount = await table(page).locator('caption').count();
+    await clickMenuAction(page, initialCaptionCount > 0 ? 'Remove caption' : 'Add caption');
+
+    await expect(contextMenu(page)).toBeHidden();
+    await expect(table(page).locator('caption')).toHaveCount(initialCaptionCount === 0 ? 1 : 0);
+    await expect(rowSelectionBand(page)).toBeHidden();
+    await expect(columnSelectionBand(page)).toBeHidden();
+  });
+
+  test('row handle keeps row scope explicit through selection and menu actions', async ({ page }) => {
+    await gotoDemo(page);
+
+    const firstBodyRow = table(page).locator('tbody tr').first();
+    const initialBodyRowCount = await table(page).locator('tbody tr').count();
+    const rowCellCount = await firstBodyRow.locator('td,th').count();
+
+    await firstBodyCell(page).hover();
+    await expect(rowHandle(page, 1)).toBeVisible();
+
+    await clickCenter(page, rowHandle(page, 1));
+    await expect(rowSelectionBand(page)).toBeVisible();
+    await expect(columnSelectionBand(page)).toBeHidden();
+    await expect(selectedCells(page)).toHaveCount(rowCellCount);
+
+    await openRowMenu(page, 1);
+    await expect(contextMenu(page)).toHaveAttribute('data-scope', 'row');
+
+    await clickMenuAction(page, 'Duplicate row');
+
+    await expect(contextMenu(page)).toBeHidden();
+    await expect(table(page).locator('tbody tr')).toHaveCount(initialBodyRowCount + 1);
+    await expect(columnSelectionBand(page)).toBeHidden();
   });
 
   test('column handle selects the whole column and keeps the menu aligned after scroll', async ({ page }) => {
@@ -196,6 +242,64 @@ test.describe('official table parity', () => {
     await expect(selectedCells(page)).toHaveCount(2);
     await expect(table(page).locator('tbody tr').first().locator('td,th').nth(0)).toHaveCSS('text-align', 'center');
     await expect(table(page).locator('tbody tr').first().locator('td,th').nth(1)).toHaveCSS('text-align', 'center');
+  });
+
+  test('cell menu lifecycle keeps selection stable across inside click, Escape, and outside click', async ({ page }) => {
+    await gotoDemo(page);
+
+    await dragBetweenCells(page, firstBodyCell(page), secondBodyCell(page));
+    await expect(selectedCells(page)).toHaveCount(2);
+
+    await clickCenter(page, cellHandle(page));
+    await expect(contextMenu(page)).toBeVisible();
+    await expect(contextMenu(page)).toHaveAttribute('data-scope', 'cell');
+
+    await contextMenu(page).click({ position: { x: 16, y: 16 } });
+    await expect(contextMenu(page)).toBeVisible();
+    await expect(selectedCells(page)).toHaveCount(2);
+
+    await page.keyboard.press('Escape');
+    await expect(contextMenu(page)).toBeHidden();
+    await expect(selectedCells(page)).toHaveCount(2);
+
+    await clickCenter(page, cellHandle(page));
+    await expect(contextMenu(page)).toBeVisible();
+    await page.locator('.hero').click();
+    await expect(contextMenu(page)).toBeHidden();
+    await expect(selectedCells(page)).toHaveCount(2);
+  });
+
+  test('resize updates widths without opening menus or leaving axis selection behind', async ({ page }) => {
+    await gotoDemo(page);
+    await firstBodyCell(page).hover();
+
+    const resizeHandle = page.getByTestId('pmht-resize-handle').first();
+    await expect(resizeHandle).toBeVisible();
+
+    const beforeWidth = await table(page).locator('col').first().getAttribute('width');
+    const beforeHandleBox = await columnHandle(page, 0).boundingBox();
+    const resizeBox = await resizeHandle.boundingBox();
+    if (!beforeHandleBox || !resizeBox) {
+      throw new Error('Could not resolve resize geometry.');
+    }
+
+    await page.mouse.move(resizeBox.x + resizeBox.width / 2, resizeBox.y + resizeBox.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(resizeBox.x + resizeBox.width / 2 + 48, resizeBox.y + resizeBox.height / 2, { steps: 8 });
+    await page.mouse.up();
+
+    const afterWidth = await table(page).locator('col').first().getAttribute('width');
+    await firstBodyCell(page).hover();
+    const afterHandleBox = await columnHandle(page, 0).boundingBox();
+    if (!afterHandleBox) {
+      throw new Error('Could not resolve column handle geometry after resize.');
+    }
+
+    expect(afterWidth).not.toBe(beforeWidth);
+    expect(afterHandleBox.x + afterHandleBox.width / 2).toBeGreaterThan(beforeHandleBox.x + beforeHandleBox.width / 2);
+    await expect(contextMenu(page)).toBeHidden();
+    await expect(rowSelectionBand(page)).toBeHidden();
+    await expect(columnSelectionBand(page)).toBeHidden();
   });
 
   test('extend buttons stay anchored to the table edges without creating vertical overflow', async ({ page }) => {
