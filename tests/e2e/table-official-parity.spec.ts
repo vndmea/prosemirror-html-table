@@ -69,6 +69,14 @@ function secondBodyCell(page: Page) {
   return table(page).locator('tbody tr').first().locator('td,th').nth(1);
 }
 
+function bodyRows(page: Page) {
+  return table(page).locator('tbody tr');
+}
+
+function bodyRowCell(page: Page, rowIndex: number, columnIndex: number) {
+  return bodyRows(page).nth(rowIndex).locator('td,th').nth(columnIndex);
+}
+
 async function clickCenter(page: Page, target: Locator) {
   const box = await target.boundingBox();
   if (!box) {
@@ -150,6 +158,24 @@ test.describe('official table parity', () => {
     await expect(columnSelectionBand(page)).toBeHidden();
   });
 
+  test('table menu toggles footer section while keeping table-scoped behavior', async ({ page }) => {
+    await gotoDemo(page);
+    await firstBodyCell(page).hover();
+
+    await clickCenter(page, tableHandle(page));
+    await clickCenter(page, tableHandle(page));
+    await expect(contextMenu(page)).toBeVisible();
+    await expect(contextMenu(page)).toHaveAttribute('data-scope', 'table');
+
+    const initialFootCount = await table(page).locator('tfoot').count();
+    await clickMenuAction(page, initialFootCount > 0 ? 'Remove footer section' : 'Add footer section');
+
+    await expect(contextMenu(page)).toBeHidden();
+    await expect(table(page).locator('tfoot')).toHaveCount(initialFootCount === 0 ? 1 : 0);
+    await expect(rowSelectionBand(page)).toBeHidden();
+    await expect(columnSelectionBand(page)).toBeHidden();
+  });
+
   test('row handle keeps row scope explicit through selection and menu actions', async ({ page }) => {
     await gotoDemo(page);
 
@@ -172,6 +198,21 @@ test.describe('official table parity', () => {
 
     await expect(contextMenu(page)).toBeHidden();
     await expect(table(page).locator('tbody tr')).toHaveCount(initialBodyRowCount + 1);
+    await expect(columnSelectionBand(page)).toBeHidden();
+  });
+
+  test('row menu actions target the captured row snapshot', async ({ page }) => {
+    await gotoDemo(page);
+    await firstBodyCell(page).hover();
+
+    await openRowMenu(page, 1);
+    await expect(contextMenu(page)).toHaveAttribute('data-scope', 'row');
+
+    await clickMenuAction(page, 'Move row down');
+
+    await expect(contextMenu(page)).toBeHidden();
+    await expect(bodyRowCell(page, 0, 0)).toHaveText('Inspect connector');
+    await expect(bodyRowCell(page, 1, 0)).toHaveText('Open panel');
     await expect(columnSelectionBand(page)).toBeHidden();
   });
 
@@ -224,6 +265,21 @@ test.describe('official table parity', () => {
     const handleCenterX = handleBox.x + handleBox.width / 2;
     const menuCenterX = menuBox.x + menuBox.width / 2;
     expect(Math.abs(menuCenterX - handleCenterX)).toBeLessThan(40);
+  });
+
+  test('column menu actions target the captured column snapshot', async ({ page }) => {
+    await gotoDemo(page);
+    await firstBodyCell(page).hover();
+
+    await openColumnMenu(page, 0);
+    await expect(contextMenu(page)).toHaveAttribute('data-scope', 'column');
+
+    await clickMenuAction(page, 'Sort ascending');
+
+    await expect(contextMenu(page)).toBeHidden();
+    await expect(bodyRowCell(page, 0, 0)).toHaveText('Inspect connector');
+    await expect(bodyRowCell(page, 1, 0)).toHaveText('Open panel');
+    await expect(rowSelectionBand(page)).toBeHidden();
   });
 
   test('cell menu actions keep the rectangular selection active', async ({ page }) => {
