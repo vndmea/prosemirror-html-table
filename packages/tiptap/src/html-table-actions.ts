@@ -420,8 +420,9 @@ export function getPrimaryHtmlTableContextAction(
 }
 
 export function getHtmlTableContextActionMenuItemState(
-  action: HtmlTableContextAction,
+  _: HtmlTableContextAction,
 ): HtmlTableContextActionMenuItemState {
+  void _;
   return {
     role: 'menuitem',
     checked: null,
