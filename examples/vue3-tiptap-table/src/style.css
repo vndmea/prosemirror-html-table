@@ -127,7 +127,8 @@
 
 .pmht-demo .editor-panel {
   --tt-table-border-color: rgba(148, 163, 184, 0.34);
-  --tt-table-selected-bg: rgba(99, 77, 255, 0.16);
+  --tt-table-selected-bg: rgba(37, 99, 235, 0.08);
+  --tt-table-axis-selected-bg: rgba(37, 99, 235, 0.05);
   --tt-table-selected-stroke: #2563eb;
   --tt-table-column-resize-handle-bg: #2563eb;
   --tt-table-handle-bg-color: #ffffff;
@@ -220,11 +221,11 @@
 }
 
 .pmht-demo .editor-panel .html-table-overlay__selection-band--row {
-  background: var(--tt-table-selected-bg);
+  background: var(--tt-table-axis-selected-bg);
 }
 
 .pmht-demo .editor-panel .html-table-overlay__selection-band--column {
-  background: var(--tt-table-selected-bg);
+  background: var(--tt-table-axis-selected-bg);
 }
 
 .pmht-demo .editor-panel .html-table-overlay__cell-selection-fill,
