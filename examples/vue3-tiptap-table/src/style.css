@@ -443,16 +443,24 @@
   position: absolute;
   z-index: 4;
   display: grid;
-  gap: 0.45rem;
+  gap: 0.25rem;
   min-width: 12rem;
   max-width: 16rem;
-  padding: 0.55rem;
+  padding: 0.4rem;
   border: 1px solid var(--pmht-overlay-border);
-  border-radius: 0.75rem;
+  border-radius: 0.7rem;
   background: #ffffff;
   box-shadow: 0 10px 24px rgba(15, 23, 42, 0.12);
   overflow-y: auto;
   pointer-events: auto;
+}
+
+.pmht-demo .editor-panel .html-table-overlay__context-menu--submenu {
+  z-index: 5;
+}
+
+.pmht-demo .editor-panel .html-table-overlay__context-menu--submenu::before {
+  content: none;
 }
 
 .pmht-demo .editor-panel .html-table-overlay__context-menu::before {
@@ -504,27 +512,6 @@
   transform: rotate(225deg);
 }
 
-.pmht-demo .editor-panel .html-table-overlay__context-menu-header {
-  display: grid;
-  gap: 0.1rem;
-  padding-bottom: 0.45rem;
-  border-bottom: 1px solid rgba(226, 232, 240, 0.96);
-}
-
-.pmht-demo .editor-panel .html-table-overlay__context-menu-header-title {
-  color: #0f172a;
-  font-size: 0.82rem;
-  font-weight: 700;
-  line-height: 1.2;
-}
-
-.pmht-demo .editor-panel .html-table-overlay__context-menu-header-detail {
-  color: #64748b;
-  font-size: 0.7rem;
-  font-weight: 600;
-  line-height: 1.2;
-}
-
 .pmht-demo .editor-panel .html-table-overlay__context-menu-group {
   display: grid;
   gap: 0.28rem;
@@ -534,34 +521,21 @@
   gap: 0.22rem;
 }
 
-.pmht-demo .editor-panel .html-table-overlay__context-menu-group:not(:last-child) {
-  padding-bottom: 0.45rem;
-  border-bottom: 1px solid rgba(226, 232, 240, 0.96);
-}
-
-.pmht-demo .editor-panel .html-table-overlay__context-menu-group-label {
-  color: #64748b;
-  font-size: 0.66rem;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
 .pmht-demo .editor-panel .html-table-overlay__context-menu-action {
   position: relative;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 0.6rem;
+  justify-content: flex-start;
+  gap: 0.55rem;
   width: 100%;
   min-width: 0;
-  padding: 0.42rem 0.55rem;
+  padding: 0.48rem 0.6rem;
   border: 0;
-  border-radius: 0.6rem;
+  border-radius: 0.55rem;
   background: transparent;
   color: #0f172a;
   font-size: 0.78rem;
-  font-weight: 600;
+  font-weight: 500;
   line-height: 1.2;
   text-align: left;
   pointer-events: auto;
@@ -573,50 +547,23 @@
 
 .pmht-demo .editor-panel .html-table-overlay__context-menu-action.has-submenu::after {
   content: "›";
+  margin-left: auto;
   color: #94a3b8;
-  font-size: 0.95rem;
-  line-height: 1;
-}
-
-.pmht-demo .editor-panel .html-table-overlay__context-menu-action.is-submenu-back {
-  justify-content: flex-start;
-  color: #475569;
-}
-
-.pmht-demo .editor-panel .html-table-overlay__context-menu-action.is-submenu-back::before {
-  content: "‹";
-  color: currentColor;
   font-size: 0.95rem;
   line-height: 1;
 }
 
 .pmht-demo .editor-panel .html-table-overlay__context-menu-action:focus-visible {
   outline: none;
-  background: rgba(37, 99, 235, 0.12);
-  box-shadow: inset 0 0 0 1px rgba(37, 99, 235, 0.36);
-  color: var(--pmht-overlay-handle-menu);
+  background: #eff6ff;
+  box-shadow: inset 0 0 0 1px rgba(37, 99, 235, 0.18);
+  color: #0f172a;
 }
 
 .pmht-demo .editor-panel .html-table-overlay__context-menu-action:hover:not(:disabled),
-.pmht-demo .editor-panel .html-table-overlay__context-menu-action.is-active {
-  background: rgba(37, 99, 235, 0.1);
-  color: var(--pmht-overlay-handle-menu);
-}
-
-.pmht-demo .editor-panel .html-table-overlay__context-menu-action.is-primary {
-  background: rgba(37, 99, 235, 0.08);
-  color: var(--pmht-overlay-handle-menu);
-}
-
-.pmht-demo .editor-panel .html-table-overlay__context-menu-action.is-primary::before {
-  content: "";
-  display: inline-block;
-  width: 0.42rem;
-  height: 0.42rem;
-  margin-right: 0.45rem;
-  border-radius: 999px;
-  background: currentColor;
-  vertical-align: middle;
+.pmht-demo .editor-panel .html-table-overlay__context-menu-action[aria-expanded="true"] {
+  background: #f8fafc;
+  color: #0f172a;
 }
 
 .pmht-demo .editor-panel .html-table-overlay__context-menu-action.is-destructive {

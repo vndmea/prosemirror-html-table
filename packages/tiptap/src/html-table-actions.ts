@@ -181,35 +181,97 @@ export function getHtmlTableContextActions(
 
   if (scope === 'row') {
     const rowHeaderActive = areSelectedCellsHeader(selectionInfo);
+    const textAlign = getCommonSelectedCellAttribute(state, selectionInfo, 'textAlign');
+    const backgroundColor = getCommonSelectedCellAttribute(state, selectionInfo, 'backgroundColor');
+    const verticalAlign = getCommonSelectedCellAttribute(state, selectionInfo, 'verticalAlign');
     return [
+      createAction('toggleHeaderRow', scope, toggleHeaderRow(options), state, rowHeaderActive === undefined ? {} : { active: rowHeaderActive }),
       createAction('addRowBefore', scope, addRowBefore(options), state),
       createAction('addRowAfter', scope, addRowAfter(options), state),
-      createAction('deleteRow', scope, deleteRow(options), state, { destructive: true }),
+      createAction('setCellBackgroundColorBlue', scope, setCellBackgroundColor('#dbeafe', options), state, {
+        active: backgroundColor === '#dbeafe',
+      }),
+      createAction('setCellBackgroundColorGreen', scope, setCellBackgroundColor('#dcfce7', options), state, {
+        active: backgroundColor === '#dcfce7',
+      }),
+      createAction('setCellBackgroundColorYellow', scope, setCellBackgroundColor('#fef3c7', options), state, {
+        active: backgroundColor === '#fef3c7',
+      }),
+      createAction('clearCellBackgroundColor', scope, setCellBackgroundColor(null, options), state, {
+        active: backgroundColor === null,
+      }),
+      createAction('setCellTextAlignLeft', scope, setCellTextAlign('left', options), state, {
+        active: textAlign === 'left',
+      }),
+      createAction('setCellTextAlignCenter', scope, setCellTextAlign('center', options), state, {
+        active: textAlign === 'center',
+      }),
+      createAction('setCellTextAlignRight', scope, setCellTextAlign('right', options), state, {
+        active: textAlign === 'right',
+      }),
+      createAction('setCellVerticalAlignTop', scope, setCellVerticalAlign('top', options), state, {
+        active: verticalAlign === 'top',
+      }),
+      createAction('setCellVerticalAlignMiddle', scope, setCellVerticalAlign('middle', options), state, {
+        active: verticalAlign === 'middle',
+      }),
+      createAction('setCellVerticalAlignBottom', scope, setCellVerticalAlign('bottom', options), state, {
+        active: verticalAlign === 'bottom',
+      }),
+      createAction('clearRowContent', scope, clearRowContent(options), state),
       createAction('moveRowUp', scope, moveRowUp(options), state),
       createAction('moveRowDown', scope, moveRowDown(options), state),
       createAction('duplicateRow', scope, duplicateRow(options), state),
-      createAction(
-        'toggleHeaderRow',
-        scope,
-        toggleHeaderRow(options),
-        state,
-        rowHeaderActive === undefined ? {} : { active: rowHeaderActive },
-      ),
-      createAction('clearRowContent', scope, clearRowContent(options), state),
       createAction('moveRowToHead', scope, moveRowToHead(options), state),
       createAction('moveRowToBody', scope, moveRowToBody(options), state),
       createAction('moveRowToFoot', scope, moveRowToFoot(options), state),
+      createAction('deleteRow', scope, deleteRow(options), state, { destructive: true }),
     ];
   }
 
   if (scope === 'column') {
     const columnHeaderActive = areSelectedCellsHeader(selectionInfo);
+    const textAlign = getCommonSelectedCellAttribute(state, selectionInfo, 'textAlign');
+    const backgroundColor = getCommonSelectedCellAttribute(state, selectionInfo, 'backgroundColor');
+    const verticalAlign = getCommonSelectedCellAttribute(state, selectionInfo, 'verticalAlign');
     return [
-      createAction('addColumnBefore', scope, addColumnBefore(options), state),
-      createAction('addColumnAfter', scope, addColumnAfter(options), state),
-      createAction('deleteColumn', scope, deleteColumn(options), state, { destructive: true }),
       createAction('moveColumnLeft', scope, moveColumnLeft(options), state),
       createAction('moveColumnRight', scope, moveColumnRight(options), state),
+      createAction('addColumnBefore', scope, addColumnBefore(options), state),
+      createAction('addColumnAfter', scope, addColumnAfter(options), state),
+      createAction('sortBodyRowsAsc', scope, sortBodyRowsByColumn({ direction: 'asc', ...options }), state),
+      createAction('sortBodyRowsDesc', scope, sortBodyRowsByColumn({ direction: 'desc', ...options }), state),
+      createAction('setCellBackgroundColorBlue', scope, setCellBackgroundColor('#dbeafe', options), state, {
+        active: backgroundColor === '#dbeafe',
+      }),
+      createAction('setCellBackgroundColorGreen', scope, setCellBackgroundColor('#dcfce7', options), state, {
+        active: backgroundColor === '#dcfce7',
+      }),
+      createAction('setCellBackgroundColorYellow', scope, setCellBackgroundColor('#fef3c7', options), state, {
+        active: backgroundColor === '#fef3c7',
+      }),
+      createAction('clearCellBackgroundColor', scope, setCellBackgroundColor(null, options), state, {
+        active: backgroundColor === null,
+      }),
+      createAction('setCellTextAlignLeft', scope, setCellTextAlign('left', options), state, {
+        active: textAlign === 'left',
+      }),
+      createAction('setCellTextAlignCenter', scope, setCellTextAlign('center', options), state, {
+        active: textAlign === 'center',
+      }),
+      createAction('setCellTextAlignRight', scope, setCellTextAlign('right', options), state, {
+        active: textAlign === 'right',
+      }),
+      createAction('setCellVerticalAlignTop', scope, setCellVerticalAlign('top', options), state, {
+        active: verticalAlign === 'top',
+      }),
+      createAction('setCellVerticalAlignMiddle', scope, setCellVerticalAlign('middle', options), state, {
+        active: verticalAlign === 'middle',
+      }),
+      createAction('setCellVerticalAlignBottom', scope, setCellVerticalAlign('bottom', options), state, {
+        active: verticalAlign === 'bottom',
+      }),
+      createAction('clearColumnContent', scope, clearColumnContent(options), state),
       createAction('duplicateColumn', scope, duplicateColumn(options), state),
       createAction(
         'toggleHeaderColumn',
@@ -218,9 +280,7 @@ export function getHtmlTableContextActions(
         state,
         columnHeaderActive === undefined ? {} : { active: columnHeaderActive },
       ),
-      createAction('clearColumnContent', scope, clearColumnContent(options), state),
-      createAction('sortBodyRowsAsc', scope, sortBodyRowsByColumn({ direction: 'asc', ...options }), state),
-      createAction('sortBodyRowsDesc', scope, sortBodyRowsByColumn({ direction: 'desc', ...options }), state),
+      createAction('deleteColumn', scope, deleteColumn(options), state, { destructive: true }),
     ];
   }
 
@@ -626,7 +686,7 @@ const ACTION_LABELS: Record<HtmlTableContextActionId, string> = {
   moveRowDown: 'Move row down',
   duplicateRow: 'Duplicate row',
   toggleHeaderRow: 'Toggle header row',
-  clearRowContent: 'Clear row',
+  clearRowContent: 'Clear row contents',
   moveRowToHead: 'Move row to header',
   moveRowToBody: 'Move row to body',
   moveRowToFoot: 'Move row to footer',
@@ -637,9 +697,9 @@ const ACTION_LABELS: Record<HtmlTableContextActionId, string> = {
   moveColumnRight: 'Move column right',
   duplicateColumn: 'Duplicate column',
   toggleHeaderColumn: 'Toggle header column',
-  clearColumnContent: 'Clear column',
-  sortBodyRowsAsc: 'Sort ascending',
-  sortBodyRowsDesc: 'Sort descending',
+  clearColumnContent: 'Clear column contents',
+  sortBodyRowsAsc: 'Sort column A-Z',
+  sortBodyRowsDesc: 'Sort column Z-A',
   setCellTextAlignLeft: 'Align left',
   setCellTextAlignCenter: 'Align center',
   setCellTextAlignRight: 'Align right',

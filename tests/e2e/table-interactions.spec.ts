@@ -34,6 +34,10 @@ function contextMenu(page: Page) {
   return page.getByTestId('pmht-context-menu');
 }
 
+function contextSubmenu(page: Page) {
+  return page.getByTestId('pmht-context-submenu');
+}
+
 function contextMenuAction(page: Page, label: string) {
   return page
     .getByTestId('pmht-context-menu-action')
@@ -101,7 +105,7 @@ async function activateMenuAction(page: Page, label: string) {
 
 async function openCellSubmenu(page: Page, label: string) {
   await activateMenuAction(page, label);
-  await expect(contextMenu(page)).toBeVisible();
+  await expect(contextSubmenu(page)).toBeVisible();
 }
 
 test.describe('table interactions', () => {
@@ -174,12 +178,33 @@ test.describe('table interactions', () => {
     await expect(table(page).locator('tbody tr').first().locator('td,th')).toHaveCount(beforeMergeCellCount);
   });
 
+  test('cell submenu opens as a right-side flyout without inline back navigation', async ({ page }) => {
+    await gotoDemo(page);
+
+    await dragBetweenCells(page, firstBodyCell(page), secondBodyCell(page));
+    await page.getByTestId('pmht-cell-handle').click();
+    await expect(contextMenu(page)).toBeVisible();
+    await expect(contextMenu(page)).not.toContainText('Cell actions');
+    await expect(contextMenu(page)).not.toContainText('Clear selected cells');
+
+    await openCellSubmenu(page, 'Color');
+    await expect(page.getByText(/^Back to /)).toHaveCount(0);
+
+    const menuBox = await contextMenu(page).boundingBox();
+    const submenuBox = await contextSubmenu(page).boundingBox();
+    if (!menuBox || !submenuBox) {
+      throw new Error('Could not resolve flyout submenu geometry.');
+    }
+
+    expect(submenuBox.x).toBeGreaterThanOrEqual(menuBox.x + menuBox.width - 8);
+  });
+
   test('menus close on Escape and outside click, but not on non-action inside clicks', async ({ page }) => {
     await gotoDemo(page);
     await firstBodyCell(page).hover();
     await openRowMenu(page, 1);
 
-    await contextMenu(page).click({ position: { x: 12, y: 12 } });
+    await contextMenu(page).click({ position: { x: 3, y: 3 } });
     await expect(contextMenu(page)).toBeVisible();
 
     await page.keyboard.press('Escape');

@@ -54,6 +54,10 @@ function contextMenu(page: Page) {
   return page.getByTestId('pmht-context-menu');
 }
 
+function contextSubmenu(page: Page) {
+  return page.getByTestId('pmht-context-submenu');
+}
+
 function contextMenuAction(page: Page, label: string) {
   return page
     .getByTestId('pmht-context-menu-action')
@@ -137,7 +141,7 @@ async function clickMenuAction(page: Page, label: string) {
 
 async function openCellSubmenu(page: Page, label: string) {
   await clickMenuAction(page, label);
-  await expect(contextMenu(page)).toBeVisible();
+  await expect(contextSubmenu(page)).toBeVisible();
 }
 
 async function openTableMenu(page: Page) {
@@ -276,7 +280,7 @@ test.describe('official table parity', () => {
     await expect(rowSelectionBand(page)).toBeHidden();
     await expect(columnSelectionBand(page)).toBeHidden();
 
-    await contextMenu(page).click({ position: { x: 16, y: 16 } });
+    await contextMenu(page).click({ position: { x: 3, y: 3 } });
     await expect(contextMenu(page)).toBeVisible();
 
     await page.keyboard.press('Escape');
@@ -541,7 +545,7 @@ test.describe('official table parity', () => {
     await expect(rowSelectionBand(page)).toBeVisible();
     await expect(columnSelectionBand(page)).toBeHidden();
 
-    await contextMenu(page).click({ position: { x: 16, y: 16 } });
+    await contextMenu(page).click({ position: { x: 3, y: 3 } });
     await expect(contextMenu(page)).toBeVisible();
     await expect(rowSelectionBand(page)).toBeVisible();
 
@@ -553,6 +557,21 @@ test.describe('official table parity', () => {
     await expect(contextMenu(page)).toBeVisible();
     await page.locator('.hero').click();
     await expect(contextMenu(page)).toBeHidden();
+  });
+
+  test('row menu exposes flyout formatting submenus and applies row color', async ({ page }) => {
+    await gotoDemo(page);
+    await firstBodyCell(page).hover();
+
+    await openRowMenu(page, 1);
+    await clickMenuAction(page, 'Color');
+    await expect(contextSubmenu(page)).toBeVisible();
+    await expect(page.getByText(/^Back to /)).toHaveCount(0);
+    await clickMenuAction(page, 'Background blue');
+
+    await expect(contextMenu(page)).toBeHidden();
+    await expect(bodyRowCell(page, 0, 0)).toHaveCSS('background-color', 'rgb(219, 234, 254)');
+    await expect(bodyRowCell(page, 0, 1)).toHaveCSS('background-color', 'rgb(219, 234, 254)');
   });
 
   test('column handle selects the whole column and keeps the menu aligned after scroll', async ({ page }) => {
@@ -661,7 +680,7 @@ test.describe('official table parity', () => {
     await openColumnMenu(page, 0);
     await expect(contextMenu(page)).toHaveAttribute('data-scope', 'column');
 
-    await clickMenuAction(page, 'Sort ascending');
+    await clickMenuAction(page, 'Sort column A-Z');
 
     await expect(contextMenu(page)).toBeHidden();
     await expect(bodyRowCell(page, 0, 0)).toHaveText('Inspect connector');
@@ -743,7 +762,7 @@ test.describe('official table parity', () => {
     await openColumnMenu(page, 1);
     await expect(contextMenu(page)).toHaveAttribute('data-scope', 'column');
 
-    await clickMenuAction(page, 'Sort descending');
+    await clickMenuAction(page, 'Sort column Z-A');
 
     await expect(contextMenu(page)).toBeHidden();
     await expect(bodyRowCell(page, 0, 0)).toHaveText('Inspect connector');
@@ -759,7 +778,7 @@ test.describe('official table parity', () => {
     await expect(columnSelectionBand(page)).toBeVisible();
     await expect(rowSelectionBand(page)).toBeHidden();
 
-    await contextMenu(page).click({ position: { x: 16, y: 16 } });
+    await contextMenu(page).click({ position: { x: 3, y: 3 } });
     await expect(contextMenu(page)).toBeVisible();
     await expect(columnSelectionBand(page)).toBeVisible();
 
@@ -771,6 +790,21 @@ test.describe('official table parity', () => {
     await expect(contextMenu(page)).toBeVisible();
     await page.locator('.hero').click();
     await expect(contextMenu(page)).toBeHidden();
+  });
+
+  test('column menu exposes flyout formatting submenus and applies column alignment', async ({ page }) => {
+    await gotoDemo(page);
+    await firstBodyCell(page).hover();
+
+    await openColumnMenu(page, 0);
+    await clickMenuAction(page, 'Alignment');
+    await expect(contextSubmenu(page)).toBeVisible();
+    await expect(page.getByText(/^Back to /)).toHaveCount(0);
+    await clickMenuAction(page, 'Align center');
+
+    await expect(contextMenu(page)).toBeHidden();
+    await expect(bodyRowCell(page, 0, 0)).toHaveCSS('text-align', 'center');
+    await expect(bodyRowCell(page, 1, 0)).toHaveCSS('text-align', 'center');
   });
 
   test('cell menu actions keep the rectangular selection active', async ({ page }) => {
@@ -1011,7 +1045,7 @@ test.describe('official table parity', () => {
     await expect(contextMenu(page)).toBeVisible();
     await expect(contextMenu(page)).toHaveAttribute('data-scope', 'cell');
 
-    await contextMenu(page).click({ position: { x: 16, y: 16 } });
+    await contextMenu(page).click({ position: { x: 3, y: 3 } });
     await expect(contextMenu(page)).toBeVisible();
     await expect(selectedCells(page)).toHaveCount(2);
 

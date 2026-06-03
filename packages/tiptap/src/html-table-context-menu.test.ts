@@ -99,6 +99,7 @@ describe('html table context menu state', () => {
     expect(menu.anchor).toEqual({ left: 10, top: 90 });
     expect(menu.groups.map((group) => group.id)).toEqual([
       'insert',
+      'format',
       'structure',
       'reorder',
       'section',

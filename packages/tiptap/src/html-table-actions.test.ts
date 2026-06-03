@@ -76,17 +76,27 @@ describe('html table context actions', () => {
     const actions = getHtmlTableContextActions(nextState, getHtmlTableInteractionState(nextState));
 
     expect(actions.map((action) => action.id)).toEqual([
+      'toggleHeaderRow',
       'addRowBefore',
       'addRowAfter',
-      'deleteRow',
+      'setCellBackgroundColorBlue',
+      'setCellBackgroundColorGreen',
+      'setCellBackgroundColorYellow',
+      'clearCellBackgroundColor',
+      'setCellTextAlignLeft',
+      'setCellTextAlignCenter',
+      'setCellTextAlignRight',
+      'setCellVerticalAlignTop',
+      'setCellVerticalAlignMiddle',
+      'setCellVerticalAlignBottom',
+      'clearRowContent',
       'moveRowUp',
       'moveRowDown',
       'duplicateRow',
-      'toggleHeaderRow',
-      'clearRowContent',
       'moveRowToHead',
       'moveRowToBody',
       'moveRowToFoot',
+      'deleteRow',
     ]);
     expect(actions.every((action) => action.scope === 'row')).toBe(true);
   });
@@ -106,16 +116,26 @@ describe('html table context actions', () => {
     const actions = getHtmlTableContextActions(nextState, getHtmlTableInteractionState(nextState));
 
     expect(actions.map((action) => action.id)).toEqual([
-      'addColumnBefore',
-      'addColumnAfter',
-      'deleteColumn',
       'moveColumnLeft',
       'moveColumnRight',
-      'duplicateColumn',
-      'toggleHeaderColumn',
-      'clearColumnContent',
+      'addColumnBefore',
+      'addColumnAfter',
       'sortBodyRowsAsc',
       'sortBodyRowsDesc',
+      'setCellBackgroundColorBlue',
+      'setCellBackgroundColorGreen',
+      'setCellBackgroundColorYellow',
+      'clearCellBackgroundColor',
+      'setCellTextAlignLeft',
+      'setCellTextAlignCenter',
+      'setCellTextAlignRight',
+      'setCellVerticalAlignTop',
+      'setCellVerticalAlignMiddle',
+      'setCellVerticalAlignBottom',
+      'clearColumnContent',
+      'duplicateColumn',
+      'toggleHeaderColumn',
+      'deleteColumn',
     ]);
     expect(actions.every((action) => action.scope === 'column')).toBe(true);
   });
@@ -433,7 +453,7 @@ describe('html table context actions', () => {
 
     expect(getHtmlTableContextActionShortcutState({
       id: 'sortBodyRowsAsc',
-      label: 'Sort ascending',
+      label: 'Sort column A-Z',
       scope: 'column',
       enabled: true,
     })).toEqual({
@@ -606,6 +626,7 @@ describe('html table context actions', () => {
 
     expect(groups.map((group) => group.id)).toEqual([
       'insert',
+      'format',
       'structure',
       'reorder',
       'section',
