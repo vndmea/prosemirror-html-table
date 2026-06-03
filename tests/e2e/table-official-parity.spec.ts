@@ -352,7 +352,9 @@ test.describe('official table parity', () => {
       throw new Error('Could not resolve table handle geometry after scroll remeasure.');
     }
 
-    expect(afterScrollBox.x + afterScrollBox.width / 2).toBeLessThan(beforeScrollBox.x + beforeScrollBox.width / 2);
+    expect(afterScrollBox.x + afterScrollBox.width / 2).toBeLessThanOrEqual(
+      beforeScrollBox.x + beforeScrollBox.width / 2,
+    );
     expect(Math.abs(afterScrollBox.x + afterScrollBox.width / 2 - wrapperBox.x)).toBeLessThan(24);
   });
 

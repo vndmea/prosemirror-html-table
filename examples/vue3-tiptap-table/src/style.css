@@ -113,6 +113,31 @@
   outline: none;
 }
 
+.pmht-demo .editor-panel {
+  --tt-table-border-color: rgba(148, 163, 184, 0.34);
+  --tt-table-selected-bg: rgba(99, 77, 255, 0.16);
+  --tt-table-selected-stroke: #2563eb;
+  --tt-table-column-resize-handle-bg: #2563eb;
+  --tt-table-handle-bg-color: #ffffff;
+  --tt-table-extend-icon-color: #64748b;
+  --pmht-table-selected-shadow: none;
+  --pmht-overlay-surface: #ffffff;
+  --pmht-overlay-surface-muted: #f8fafc;
+  --pmht-overlay-border: rgba(148, 163, 184, 0.28);
+  --pmht-overlay-shadow: 0 6px 16px rgba(15, 23, 42, 0.08);
+  --pmht-overlay-shadow-strong: 0 10px 24px rgba(15, 23, 42, 0.12);
+  --pmht-overlay-selected-fill: var(--tt-table-selected-bg);
+  --pmht-overlay-selected-stroke: var(--tt-table-selected-stroke);
+  --pmht-overlay-selected-stroke-strong: #1d4ed8;
+  --pmht-overlay-handle-rest: var(--tt-table-handle-bg-color);
+  --pmht-overlay-handle-hover: #f8fafc;
+  --pmht-overlay-handle-selected: rgba(37, 99, 235, 0.92);
+  --pmht-overlay-handle-menu: #1d4ed8;
+  --pmht-overlay-guide: var(--tt-table-column-resize-handle-bg);
+  --pmht-overlay-danger: #b91c1c;
+  --pmht-overlay-danger-bg: rgba(220, 38, 38, 0.08);
+}
+
 .pmht-demo .editor-panel .tiptap:focus {
   /* box-shadow: inset 0 0 0 2px #bfdbfe; */
 }
@@ -132,13 +157,16 @@
   position: relative;
   width: 100%;
   overflow-x: auto;
-  margin: 0.65rem 0;
-  padding: var(--pmht-selection-gutter) 1.4rem 1.25rem var(--pmht-selection-gutter);
+  margin: 1.25rem 0;
+  margin-left: -1rem;
+  padding: 1rem 1.5rem 1.5rem 1rem;
 }
 
 .pmht-demo .editor-panel .html-table-node__table {
   background: #ffffff;
   margin: 0;
+  table-layout: fixed;
+  box-shadow: none;
 }
 
 .pmht-demo .editor-panel .html-table-overlay {
@@ -172,42 +200,74 @@
 .pmht-demo .editor-panel .html-table-overlay__selection-band {
   position: absolute;
   z-index: 0;
-  border-radius: 8px;
-  background: rgba(191, 219, 254, 0.2);
-  box-shadow: inset 0 0 0 1px rgba(37, 99, 235, 0.16);
+  border-radius: 2px;
+  background: var(--pmht-overlay-selected-fill);
+  box-shadow: inset 0 0 0 2px var(--pmht-overlay-selected-stroke);
   pointer-events: none;
 }
 
 .pmht-demo .editor-panel .html-table-overlay__selection-band--row {
   transform: translateY(-1px);
+  background: var(--tt-table-selected-bg);
 }
 
 .pmht-demo .editor-panel .html-table-overlay__selection-band--column {
   transform: translateX(-1px);
+  background: var(--tt-table-selected-bg);
+}
+
+.pmht-demo .editor-panel .html-table-overlay__cell-selection-fill,
+.pmht-demo .editor-panel .html-table-overlay__cell-selection-outline {
+  position: absolute;
+  pointer-events: none;
+}
+
+.pmht-demo .editor-panel .html-table-overlay__cell-selection-fill {
+  z-index: 2;
+  border-radius: 2px;
+  background: var(--tt-table-selected-bg);
+}
+
+.pmht-demo .editor-panel .html-table-overlay__cell-selection-outline {
+  z-index: 3;
+  border: 2px solid var(--tt-table-selected-stroke);
+  border-radius: 2px;
 }
 
 .pmht-demo .editor-panel .html-table-overlay__cell-selection-handle {
   position: absolute;
-  z-index: 3;
-  width: 0.52rem;
-  height: 0.52rem;
+  top: 50%;
+  right: 0;
+  z-index: 4;
+  width: 0.625rem;
+  height: 0.625rem;
   min-width: 0;
   padding: 0;
   border: 0;
   border-radius: 999px;
-  background: #2563eb;
-  box-shadow: 0 0 0 2px #ffffff;
+  background: var(--pmht-overlay-selected-stroke);
+  box-shadow: none;
   pointer-events: auto;
-  transform: translate(0, -50%);
+  transform: translate(50%, -50%);
+  transition:
+    background 0.15s ease,
+    box-shadow 0.15s ease,
+    transform 0.15s ease;
+}
+
+.pmht-demo .editor-panel .html-table-overlay__cell-selection-handle::before {
+  content: none;
+}
+
+.pmht-demo .editor-panel .html-table-overlay__cell-selection-handle:hover,
+.pmht-demo .editor-panel .html-table-overlay__cell-selection-handle[aria-expanded="true"],
+.pmht-demo .editor-panel .html-table-overlay__cell-selection-handle.is-menu-open {
+  background: var(--pmht-overlay-handle-menu);
+  box-shadow: 0 0 0 2px #ffffff;
 }
 
 .pmht-demo .editor-panel .html-table-overlay__cell-selection-handle[aria-expanded="true"] {
-  background: #1d4ed8;
-  box-shadow: 0 0 0 2px #ffffff, 0 8px 18px rgba(37, 99, 235, 0.28);
-}
-
-.pmht-demo .editor-panel .html-table-overlay__cell-selection-handle.is-menu-open {
-  background: #1d4ed8;
+  transform: translate(50%, -50%);
 }
 
 .pmht-demo .editor-panel .html-table-overlay__handle {
@@ -217,8 +277,8 @@
   padding: 0;
   border: 0;
   border-radius: 999px;
-  background: transparent;
-  box-shadow: none;
+  background: var(--pmht-overlay-handle-rest);
+  box-shadow: inset 0 0 0 1px rgba(148, 163, 184, 0.36);
   opacity: 1;
   pointer-events: auto;
   transform: translate(-50%, -50%);
@@ -233,7 +293,7 @@
   position: absolute;
   top: 50%;
   left: 50%;
-  color: rgba(37, 99, 235, 0.96);
+  color: rgba(71, 85, 105, 0.92);
   font-size: 0.58rem;
   font-weight: 700;
   letter-spacing: 0.08rem;
@@ -242,24 +302,23 @@
 }
 
 .pmht-demo .editor-panel .html-table-overlay__handle:not(.is-hovered):not(.is-selected):not(:hover) {
-  background: transparent;
-  box-shadow: none;
+  background: var(--pmht-overlay-handle-rest);
 }
 
 .pmht-demo .editor-panel .html-table-overlay__handle.is-hovered,
 .pmht-demo .editor-panel .html-table-overlay__handle.is-selected {
-  background: rgba(37, 99, 235, 0.88);
-  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.24);
+  background: var(--pmht-overlay-handle-hover);
+  box-shadow: inset 0 0 0 1px rgba(37, 99, 235, 0.32);
 }
 
 .pmht-demo .editor-panel .html-table-overlay__handle.is-menu-open {
-  background: #1d4ed8;
-  box-shadow: 0 6px 16px rgba(37, 99, 235, 0.3);
+  background: var(--pmht-overlay-handle-menu);
+  box-shadow: inset 0 0 0 1px rgba(29, 78, 216, 0.95);
 }
 
 .pmht-demo .editor-panel .html-table-overlay__handle.is-hovered::after,
 .pmht-demo .editor-panel .html-table-overlay__handle.is-selected::after {
-  color: #ffffff;
+  color: var(--pmht-overlay-selected-stroke);
 }
 
 .pmht-demo .editor-panel .html-table-overlay__handle.is-menu-open::after {
@@ -299,9 +358,9 @@
   top: 0;
   bottom: 0;
   left: 50%;
-  width: 3px;
-  border-radius: 999px;
-  background: linear-gradient(180deg, rgba(37, 99, 235, 0), rgba(37, 99, 235, 0.45), rgba(37, 99, 235, 0));
+  width: 2px;
+  border-radius: 0;
+  background: var(--tt-table-column-resize-handle-bg);
   opacity: 0;
   transform: translateX(-50%);
   transition: opacity 0.15s ease, background 0.15s ease;
@@ -314,7 +373,7 @@
 }
 
 .pmht-demo .editor-panel .html-table-overlay__resize-handle.is-active::before {
-  background: linear-gradient(180deg, rgba(37, 99, 235, 0.05), rgba(37, 99, 235, 0.9), rgba(37, 99, 235, 0.05));
+  background: var(--tt-table-column-resize-handle-bg);
 }
 
 .pmht-demo .editor-panel .html-table-overlay__extend-button {
@@ -324,11 +383,11 @@
   width: 1.2rem;
   height: 1.2rem;
   padding: 0;
-  border: 1px solid rgba(37, 99, 235, 0.38);
+  border: 1px solid rgba(148, 163, 184, 0.42);
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.98);
-  box-shadow: 0 3px 10px rgba(37, 99, 235, 0.14);
-  color: #2563eb;
+  background: var(--pmht-overlay-surface);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+  color: var(--tt-table-extend-icon-color);
   font-size: 0.9rem;
   font-weight: 700;
   line-height: 1;
@@ -337,9 +396,10 @@
 }
 
 .pmht-demo .editor-panel .html-table-overlay__extend-button:hover {
-  background: #dbeafe;
-  border-color: rgba(37, 99, 235, 0.7);
-  box-shadow: 0 5px 14px rgba(37, 99, 235, 0.2);
+  background: var(--pmht-overlay-handle-hover);
+  border-color: rgba(37, 99, 235, 0.34);
+  box-shadow: 0 4px 10px rgba(15, 23, 42, 0.12);
+  color: var(--pmht-overlay-selected-stroke);
 }
 
 .pmht-demo .editor-panel .html-table-overlay__context-trigger {
@@ -349,22 +409,33 @@
   width: 1.35rem;
   height: 1.35rem;
   padding: 0;
-  border: 1px solid rgba(37, 99, 235, 0.3);
+  border: 1px solid rgba(148, 163, 184, 0.36);
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.98);
-  box-shadow: 0 6px 16px rgba(15, 23, 42, 0.14);
-  color: #2563eb;
+  background: var(--pmht-overlay-surface);
+  box-shadow: var(--pmht-overlay-shadow);
+  color: var(--pmht-overlay-selected-stroke);
   font-size: 0.8rem;
   font-weight: 700;
   line-height: 1;
   pointer-events: auto;
   transform: translate(-50%, -50%);
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    box-shadow 0.15s ease,
+    color 0.15s ease;
+}
+
+.pmht-demo .editor-panel .html-table-overlay__context-trigger:hover {
+  background: var(--pmht-overlay-handle-hover);
+  border-color: rgba(37, 99, 235, 0.32);
+  box-shadow: 0 8px 18px rgba(37, 99, 235, 0.14);
 }
 
 .pmht-demo .editor-panel .html-table-overlay__context-trigger[aria-expanded="true"] {
-  background: #2563eb;
-  border-color: #1d4ed8;
-  box-shadow: 0 8px 18px rgba(37, 99, 235, 0.28);
+  background: var(--pmht-overlay-handle-menu);
+  border-color: var(--pmht-overlay-handle-menu);
+  box-shadow: 0 10px 22px rgba(37, 99, 235, 0.28);
   color: #ffffff;
 }
 
@@ -376,10 +447,10 @@
   min-width: 12rem;
   max-width: 16rem;
   padding: 0.55rem;
-  border: 1px solid rgba(148, 163, 184, 0.28);
-  border-radius: 0.9rem;
-  background: rgba(255, 255, 255, 0.98);
-  box-shadow: 0 16px 36px rgba(15, 23, 42, 0.18);
+  border: 1px solid var(--pmht-overlay-border);
+  border-radius: 0.75rem;
+  background: #ffffff;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.12);
   overflow-y: auto;
   pointer-events: auto;
 }
@@ -389,9 +460,9 @@
   position: absolute;
   width: 0.72rem;
   height: 0.72rem;
-  border-top: 1px solid rgba(148, 163, 184, 0.28);
-  border-left: 1px solid rgba(148, 163, 184, 0.28);
-  background: rgba(255, 255, 255, 0.98);
+  border-top: 1px solid var(--pmht-overlay-border);
+  border-left: 1px solid var(--pmht-overlay-border);
+  background: #ffffff;
   transform: rotate(45deg);
 }
 
@@ -437,7 +508,7 @@
   display: grid;
   gap: 0.1rem;
   padding-bottom: 0.45rem;
-  border-bottom: 1px solid rgba(226, 232, 240, 0.9);
+  border-bottom: 1px solid rgba(226, 232, 240, 0.96);
 }
 
 .pmht-demo .editor-panel .html-table-overlay__context-menu-header-title {
@@ -461,7 +532,7 @@
 
 .pmht-demo .editor-panel .html-table-overlay__context-menu-group:not(:last-child) {
   padding-bottom: 0.45rem;
-  border-bottom: 1px solid rgba(226, 232, 240, 0.9);
+  border-bottom: 1px solid rgba(226, 232, 240, 0.96);
 }
 
 .pmht-demo .editor-panel .html-table-overlay__context-menu-group-label {
@@ -486,6 +557,10 @@
   line-height: 1.2;
   text-align: left;
   pointer-events: auto;
+  transition:
+    background 0.15s ease,
+    box-shadow 0.15s ease,
+    color 0.15s ease;
 }
 
 .pmht-demo .editor-panel .html-table-overlay__context-menu-action[data-role="menuitemcheckbox"],
@@ -516,25 +591,26 @@
 
 .pmht-demo .editor-panel .html-table-overlay__context-menu-action[data-checked="true"]::before {
   border-color: rgba(37, 99, 235, 0.95);
-  background: #2563eb;
+  background: var(--pmht-overlay-selected-stroke);
   box-shadow: inset 0 0 0 2px #ffffff;
 }
 
 .pmht-demo .editor-panel .html-table-overlay__context-menu-action:focus-visible {
   outline: none;
   background: rgba(37, 99, 235, 0.12);
-  box-shadow: inset 0 0 0 1px rgba(37, 99, 235, 0.35);
-  color: #1d4ed8;
+  box-shadow: inset 0 0 0 1px rgba(37, 99, 235, 0.36);
+  color: var(--pmht-overlay-handle-menu);
 }
 
 .pmht-demo .editor-panel .html-table-overlay__context-menu-action:hover:not(:disabled),
 .pmht-demo .editor-panel .html-table-overlay__context-menu-action.is-active {
   background: rgba(37, 99, 235, 0.1);
-  color: #1d4ed8;
+  color: var(--pmht-overlay-handle-menu);
 }
 
 .pmht-demo .editor-panel .html-table-overlay__context-menu-action.is-primary {
-  background: rgba(37, 99, 235, 0.06);
+  background: rgba(37, 99, 235, 0.08);
+  color: var(--pmht-overlay-handle-menu);
 }
 
 .pmht-demo .editor-panel .html-table-overlay__context-menu-action.is-primary::before {
@@ -549,16 +625,17 @@
 }
 
 .pmht-demo .editor-panel .html-table-overlay__context-menu-action.is-destructive {
-  color: #b91c1c;
+  color: var(--pmht-overlay-danger);
 }
 
 .pmht-demo .editor-panel .html-table-overlay__context-menu-action.is-destructive:hover:not(:disabled) {
-  background: rgba(220, 38, 38, 0.08);
+  background: var(--pmht-overlay-danger-bg);
   color: #991b1b;
 }
 
 .pmht-demo .editor-panel .html-table-overlay__context-menu-action:disabled {
   color: #94a3b8;
+  background: transparent;
   cursor: default;
 }
 
@@ -578,16 +655,20 @@
 .pmht-demo .editor-panel th,
 .pmht-demo .editor-panel td {
   position: relative;
-  border: 1px solid #cbd5e1;
-  padding: 0.65rem;
+  border: 1px solid var(--tt-table-border-color);
+  padding: 0.5rem;
   vertical-align: top;
-  transition: box-shadow 0.15s ease, background 0.15s ease;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease,
+    background 0.15s ease;
 }
 
 .pmht-demo .editor-panel th {
-  background: #eff6ff;
-  color: #1e3a8a;
+  background: #f8fafc;
+  color: #0f172a;
   font-weight: 700;
+  text-align: left;
 }
 
 .pmht-demo .editor-panel tfoot td,
@@ -597,16 +678,37 @@
 }
 
 .pmht-demo .editor-panel .html-table-cell--selected {
-  background: linear-gradient(180deg, rgba(191, 219, 254, 0.38), rgba(219, 234, 254, 0.5));
-  box-shadow: inset 0 0 0 2px rgba(37, 99, 235, 0.35);
+  background: var(--tt-table-selected-bg);
+  box-shadow: none;
+}
+
+.pmht-demo .editor-panel .html-table-cell--selected.html-table-cell--selected--anchor,
+.pmht-demo .editor-panel .html-table-cell--selected.html-table-cell--selected--head {
+  background: var(--tt-table-selected-bg);
 }
 
 .pmht-demo .editor-panel .html-table-node--has-selection {
-  /* box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.14); */
+  box-shadow: none;
 }
 
 .pmht-demo .editor-panel .html-table-node--selected {
-  /* box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.22); */
+  box-shadow: 0 0 0 2px var(--tt-table-selected-stroke);
+}
+
+.pmht-demo .editor-panel .html-table-overlay[data-selection-scope="table"] .html-table-overlay__handle--table {
+  background: var(--pmht-overlay-handle-selected);
+  box-shadow: 0 10px 22px rgba(37, 99, 235, 0.26);
+}
+
+.pmht-demo .editor-panel .html-table-overlay[data-selection-scope="table"] .html-table-overlay__handle--table::after,
+.pmht-demo .editor-panel .html-table-overlay[data-selection-scope="row"] .html-table-overlay__handle--row.is-selected::after,
+.pmht-demo .editor-panel .html-table-overlay[data-selection-scope="column"] .html-table-overlay__handle--column.is-selected::after {
+  color: #ffffff;
+}
+
+.pmht-demo .editor-panel .html-table-overlay[data-selection-scope="row"] .html-table-overlay__selection-band--row,
+.pmht-demo .editor-panel .html-table-overlay[data-selection-scope="column"] .html-table-overlay__selection-band--column {
+  box-shadow: inset 0 0 0 2px var(--tt-table-selected-stroke);
 }
 
 .pmht-demo .output-panel pre {

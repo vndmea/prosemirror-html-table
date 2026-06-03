@@ -58,6 +58,8 @@ export class HtmlTableCellSelectionController {
   private readonly toggleContextMenuFromControl: HtmlTableCellSelectionControllerOptions['toggleContextMenuFromControl'];
   private readonly rowSelectionOverlay: HTMLDivElement;
   private readonly columnSelectionOverlay: HTMLDivElement;
+  private readonly cellSelectionFill: HTMLDivElement;
+  private readonly cellSelectionOutline: HTMLDivElement;
 
   constructor(options: HtmlTableCellSelectionControllerOptions) {
     this.root = options.root;
@@ -73,22 +75,30 @@ export class HtmlTableCellSelectionController {
     this.columnSelectionOverlay.className =
       'html-table-overlay__selection-band html-table-overlay__selection-band--column';
     this.columnSelectionOverlay.dataset.testid = 'pmht-selection-band-column';
+    this.cellSelectionFill = this.root.ownerDocument.createElement('div');
+    this.cellSelectionFill.className = 'html-table-overlay__cell-selection-fill';
+    this.cellSelectionFill.hidden = true;
+    this.cellSelectionOutline = this.root.ownerDocument.createElement('div');
+    this.cellSelectionOutline.className = 'html-table-overlay__cell-selection-outline';
+    this.cellSelectionOutline.hidden = true;
     this.cellSelectionHandle = this.root.ownerDocument.createElement('button');
     this.cellSelectionHandle.type = 'button';
     this.cellSelectionHandle.className = 'html-table-overlay__cell-selection-handle';
     this.cellSelectionHandle.dataset.testid = 'pmht-cell-handle';
     this.cellSelectionHandle.tabIndex = -1;
     this.cellSelectionHandle.hidden = true;
-    this.cellSelectionHandle.setAttribute('aria-label', 'Selected cells handle');
-    this.cellSelectionHandle.title = 'Selected cells handle';
+    this.cellSelectionHandle.setAttribute('aria-label', 'Table cells option');
+    this.cellSelectionHandle.title = 'Table cells option';
     this.cellSelectionHandle.addEventListener('mousedown', (event) => this.handleCellSelectionHandleMouseDown(event));
     this.cellSelectionHandle.addEventListener('click', (event) => this.handleCellSelectionHandleClick(event));
 
     this.root.append(
       this.rowSelectionOverlay,
       this.columnSelectionOverlay,
-      this.cellSelectionHandle,
+      this.cellSelectionFill,
+      this.cellSelectionOutline,
     );
+    this.cellSelectionOutline.append(this.cellSelectionHandle);
   }
 
   render(
@@ -213,6 +223,8 @@ export class HtmlTableCellSelectionController {
     const renderState = getHtmlTableCellContextTriggerRenderState(menu);
     const controls = getHtmlTableContextMenuAriaControls(this.contextMenuId, renderState.expanded);
     if (!selectionInfo || selectionInfo.tablePos !== tablePos) {
+      this.cellSelectionFill.hidden = true;
+      this.cellSelectionOutline.hidden = true;
       this.cellSelectionHandle.hidden = true;
       this.cellSelectionHandle.tabIndex = -1;
       return;
@@ -228,16 +240,26 @@ export class HtmlTableCellSelectionController {
       selectionInfo.bottom,
     );
     if (!rect) {
+      this.cellSelectionFill.hidden = true;
+      this.cellSelectionOutline.hidden = true;
       this.cellSelectionHandle.hidden = true;
       this.cellSelectionHandle.tabIndex = -1;
       return;
     }
 
     const visible = isHtmlTableCellHandleVisible(interaction, tablePos, selectionInfo, renderState.visible);
+    this.cellSelectionFill.hidden = false;
+    this.cellSelectionFill.style.left = `${rect.left}px`;
+    this.cellSelectionFill.style.top = `${rect.top}px`;
+    this.cellSelectionFill.style.width = `${rect.width}px`;
+    this.cellSelectionFill.style.height = `${rect.height}px`;
+    this.cellSelectionOutline.hidden = false;
+    this.cellSelectionOutline.style.left = `${rect.left}px`;
+    this.cellSelectionOutline.style.top = `${rect.top}px`;
+    this.cellSelectionOutline.style.width = `${rect.width}px`;
+    this.cellSelectionOutline.style.height = `${rect.height}px`;
     this.cellSelectionHandle.hidden = !visible;
     this.cellSelectionHandle.tabIndex = visible ? 0 : -1;
-    this.cellSelectionHandle.style.left = `${rect.right - 1}px`;
-    this.cellSelectionHandle.style.top = `${rect.top + rect.height / 2}px`;
     this.cellSelectionHandle.dataset.primaryAction = renderState.primaryActionId ?? '';
     this.cellSelectionHandle.setAttribute('aria-haspopup', 'menu');
     this.cellSelectionHandle.setAttribute('aria-expanded', renderState.expanded ? 'true' : 'false');
@@ -246,8 +268,8 @@ export class HtmlTableCellSelectionController {
     } else {
       this.cellSelectionHandle.removeAttribute('aria-controls');
     }
-    this.cellSelectionHandle.setAttribute('aria-label', renderState.label ?? 'Cell actions');
-    this.cellSelectionHandle.title = renderState.title ?? renderState.label ?? 'Cell actions';
+    this.cellSelectionHandle.setAttribute('aria-label', renderState.label ?? 'Table cells option');
+    this.cellSelectionHandle.title = renderState.title ?? renderState.label ?? 'Table cells option';
     this.cellSelectionHandle.classList.toggle('is-menu-open', renderState.expanded);
   }
 
