@@ -225,7 +225,6 @@
 }
 
 .pmht-demo .editor-panel .html-table-overlay__selection-band--column {
-  transform: translateX(-1px);
   background: var(--tt-table-selected-bg);
 }
 
