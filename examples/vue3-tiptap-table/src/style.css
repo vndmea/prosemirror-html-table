@@ -220,7 +220,6 @@
 }
 
 .pmht-demo .editor-panel .html-table-overlay__selection-band--row {
-  transform: translateY(-1px);
   background: var(--tt-table-selected-bg);
 }
 
