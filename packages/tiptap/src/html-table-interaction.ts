@@ -1,5 +1,5 @@
 import type { Node as ProseMirrorNode } from '@tiptap/pm/model';
-import { NodeSelection, Plugin, PluginKey, type EditorState, type Selection } from '@tiptap/pm/state';
+import { NodeSelection, Plugin, PluginKey, TextSelection, type EditorState, type Selection } from '@tiptap/pm/state';
 import type { EditorView } from '@tiptap/pm/view';
 import { CellSelection, createHtmlTableGrid, type HtmlTableCellRef } from 'prosemirror-html-table';
 
@@ -366,6 +366,8 @@ class HtmlTableInteractionView {
   private readonly ownerDocument: Document;
   private activeCellDrag: HtmlTableCellDragState | null = null;
   private suppressNextClick = false;
+  private previousUserSelect: string | null = null;
+  private previousWebkitUserSelect: string | null = null;
   private readonly onMouseDown = (event: MouseEvent) => this.handleMouseDown(event);
   private readonly onClickCapture = (event: MouseEvent) => this.handleClickCapture(event);
   private readonly onDocumentMouseMove = (event: MouseEvent) => this.updateCellDragSelection(event);
@@ -398,6 +400,7 @@ class HtmlTableInteractionView {
   }
 
   destroy(): void {
+    this.restoreNativeSelectionSuppression();
     this.view.dom.removeEventListener('mousedown', this.onMouseDown);
     this.view.dom.removeEventListener('click', this.onClickCapture, true);
     this.view.dom.removeEventListener('mousemove', this.onMouseMove);
@@ -425,6 +428,9 @@ class HtmlTableInteractionView {
       headCellPos: cellContext.cellPos,
       selectionStarted: false,
     };
+    event.preventDefault();
+    this.ownerDocument.getSelection()?.removeAllRanges();
+    this.suppressNativeSelection();
     this.ownerDocument.addEventListener('mousemove', this.onDocumentMouseMove);
   }
 
@@ -582,6 +588,16 @@ class HtmlTableInteractionView {
 
   private handleDocumentMouseUp(event: MouseEvent): void {
     const activeCellDrag = this.activeCellDrag;
+    if (activeCellDrag && !activeCellDrag.selectionStarted) {
+      const nextSelection = TextSelection.near(this.view.state.doc.resolve(activeCellDrag.anchorCellPos + 1));
+      if (!nextSelection.eq(this.view.state.selection)) {
+        this.ownerDocument.getSelection()?.removeAllRanges();
+        event.preventDefault();
+        event.stopPropagation();
+        this.view.dispatch(this.view.state.tr.setSelection(nextSelection));
+      }
+    }
+
     if (
       activeCellDrag?.selectionStarted
       && activeCellDrag.anchorCellPos !== activeCellDrag.headCellPos
@@ -604,6 +620,33 @@ class HtmlTableInteractionView {
   private clearCellDrag(): void {
     this.ownerDocument.removeEventListener('mousemove', this.onDocumentMouseMove);
     this.activeCellDrag = null;
+    this.restoreNativeSelectionSuppression();
+  }
+
+  private suppressNativeSelection(): void {
+    if (this.previousUserSelect !== null || this.previousWebkitUserSelect !== null) {
+      this.ownerDocument.getSelection()?.removeAllRanges();
+      return;
+    }
+
+    const { style } = this.view.dom;
+    this.previousUserSelect = style.userSelect;
+    this.previousWebkitUserSelect = style.webkitUserSelect;
+    style.userSelect = 'none';
+    style.webkitUserSelect = 'none';
+    this.ownerDocument.getSelection()?.removeAllRanges();
+  }
+
+  private restoreNativeSelectionSuppression(): void {
+    if (this.previousUserSelect === null || this.previousWebkitUserSelect === null) {
+      return;
+    }
+
+    const { style } = this.view.dom;
+    style.userSelect = this.previousUserSelect;
+    style.webkitUserSelect = this.previousWebkitUserSelect;
+    this.previousUserSelect = null;
+    this.previousWebkitUserSelect = null;
   }
 }
 
