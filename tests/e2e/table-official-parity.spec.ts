@@ -655,6 +655,16 @@ test.describe('official table parity', () => {
     await expect(columnHandle(page, 0)).toBeHidden();
   });
 
+  test('column selection uses hidden native selection painting', async ({ page }) => {
+    await gotoDemo(page);
+    await secondBodyCell(page).hover();
+
+    await clickCenter(page, columnHandle(page, 1));
+
+    await expect(columnSelectionBand(page)).toBeVisible();
+    await expect(page.locator('.ProseMirror').first()).toHaveClass(/ProseMirror-hideselection/);
+  });
+
   test('column add-after action targets the captured column snapshot', async ({ page }) => {
     await gotoDemo(page);
     await firstBodyCell(page).hover();

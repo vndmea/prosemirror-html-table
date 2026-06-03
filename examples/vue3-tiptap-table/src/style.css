@@ -113,6 +113,18 @@
   outline: none;
 }
 
+.pmht-demo .editor-panel .ProseMirror-hideselection *::selection {
+  background: transparent;
+}
+
+.pmht-demo .editor-panel .ProseMirror-hideselection *::-moz-selection {
+  background: transparent;
+}
+
+.pmht-demo .editor-panel .ProseMirror-hideselection {
+  caret-color: transparent;
+}
+
 .pmht-demo .editor-panel {
   --tt-table-border-color: rgba(148, 163, 184, 0.34);
   --tt-table-selected-bg: rgba(99, 77, 255, 0.16);
@@ -129,6 +141,7 @@
   --pmht-overlay-selected-fill: var(--tt-table-selected-bg);
   --pmht-overlay-selected-stroke: var(--tt-table-selected-stroke);
   --pmht-overlay-selected-stroke-strong: #1d4ed8;
+  --pmht-overlay-selected-stroke-width: 1px;
   --pmht-overlay-handle-rest: var(--tt-table-handle-bg-color);
   --pmht-overlay-handle-hover: #f8fafc;
   --pmht-overlay-handle-selected: rgba(37, 99, 235, 0.92);
@@ -202,7 +215,7 @@
   z-index: 0;
   border-radius: 2px;
   background: var(--pmht-overlay-selected-fill);
-  box-shadow: inset 0 0 0 2px var(--pmht-overlay-selected-stroke);
+  box-shadow: inset 0 0 0 var(--pmht-overlay-selected-stroke-width) var(--pmht-overlay-selected-stroke);
   pointer-events: none;
 }
 
@@ -230,7 +243,7 @@
 
 .pmht-demo .editor-panel .html-table-overlay__cell-selection-outline {
   z-index: 3;
-  border: 2px solid var(--tt-table-selected-stroke);
+  border: var(--pmht-overlay-selected-stroke-width) solid var(--tt-table-selected-stroke);
   border-radius: 2px;
 }
 
@@ -263,7 +276,7 @@
 .pmht-demo .editor-panel .html-table-overlay__cell-selection-handle[aria-expanded="true"],
 .pmht-demo .editor-panel .html-table-overlay__cell-selection-handle.is-menu-open {
   background: var(--pmht-overlay-handle-menu);
-  box-shadow: 0 0 0 2px #ffffff;
+  /* box-shadow: 0 0 0 2px #ffffff; */
 }
 
 .pmht-demo .editor-panel .html-table-overlay__cell-selection-handle[aria-expanded="true"] {
@@ -278,13 +291,13 @@
   border: 0;
   border-radius: 999px;
   background: var(--pmht-overlay-handle-rest);
-  box-shadow: inset 0 0 0 1px rgba(148, 163, 184, 0.36);
+  /* box-shadow: inset 0 0 0 1px rgba(148, 163, 184, 0.36); */
   opacity: 1;
   pointer-events: auto;
   transform: translate(-50%, -50%);
   transition:
     background 0.15s ease,
-    box-shadow 0.15s ease,
+    /* box-shadow 0.15s ease, */
     color 0.15s ease;
 }
 
@@ -358,7 +371,7 @@
   top: 0;
   bottom: 0;
   left: 50%;
-  width: 2px;
+  width: 1px;
   border-radius: 0;
   background: var(--tt-table-column-resize-handle-bg);
   opacity: 0;
@@ -386,7 +399,7 @@
   border: 1px solid rgba(148, 163, 184, 0.42);
   border-radius: 999px;
   background: var(--pmht-overlay-surface);
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+  /* box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08); */
   color: var(--tt-table-extend-icon-color);
   font-size: 0.9rem;
   font-weight: 700;
@@ -435,7 +448,7 @@
 .pmht-demo .editor-panel .html-table-overlay__context-trigger[aria-expanded="true"] {
   background: var(--pmht-overlay-handle-menu);
   border-color: var(--pmht-overlay-handle-menu);
-  box-shadow: 0 10px 22px rgba(37, 99, 235, 0.28);
+  /* box-shadow: 0 10px 22px rgba(37, 99, 235, 0.28); */
   color: #ffffff;
 }
 
@@ -634,12 +647,12 @@
 }
 
 .pmht-demo .editor-panel .html-table-node--selected {
-  box-shadow: 0 0 0 2px var(--tt-table-selected-stroke);
+  /* box-shadow: 0 0 0 var(--pmht-overlay-selected-stroke-width) var(--tt-table-selected-stroke); */
 }
 
 .pmht-demo .editor-panel .html-table-overlay[data-selection-scope="table"] .html-table-overlay__handle--table {
   background: var(--pmht-overlay-handle-selected);
-  box-shadow: 0 10px 22px rgba(37, 99, 235, 0.26);
+  /* box-shadow: 0 10px 22px rgba(37, 99, 235, 0.26); */
 }
 
 .pmht-demo .editor-panel .html-table-overlay[data-selection-scope="table"] .html-table-overlay__handle--table::after,
@@ -650,7 +663,7 @@
 
 .pmht-demo .editor-panel .html-table-overlay[data-selection-scope="row"] .html-table-overlay__selection-band--row,
 .pmht-demo .editor-panel .html-table-overlay[data-selection-scope="column"] .html-table-overlay__selection-band--column {
-  box-shadow: inset 0 0 0 2px var(--tt-table-selected-stroke);
+  /* box-shadow: inset 0 0 0 var(--pmht-overlay-selected-stroke-width) var(--tt-table-selected-stroke); */
 }
 
 .pmht-demo .output-panel pre {

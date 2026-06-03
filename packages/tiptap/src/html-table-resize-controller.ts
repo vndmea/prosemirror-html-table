@@ -98,7 +98,7 @@ export class HtmlTableResizeController {
       resizeHandle.dataset.index = String(column.index);
       resizeHandle.setAttribute('aria-label', `Resize column ${column.index + 1}`);
       resizeHandle.title = `Resize column ${column.index + 1}`;
-      resizeHandle.style.width = `${Math.max(4, this.handleWidth)}px`;
+      resizeHandle.style.width = `${this.handleWidth}px`;
       resizeHandle.style.left = `${tableLeft + column.left + column.width}px`;
       resizeHandle.style.top = `${visibleTableTop}px`;
       resizeHandle.style.height = `${visibleTableHeight}px`;

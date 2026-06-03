@@ -1253,6 +1253,13 @@ describe('html table commands', () => {
     expect(nextState.selection.empty).toBe(false);
   });
 
+  it('keeps cell selections hidden from native DOM painting', () => {
+    const nextState = applyCommand(createStateWithTable(2, 2), selectColumn());
+
+    expect(nextState.selection).toBeInstanceOf(CellSelection);
+    expect(nextState.selection.visible).toBe(false);
+  });
+
   it('selects the whole table as a node selection', () => {
     const nextState = applyCommand(createStateWithTable(2, 2), selectTable());
 

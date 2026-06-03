@@ -7,7 +7,7 @@ describe('defaultHtmlTableTiptapOptions', () => {
     expect(defaultHtmlTableTiptapOptions).toMatchObject({
       resizable: true,
       renderWrapper: true,
-      handleWidth: 6,
+      handleWidth: 1,
       cellMinWidth: 120,
       lastColumnResizable: true,
       allowTableNodeSelection: true,

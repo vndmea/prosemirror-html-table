@@ -79,6 +79,7 @@ class CellBookmark implements SelectionBookmark {
 }
 
 Selection.jsonID('html-table-cell', CellSelection);
+CellSelection.prototype.visible = false;
 
 function isValidCellPosition(doc: ProseMirrorNode, pos: number): boolean {
   if (pos < 0 || pos >= doc.content.size) return false;
