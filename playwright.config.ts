@@ -1,5 +1,8 @@
 import { defineConfig, devices } from '@playwright/test';
 
+const E2E_PORT = Number(process.env.E2E_PORT || 4173);
+const E2E_BASE_URL = `http://127.0.0.1:${E2E_PORT}`;
+
 export default defineConfig({
   testDir: './tests/e2e',
   timeout: 30_000,
@@ -12,7 +15,7 @@ export default defineConfig({
   retries: process.env.CI ? 2 : 0,
   reporter: 'list',
   use: {
-    baseURL: 'http://127.0.0.1:4173',
+    baseURL: E2E_BASE_URL,
     trace: 'on-first-retry',
     viewport: {
       width: 1280,
@@ -28,9 +31,9 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: 'npm run dev --workspace vue3-tiptap-table-demo -- --host 127.0.0.1 --port 4173',
-    url: 'http://127.0.0.1:4173',
-    reuseExistingServer: false,
+    command: `npm run dev --workspace vue3-tiptap-table-demo -- --host 127.0.0.1 --port ${E2E_PORT}`,
+    url: E2E_BASE_URL,
+    reuseExistingServer: !process.env.CI,
     timeout: 120_000,
   },
 });
