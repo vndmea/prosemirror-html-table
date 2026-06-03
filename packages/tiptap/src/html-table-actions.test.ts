@@ -387,7 +387,7 @@ describe('html table context actions', () => {
     expect(cellActions.find((action) => action.id === 'toggleHeaderCell')?.label).toBe('Set header cell');
   });
 
-  it('derives checkbox and radio menu item semantics for toggle and formatting actions', () => {
+  it('derives plain menu item semantics for toggle, formatting, and destructive actions', () => {
     expect(getHtmlTableContextActionMenuItemState({
       id: 'toggleCaption',
       label: 'Remove caption',
@@ -395,8 +395,8 @@ describe('html table context actions', () => {
       enabled: true,
       active: true,
     })).toEqual({
-      role: 'menuitemcheckbox',
-      checked: true,
+      role: 'menuitem',
+      checked: null,
     });
 
     expect(getHtmlTableContextActionMenuItemState({
@@ -406,8 +406,8 @@ describe('html table context actions', () => {
       enabled: true,
       active: false,
     })).toEqual({
-      role: 'menuitemradio',
-      checked: false,
+      role: 'menuitem',
+      checked: null,
     });
 
     expect(getHtmlTableContextActionMenuItemState({

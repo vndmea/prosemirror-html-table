@@ -8,6 +8,7 @@ import {
   type HtmlTableContextActionId,
 } from './html-table-actions.js';
 import {
+  getHtmlTableContextMenuState,
   runHtmlTableContextMenuAction,
   type HtmlTableContextMenuState,
   type HtmlTableContextTriggerButtonState,
@@ -37,6 +38,27 @@ const MENU_SCOPE_LABELS: Record<HtmlTableSelectionScope, string> = {
   column: 'Column actions',
   cell: 'Cell actions',
 };
+
+const CELL_COLOR_ACTION_IDS: HtmlTableContextActionId[] = [
+  'setCellBackgroundColorBlue',
+  'setCellBackgroundColorGreen',
+  'setCellBackgroundColorYellow',
+  'clearCellBackgroundColor',
+];
+
+const CELL_ALIGNMENT_ACTION_IDS: HtmlTableContextActionId[] = [
+  'setCellTextAlignLeft',
+  'setCellTextAlignCenter',
+  'setCellTextAlignRight',
+  'setCellVerticalAlignTop',
+  'setCellVerticalAlignMiddle',
+  'setCellVerticalAlignBottom',
+];
+
+const CELL_STRUCTURE_ACTION_IDS: HtmlTableContextActionId[] = [
+  'mergeOrSplitCells',
+  'toggleHeaderCell',
+];
 
 export interface HtmlTableContextTriggerRenderState {
   visible: boolean;
@@ -92,6 +114,32 @@ export interface HtmlTableContextMenuAccessibleState {
 
 export interface HtmlTableContextMenuGroupAccessibleState {
   labelId: string;
+}
+
+interface HtmlTableContextMenuActionEntry {
+  kind: 'action';
+  key: string;
+  label: string;
+  actionId: HtmlTableContextActionId;
+  enabled: boolean;
+  active: boolean;
+  primary: boolean;
+  destructive: boolean;
+  shortcut: string | null;
+}
+
+interface HtmlTableContextMenuSubmenuEntry {
+  kind: 'submenu';
+  key: string;
+  label: string;
+  items: HtmlTableContextMenuEntry[];
+}
+
+type HtmlTableContextMenuEntry = HtmlTableContextMenuActionEntry | HtmlTableContextMenuSubmenuEntry;
+
+interface HtmlTableResolvedContextMenuLevel {
+  title: string | null;
+  entries: HtmlTableContextMenuEntry[];
 }
 
 type HtmlTableMenuContext =
@@ -370,6 +418,9 @@ export class HtmlTableMenuController {
   private contextMenuTypeaheadQuery = '';
   private contextMenuTypeaheadResetTimer: ReturnType<typeof setTimeout> | null = null;
   private contextMenuContext: HtmlTableMenuContext | null = null;
+  private contextMenuSubmenuPath: string[] = [];
+  private lastHostRect: DOMRect | null = null;
+  private lastViewportInset = 12;
 
   constructor(options: HtmlTableMenuControllerOptions) {
     this.getView = options.getView;
@@ -386,8 +437,10 @@ export class HtmlTableMenuController {
   }
 
   sync(menu: HtmlTableContextMenuState, hostRect: DOMRect, viewportInset: number): void {
+    this.lastHostRect = hostRect;
+    this.lastViewportInset = viewportInset;
     const renderState = getHtmlTableContextMenuRenderState(menu);
-    const focusedActionId = this.getFocusedContextMenuActionId();
+    const focusedMenuItemKey = this.getFocusedContextMenuItemKey();
     const headerState = getHtmlTableContextMenuHeaderState(menu);
     const accessibleState = getHtmlTableContextMenuAccessibleState(this.contextMenuId, headerState);
 
@@ -407,6 +460,7 @@ export class HtmlTableMenuController {
 
     if (!renderState.visible || renderState.left === null || renderState.top === null) {
       this.contextMenuContext = null;
+      this.contextMenuSubmenuPath = [];
       this.resetContextMenuTypeahead();
       this.restoreContextMenuFocusIfNeeded();
       this.contextMenu.replaceChildren();
@@ -419,7 +473,11 @@ export class HtmlTableMenuController {
       return;
     }
 
-    this.contextMenu.replaceChildren(...this.buildContextMenuGroups(menu));
+    if (!menu.open || menu.scope !== 'cell') {
+      this.contextMenuSubmenuPath = [];
+    }
+
+    this.contextMenu.replaceChildren(...this.buildContextMenuContent(menu));
     const menuWidth = this.contextMenu.offsetWidth;
     const menuHeight = this.contextMenu.offsetHeight;
     const defaultView = this.root.ownerDocument.defaultView;
@@ -451,7 +509,7 @@ export class HtmlTableMenuController {
     this.contextMenu.style.maxHeight = `${availableHeight}px`;
     this.contextMenu.dataset.placement = position.placement;
     this.contextMenu.style.transformOrigin = getHtmlTableContextMenuTransformOrigin(position.placement);
-    this.restoreContextMenuFocus(menu, focusedActionId);
+    this.restoreContextMenuFocus(menu, focusedMenuItemKey);
   }
 
   toggleFromControl(
@@ -462,6 +520,7 @@ export class HtmlTableMenuController {
     this.contextMenuFocusTarget = focusTarget;
     this.restoreContextMenuFocusOnClose = !nextOpen;
     this.contextMenuContext = nextOpen ? this.captureContextMenuContext(interaction) : null;
+    this.contextMenuSubmenuPath = [];
     this.view.dispatch(
       this.view.state.tr.setMeta(htmlTableInteractionPluginKey, {
         contextMenuOpen: nextOpen,
@@ -486,6 +545,20 @@ export class HtmlTableMenuController {
     const enabledButtons = this.getEnabledContextMenuActionButtons();
     if (isHtmlTableContextMenuExitKey(event.key)) {
       this.closeContextMenu(false);
+      return;
+    }
+
+    if (isHtmlTableContextMenuDismissKey(event.key)) {
+      if (this.contextMenuSubmenuPath.length > 0) {
+        event.preventDefault();
+        event.stopPropagation();
+        this.contextMenuSubmenuPath.pop();
+        this.resetContextMenuTypeahead();
+        this.rerenderOpenContextMenu();
+        return;
+      }
+
+      this.closeContextMenu(true);
       return;
     }
 
@@ -564,7 +637,7 @@ export class HtmlTableMenuController {
     return this.getView();
   }
 
-  private buildContextMenuGroups(menu: HtmlTableContextMenuState): HTMLElement[] {
+  private buildContextMenuContent(menu: HtmlTableContextMenuState): HTMLElement[] {
     const headerState = getHtmlTableContextMenuHeaderState(menu);
     const elements: HTMLElement[] = [];
 
@@ -589,72 +662,265 @@ export class HtmlTableMenuController {
       elements.push(header);
     }
 
-    return elements.concat(
-      menu.groups.map((group) => {
-        const groupElement = this.root.ownerDocument.createElement('div');
-        groupElement.className = 'html-table-overlay__context-menu-group';
-        groupElement.dataset.group = group.id;
-        groupElement.setAttribute('role', 'group');
-        const accessibleGroupState = getHtmlTableContextMenuGroupAccessibleState(this.contextMenuId, group.id);
-        groupElement.setAttribute('aria-labelledby', accessibleGroupState.labelId);
+    if (menu.scope === 'cell') {
+      return elements.concat(this.buildCellContextMenuLevel(menu));
+    }
 
-        const label = this.root.ownerDocument.createElement('div');
-        label.className = 'html-table-overlay__context-menu-group-label';
-        label.id = accessibleGroupState.labelId;
-        label.textContent = group.label;
-        groupElement.append(label);
-
-        for (const action of group.actions) {
-          const menuItemState = getHtmlTableContextActionMenuItemState(action);
-          const shortcutState = getHtmlTableContextActionShortcutState(action);
-          const renderState = getHtmlTableContextMenuActionRenderState(
-            action,
-            menuItemState,
-            menu.primaryAction?.id === action.id,
-          );
-          const button = this.root.ownerDocument.createElement('button');
-          button.type = 'button';
-          button.className = 'html-table-overlay__context-menu-action';
-          button.dataset.actionId = action.id;
-          button.dataset.testid = 'pmht-context-menu-action';
-          button.dataset.role = renderState.role;
-          button.dataset.checked = renderState.checked ?? '';
-          button.disabled = !action.enabled;
-          button.textContent = action.label;
-          button.setAttribute('role', renderState.role);
-          if (shortcutState.ariaKeyshortcuts) {
-            button.setAttribute('aria-keyshortcuts', shortcutState.ariaKeyshortcuts);
-          } else {
-            button.removeAttribute('aria-keyshortcuts');
-          }
-          if (renderState.checked === null) {
-            button.removeAttribute('aria-checked');
-          } else {
-            button.setAttribute('aria-checked', renderState.checked);
-          }
-          button.setAttribute('aria-current', renderState.current);
-          button.classList.toggle('is-active', renderState.active);
-          button.classList.toggle('is-destructive', renderState.destructive);
-          button.classList.toggle('is-primary', renderState.primary);
-          groupElement.append(button);
-        }
-
-        return groupElement;
-      }),
-    );
+    return elements.concat(menu.groups.map((group) => this.buildStandardContextMenuGroup(group, menu.primaryAction?.id ?? null)));
   }
 
-  private getFocusedContextMenuActionId(): string | null {
+  private buildStandardContextMenuGroup(
+    group: HtmlTableContextMenuState['groups'][number],
+    primaryActionId: string | null,
+  ): HTMLElement {
+    const groupElement = this.root.ownerDocument.createElement('div');
+    groupElement.className = 'html-table-overlay__context-menu-group';
+    groupElement.dataset.group = group.id;
+    groupElement.setAttribute('role', 'group');
+    const accessibleGroupState = getHtmlTableContextMenuGroupAccessibleState(this.contextMenuId, group.id);
+    groupElement.setAttribute('aria-labelledby', accessibleGroupState.labelId);
+
+    const label = this.root.ownerDocument.createElement('div');
+    label.className = 'html-table-overlay__context-menu-group-label';
+    label.id = accessibleGroupState.labelId;
+    label.textContent = group.label;
+    groupElement.append(label);
+
+    for (const action of group.actions) {
+      groupElement.append(this.createContextMenuActionButton(action, primaryActionId === action.id));
+    }
+
+    return groupElement;
+  }
+
+  private buildCellContextMenuLevel(menu: HtmlTableContextMenuState): HTMLElement {
+    const level = this.resolveCellContextMenuLevel(menu);
+    const groupElement = this.root.ownerDocument.createElement('div');
+    groupElement.className = 'html-table-overlay__context-menu-group html-table-overlay__context-menu-group--stack';
+    groupElement.dataset.group = 'cell';
+    groupElement.setAttribute('role', 'group');
+
+    if (this.contextMenuSubmenuPath.length > 0) {
+      const backButton = this.root.ownerDocument.createElement('button');
+      backButton.type = 'button';
+      backButton.className = 'html-table-overlay__context-menu-action is-submenu-back';
+      backButton.dataset.testid = 'pmht-context-menu-action';
+      backButton.dataset.menuKey = 'back';
+      backButton.dataset.back = 'true';
+      backButton.setAttribute('role', 'menuitem');
+      backButton.textContent = level.title ? `Back to ${level.title}` : 'Back';
+      groupElement.append(backButton);
+    }
+
+    for (const entry of level.entries) {
+      if (entry.kind === 'submenu') {
+        const button = this.root.ownerDocument.createElement('button');
+        button.type = 'button';
+        button.className = 'html-table-overlay__context-menu-action has-submenu';
+        button.dataset.testid = 'pmht-context-menu-action';
+        button.dataset.menuKey = entry.key;
+        button.dataset.submenuId = entry.key;
+        button.setAttribute('role', 'menuitem');
+        button.setAttribute('aria-haspopup', 'menu');
+        button.textContent = entry.label;
+        groupElement.append(button);
+        continue;
+      }
+
+      groupElement.append(this.createContextMenuActionButton(
+        {
+          id: entry.actionId,
+          label: entry.label,
+          scope: menu.scope ?? 'cell',
+          enabled: entry.enabled,
+          active: entry.active,
+          destructive: entry.destructive,
+        },
+        entry.primary,
+        entry.shortcut,
+      ));
+    }
+
+    return groupElement;
+  }
+
+  private createContextMenuActionButton(
+    action: {
+      id: HtmlTableContextActionId;
+      label: string;
+      scope: HtmlTableSelectionScope;
+      enabled: boolean;
+      active?: boolean;
+      destructive?: boolean;
+    },
+    primary: boolean,
+    ariaKeyshortcutsOverride?: string | null,
+  ): HTMLButtonElement {
+    const menuItemState = getHtmlTableContextActionMenuItemState(action);
+    const shortcutState = ariaKeyshortcutsOverride !== undefined
+      ? { ariaKeyshortcuts: ariaKeyshortcutsOverride }
+      : getHtmlTableContextActionShortcutState(action);
+    const renderState = getHtmlTableContextMenuActionRenderState(action, menuItemState, primary);
+    const button = this.root.ownerDocument.createElement('button');
+    button.type = 'button';
+    button.className = 'html-table-overlay__context-menu-action';
+    button.dataset.actionId = action.id;
+    button.dataset.menuKey = action.id;
+    button.dataset.testid = 'pmht-context-menu-action';
+    button.disabled = !action.enabled;
+    button.textContent = action.label;
+    button.setAttribute('role', renderState.role);
+    if (shortcutState.ariaKeyshortcuts) {
+      button.setAttribute('aria-keyshortcuts', shortcutState.ariaKeyshortcuts);
+    } else {
+      button.removeAttribute('aria-keyshortcuts');
+    }
+    button.removeAttribute('aria-checked');
+    button.setAttribute('aria-current', renderState.current);
+    button.classList.toggle('is-active', renderState.active);
+    button.classList.toggle('is-destructive', renderState.destructive);
+    button.classList.toggle('is-primary', renderState.primary);
+    return button;
+  }
+
+  private resolveCellContextMenuLevel(menu: HtmlTableContextMenuState): HtmlTableResolvedContextMenuLevel {
+    const rootEntries = this.buildCellContextMenuEntries(menu);
+    let entries = rootEntries;
+    let parentTitle = 'Cell actions';
+
+    for (const key of this.contextMenuSubmenuPath) {
+      const submenu = entries.find((entry): entry is HtmlTableContextMenuSubmenuEntry => entry.kind === 'submenu' && entry.key === key);
+      if (!submenu) {
+        this.contextMenuSubmenuPath = [];
+        return {
+          title: null,
+          entries: rootEntries,
+        };
+      }
+
+      parentTitle = submenu.label;
+      entries = submenu.items;
+    }
+
+    return {
+      title: this.contextMenuSubmenuPath.length > 0 ? parentTitle : null,
+      entries,
+    };
+  }
+
+  private buildCellContextMenuEntries(menu: HtmlTableContextMenuState): HtmlTableContextMenuEntry[] {
+    const actionsById = new Map(menu.actions.map((action) => [action.id, action]));
+    const rootEntries: HtmlTableContextMenuEntry[] = [];
+
+    const colorEntries = this.buildCellActionEntries(CELL_COLOR_ACTION_IDS, actionsById, menu.primaryAction?.id ?? null);
+    if (colorEntries.length > 0) {
+      rootEntries.push({
+        kind: 'submenu',
+        key: 'color',
+        label: 'Color',
+        items: colorEntries,
+      });
+    }
+
+    const alignmentEntries = this.buildCellActionEntries(
+      CELL_ALIGNMENT_ACTION_IDS,
+      actionsById,
+      menu.primaryAction?.id ?? null,
+    );
+    if (alignmentEntries.length > 0) {
+      rootEntries.push({
+        kind: 'submenu',
+        key: 'alignment',
+        label: 'Alignment',
+        items: alignmentEntries,
+      });
+    }
+
+    const structureEntries = this.buildCellActionEntries(
+      CELL_STRUCTURE_ACTION_IDS,
+      actionsById,
+      menu.primaryAction?.id ?? null,
+    );
+    if (structureEntries.length > 0) {
+      rootEntries.push({
+        kind: 'submenu',
+        key: 'structure',
+        label: 'Structure',
+        items: structureEntries,
+      });
+    }
+
+    const clearAction = actionsById.get('clearSelectedCells');
+    if (clearAction) {
+      rootEntries.push(this.createCellActionEntry(clearAction, menu.primaryAction?.id === clearAction.id));
+    }
+
+    return rootEntries;
+  }
+
+  private buildCellActionEntries(
+    actionIds: HtmlTableContextActionId[],
+    actionsById: Map<HtmlTableContextActionId, HtmlTableContextMenuState['actions'][number]>,
+    primaryActionId: string | null,
+  ): HtmlTableContextMenuActionEntry[] {
+    return actionIds
+      .map((actionId) => actionsById.get(actionId))
+      .filter((action): action is HtmlTableContextMenuState['actions'][number] => Boolean(action))
+      .map((action) => this.createCellActionEntry(action, primaryActionId === action.id));
+  }
+
+  private createCellActionEntry(
+    action: HtmlTableContextMenuState['actions'][number],
+    primary: boolean,
+  ): HtmlTableContextMenuActionEntry {
+    return {
+      kind: 'action',
+      key: action.id,
+      label: this.getCellActionDisplayLabel(action.id, action.label),
+      actionId: action.id,
+      enabled: action.enabled,
+      active: Boolean(action.active),
+      primary,
+      destructive: Boolean(action.destructive),
+      shortcut: getHtmlTableContextActionShortcutState(action).ariaKeyshortcuts,
+    };
+  }
+
+  private getCellActionDisplayLabel(actionId: HtmlTableContextActionId, fallback: string): string {
+    if (actionId === 'clearSelectedCells') {
+      return 'Clear contents';
+    }
+
+    if (actionId === 'clearCellBackgroundColor') {
+      return 'Clear color';
+    }
+
+    return fallback;
+  }
+
+  private getFocusedContextMenuItemKey(): string | null {
     const activeElement = this.root.ownerDocument.activeElement;
     return activeElement instanceof HTMLButtonElement && this.contextMenu.contains(activeElement)
-      ? activeElement.dataset.actionId ?? null
+      ? activeElement.dataset.menuKey ?? null
       : null;
   }
 
   private getEnabledContextMenuActionButtons(): HTMLButtonElement[] {
-    return Array.from(this.contextMenu.querySelectorAll<HTMLButtonElement>('button[data-action-id]')).filter(
+    return Array.from(this.contextMenu.querySelectorAll<HTMLButtonElement>('button[data-menu-key]')).filter(
       (button) => !button.disabled,
     );
+  }
+
+  private rerenderOpenContextMenu(): void {
+    const interaction = getHtmlTableInteractionState(this.view.state);
+    const menu = getHtmlTableContextMenuState(this.view.state, interaction);
+    if (this.lastHostRect) {
+      this.sync(menu, this.lastHostRect, this.lastViewportInset);
+      return;
+    }
+
+    this.contextMenu.replaceChildren(...this.buildContextMenuContent(menu));
+    this.restoreContextMenuFocus(menu, null);
   }
 
   private scheduleContextMenuTypeaheadReset(): void {
@@ -676,15 +942,15 @@ export class HtmlTableMenuController {
     }
   }
 
-  private restoreContextMenuFocus(menu: HtmlTableContextMenuState, focusedActionId: string | null): void {
+  private restoreContextMenuFocus(menu: HtmlTableContextMenuState, focusedMenuItemKey: string | null): void {
     const enabledButtons = this.getEnabledContextMenuActionButtons();
     if (enabledButtons.length === 0) {
       this.lastContextMenuOpen = menu.open;
       return;
     }
 
-    if (focusedActionId) {
-      const focusedButton = enabledButtons.find((button) => button.dataset.actionId === focusedActionId);
+    if (focusedMenuItemKey) {
+      const focusedButton = enabledButtons.find((button) => button.dataset.menuKey === focusedMenuItemKey);
       if (focusedButton) {
         focusedButton.focus();
         this.lastContextMenuOpen = menu.open;
@@ -695,7 +961,7 @@ export class HtmlTableMenuController {
     if (menu.open && !this.lastContextMenuOpen) {
       const primaryActionId = menu.primaryAction?.id ?? null;
       const primaryButton =
-        (primaryActionId
+        (this.contextMenuSubmenuPath.length === 0 && primaryActionId
           ? enabledButtons.find((button) => button.dataset.actionId === primaryActionId)
           : null) ?? enabledButtons[0];
       primaryButton?.focus();
@@ -725,6 +991,7 @@ export class HtmlTableMenuController {
 
     this.restoreContextMenuFocusOnClose = restoreFocus;
     this.contextMenuContext = null;
+    this.contextMenuSubmenuPath = [];
     this.view.dispatch(
       this.view.state.tr.setMeta(htmlTableInteractionPluginKey, {
         contextMenuOpen: false,
@@ -846,8 +1113,29 @@ export class HtmlTableMenuController {
   private runContextMenuActionFromEvent(event: MouseEvent): void {
     const target =
       event.target instanceof HTMLElement
-        ? (event.target.closest('button[data-action-id]') as HTMLButtonElement | null)
+        ? (event.target.closest('button[data-menu-key]') as HTMLButtonElement | null)
         : null;
+    if (target?.dataset.back === 'true') {
+      event.preventDefault();
+      event.stopPropagation();
+      if (this.contextMenuSubmenuPath.length > 0) {
+        this.contextMenuSubmenuPath.pop();
+        this.resetContextMenuTypeahead();
+        this.rerenderOpenContextMenu();
+      }
+      return;
+    }
+
+    const submenuId = target?.dataset.submenuId;
+    if (submenuId) {
+      event.preventDefault();
+      event.stopPropagation();
+      this.contextMenuSubmenuPath.push(submenuId);
+      this.resetContextMenuTypeahead();
+      this.rerenderOpenContextMenu();
+      return;
+    }
+
     const actionId = target?.dataset.actionId;
     if (!actionId) {
       event.preventDefault();

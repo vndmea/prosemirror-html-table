@@ -793,20 +793,20 @@ describe('html table handles', () => {
     });
   });
 
-  it('derives context menu action render state for checked and primary items', () => {
+  it('derives context menu action render state for active and primary items', () => {
     expect(getHtmlTableContextMenuActionRenderState(
       {
         active: true,
         destructive: false,
       },
       {
-        role: 'menuitemradio',
-        checked: true,
+        role: 'menuitem',
+        checked: null,
       },
       true,
     )).toEqual({
-      role: 'menuitemradio',
-      checked: 'true',
+      role: 'menuitem',
+      checked: null,
       current: 'true',
       primary: true,
       destructive: false,

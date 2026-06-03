@@ -99,6 +99,11 @@ async function activateMenuAction(page: Page, label: string) {
   await action.dispatchEvent('mousedown');
 }
 
+async function openCellSubmenu(page: Page, label: string) {
+  await activateMenuAction(page, label);
+  await expect(contextMenu(page)).toBeVisible();
+}
+
 test.describe('table interactions', () => {
   test('row handle hover, select, open menu, and add row after', async ({ page }) => {
     await gotoDemo(page);
@@ -152,6 +157,7 @@ test.describe('table interactions', () => {
     const beforeMergeCellCount = await table(page).locator('tbody tr').first().locator('td,th').count();
     await page.getByTestId('pmht-cell-handle').click();
     await expect(contextMenu(page)).toBeVisible();
+    await openCellSubmenu(page, 'Structure');
     await expect(contextMenuAction(page, 'Merge or split cells')).toBeEnabled();
     await activateMenuAction(page, 'Merge or split cells');
 
@@ -161,6 +167,7 @@ test.describe('table interactions', () => {
 
     await page.getByTestId('pmht-cell-handle').click();
     await expect(contextMenu(page)).toBeVisible();
+    await openCellSubmenu(page, 'Structure');
     await activateMenuAction(page, 'Merge or split cells');
 
     await expect(contextMenu(page)).toBeHidden();

@@ -135,6 +135,11 @@ async function clickMenuAction(page: Page, label: string) {
   await clickCenter(page, contextMenuAction(page, label));
 }
 
+async function openCellSubmenu(page: Page, label: string) {
+  await clickMenuAction(page, label);
+  await expect(contextMenu(page)).toBeVisible();
+}
+
 async function openTableMenu(page: Page) {
   await firstBodyCell(page).hover();
   await clickCenter(page, tableHandle(page));
@@ -778,6 +783,7 @@ test.describe('official table parity', () => {
     await expect(contextMenu(page)).toBeVisible();
     await expect(contextMenu(page)).toHaveAttribute('data-scope', 'cell');
 
+    await openCellSubmenu(page, 'Alignment');
     await clickMenuAction(page, 'Align center');
 
     await expect(contextMenu(page)).toBeHidden();
@@ -840,6 +846,7 @@ test.describe('official table parity', () => {
     await expect(contextMenu(page)).toBeVisible();
     await expect(contextMenu(page)).toHaveAttribute('data-scope', 'cell');
 
+    await openCellSubmenu(page, 'Structure');
     await clickMenuAction(page, 'Set header cell');
 
     await expect(contextMenu(page)).toBeHidden();
@@ -855,6 +862,7 @@ test.describe('official table parity', () => {
 
     await clickCenter(page, cellHandle(page));
     await expect(contextMenu(page)).toBeVisible();
+    await openCellSubmenu(page, 'Color');
     await clickMenuAction(page, 'Background blue');
 
     await expect(contextMenu(page)).toBeHidden();
@@ -864,7 +872,8 @@ test.describe('official table parity', () => {
 
     await clickCenter(page, cellHandle(page));
     await expect(contextMenu(page)).toBeVisible();
-    await clickMenuAction(page, 'Clear background');
+    await openCellSubmenu(page, 'Color');
+    await clickMenuAction(page, 'Clear color');
 
     await expect(contextMenu(page)).toBeHidden();
     await expect(selectedCells(page)).toHaveCount(2);
@@ -880,6 +889,7 @@ test.describe('official table parity', () => {
 
     await clickCenter(page, cellHandle(page));
     await expect(contextMenu(page)).toBeVisible();
+    await openCellSubmenu(page, 'Alignment');
     await clickMenuAction(page, 'Align right');
 
     await expect(contextMenu(page)).toBeHidden();
@@ -889,6 +899,7 @@ test.describe('official table parity', () => {
 
     await clickCenter(page, cellHandle(page));
     await expect(contextMenu(page)).toBeVisible();
+    await openCellSubmenu(page, 'Alignment');
     await clickMenuAction(page, 'Align left');
 
     await expect(contextMenu(page)).toBeHidden();
@@ -905,6 +916,7 @@ test.describe('official table parity', () => {
 
     await clickCenter(page, cellHandle(page));
     await expect(contextMenu(page)).toBeVisible();
+    await openCellSubmenu(page, 'Alignment');
     await clickMenuAction(page, 'Align middle');
 
     await expect(contextMenu(page)).toBeHidden();
@@ -921,6 +933,7 @@ test.describe('official table parity', () => {
 
     await clickCenter(page, cellHandle(page));
     await expect(contextMenu(page)).toBeVisible();
+    await openCellSubmenu(page, 'Alignment');
     await clickMenuAction(page, 'Align bottom');
 
     await expect(contextMenu(page)).toBeHidden();
@@ -930,6 +943,7 @@ test.describe('official table parity', () => {
 
     await clickCenter(page, cellHandle(page));
     await expect(contextMenu(page)).toBeVisible();
+    await openCellSubmenu(page, 'Alignment');
     await clickMenuAction(page, 'Align top');
 
     await expect(contextMenu(page)).toBeHidden();
@@ -947,7 +961,7 @@ test.describe('official table parity', () => {
 
     await clickCenter(page, cellHandle(page));
     await expect(contextMenu(page)).toBeVisible();
-    await clickMenuAction(page, 'Clear selected cells');
+    await clickMenuAction(page, 'Clear contents');
 
     await expect(contextMenu(page)).toBeHidden();
     await expect(firstBodyRow(page).locator('td,th')).toHaveCount(initialCellCount);
@@ -967,6 +981,7 @@ test.describe('official table parity', () => {
     await expect(contextMenu(page)).toBeVisible();
     await expect(contextMenu(page)).toHaveAttribute('data-scope', 'cell');
 
+    await openCellSubmenu(page, 'Structure');
     await clickMenuAction(page, 'Merge or split cells');
 
     await expect(contextMenu(page)).toBeHidden();
@@ -976,6 +991,7 @@ test.describe('official table parity', () => {
 
     await clickCenter(page, cellHandle(page));
     await expect(contextMenu(page)).toBeVisible();
+    await openCellSubmenu(page, 'Structure');
     await clickMenuAction(page, 'Merge or split cells');
 
     await expect(contextMenu(page)).toBeHidden();

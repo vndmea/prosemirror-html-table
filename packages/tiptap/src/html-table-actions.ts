@@ -115,7 +115,7 @@ export interface HtmlTableContextActionGroup {
   actions: HtmlTableContextAction[];
 }
 
-export type HtmlTableContextActionMenuItemRole = 'menuitem' | 'menuitemcheckbox' | 'menuitemradio';
+export type HtmlTableContextActionMenuItemRole = 'menuitem';
 
 export interface HtmlTableContextActionMenuItemState {
   role: HtmlTableContextActionMenuItemRole;
@@ -422,20 +422,6 @@ export function getPrimaryHtmlTableContextAction(
 export function getHtmlTableContextActionMenuItemState(
   action: HtmlTableContextAction,
 ): HtmlTableContextActionMenuItemState {
-  if (CHECKBOX_ACTION_IDS.has(action.id)) {
-    return {
-      role: 'menuitemcheckbox',
-      checked: Boolean(action.active),
-    };
-  }
-
-  if (RADIO_ACTION_IDS.has(action.id)) {
-    return {
-      role: 'menuitemradio',
-      checked: Boolean(action.active),
-    };
-  }
-
   return {
     role: 'menuitem',
     checked: null,
@@ -731,29 +717,6 @@ const ACTION_GROUP_LABELS: Record<HtmlTableContextActionGroupId, string> = {
   content: 'Content',
   danger: 'Danger',
 };
-
-const CHECKBOX_ACTION_IDS = new Set<HtmlTableContextActionId>([
-  'toggleCaption',
-  'toggleColgroup',
-  'toggleHeadSection',
-  'toggleFootSection',
-  'toggleHeaderRow',
-  'toggleHeaderColumn',
-  'toggleHeaderCell',
-]);
-
-const RADIO_ACTION_IDS = new Set<HtmlTableContextActionId>([
-  'setCellTextAlignLeft',
-  'setCellTextAlignCenter',
-  'setCellTextAlignRight',
-  'setCellBackgroundColorBlue',
-  'setCellBackgroundColorGreen',
-  'setCellBackgroundColorYellow',
-  'clearCellBackgroundColor',
-  'setCellVerticalAlignTop',
-  'setCellVerticalAlignMiddle',
-  'setCellVerticalAlignBottom',
-]);
 
 const ACTION_ARIA_KEYSHORTCUTS: Partial<Record<HtmlTableContextActionId, string>> = {
   sortBodyRowsAsc: 'Alt+ArrowUp',
