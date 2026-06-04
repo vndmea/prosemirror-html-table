@@ -648,12 +648,6 @@ export class HtmlTableMenuController {
 
     event.preventDefault();
     event.stopPropagation();
-
-    if (this.openContextSubmenuId) {
-      this.closeContextSubmenu(true);
-      return;
-    }
-
     this.closeContextMenu(true);
   }
 

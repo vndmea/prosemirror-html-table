@@ -68,6 +68,20 @@ export class HtmlTableNodeView {
       return false;
     }
 
+    if (mutation.type === 'attributes' && mutation.target instanceof Element) {
+      if (mutation.target === this.table && mutation.attributeName === 'style') {
+        return true;
+      }
+
+      if (
+        mutation.target.nodeName === 'COL'
+        && this.table.contains(mutation.target)
+        && (mutation.attributeName === 'style' || mutation.attributeName === 'width')
+      ) {
+        return true;
+      }
+    }
+
     return this.wrapper.contains(mutation.target) && !this.table.contains(mutation.target);
   }
 

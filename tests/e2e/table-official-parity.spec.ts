@@ -1079,12 +1079,9 @@ test.describe('official table parity', () => {
 
   test('extend buttons stay anchored to the table edges without creating vertical overflow', async ({ page }) => {
     await gotoDemo(page);
-    await expect(addRowButton(page)).toBeHidden();
-    await expect(addColumnButton(page)).toBeHidden();
+    await expect(addRowButton(page)).toHaveCSS('opacity', '0');
+    await expect(addColumnButton(page)).toHaveCSS('opacity', '0');
     await firstBodyCell(page).hover();
-
-    await expect(addRowButton(page)).toBeVisible();
-    await expect(addColumnButton(page)).toBeVisible();
 
     const wrapperBox = await tableWrapper(page).boundingBox();
     const tableBox = await table(page).boundingBox();
@@ -1113,9 +1110,15 @@ test.describe('official table parity', () => {
     expect((overflowState?.scrollHeight ?? 0) - (overflowState?.clientHeight ?? 0)).toBeLessThanOrEqual(1);
     expect(wrapperBox.height).toBeGreaterThan(tableBox.height);
 
+    await hoverCenter(page, addRowButton(page));
+    await expect(addRowButton(page)).toHaveCSS('opacity', '1');
+    await hoverCenter(page, addColumnButton(page));
+    await expect(addColumnButton(page)).toHaveCSS('opacity', '1');
+
     const initialRowCount = await table(page).locator('tbody tr').count();
     const initialColumnCount = await table(page).locator('thead tr').first().locator('th,td').count();
 
+    await hoverCenter(page, addRowButton(page));
     await clickCenter(page, addRowButton(page));
     await expect(table(page).locator('tbody tr')).toHaveCount(initialRowCount + 1);
     await expect(rowSelectionBand(page)).toBeVisible();
@@ -1126,6 +1129,7 @@ test.describe('official table parity', () => {
     await page.locator('.hero').hover();
     await expect(rowHandle(page, insertedRowHandleIndex)).toBeVisible();
 
+    await hoverCenter(page, addColumnButton(page));
     await clickCenter(page, addColumnButton(page));
     await expect(table(page).locator('thead tr').first().locator('th,td')).toHaveCount(initialColumnCount + 1);
     await expect(columnSelectionBand(page)).toBeVisible();
@@ -1137,28 +1141,34 @@ test.describe('official table parity', () => {
 
   test('extend buttons hide while a context menu is open and return after it closes', async ({ page }) => {
     await gotoDemo(page);
-    await expect(addRowButton(page)).toBeHidden();
-    await expect(addColumnButton(page)).toBeHidden();
+    await expect(addRowButton(page)).toHaveCSS('opacity', '0');
+    await expect(addColumnButton(page)).toHaveCSS('opacity', '0');
     await firstBodyCell(page).hover();
 
-    await expect(addRowButton(page)).toBeVisible();
-    await expect(addColumnButton(page)).toBeVisible();
+    await hoverCenter(page, addRowButton(page));
+    await expect(addRowButton(page)).toHaveCSS('opacity', '1');
+    await hoverCenter(page, addColumnButton(page));
+    await expect(addColumnButton(page)).toHaveCSS('opacity', '1');
 
+    await firstBodyCell(page).hover();
     await openRowMenu(page, 1);
     await expect(addRowButton(page)).toBeHidden();
     await expect(addColumnButton(page)).toBeHidden();
 
     await page.keyboard.press('Escape');
     await expect(contextMenu(page)).toBeHidden();
-    await firstBodyCell(page).hover();
-    await expect(addRowButton(page)).toBeVisible();
-    await expect(addColumnButton(page)).toBeVisible();
+    await expect(addRowButton(page)).not.toHaveAttribute('hidden', '');
+    await expect(addColumnButton(page)).not.toHaveAttribute('hidden', '');
+    await hoverCenter(page, addRowButton(page));
+    await expect(addRowButton(page)).toHaveCSS('opacity', '1');
+    await hoverCenter(page, addColumnButton(page));
+    await expect(addColumnButton(page)).toHaveCSS('opacity', '1');
   });
 
   test('extend buttons hide during resize and return after resize ends', async ({ page }) => {
     await gotoDemo(page);
-    await expect(addRowButton(page)).toBeHidden();
-    await expect(addColumnButton(page)).toBeHidden();
+    await expect(addRowButton(page)).toHaveCSS('opacity', '0');
+    await expect(addColumnButton(page)).toHaveCSS('opacity', '0');
     await firstBodyCell(page).hover();
 
     const resizeHandle = page.getByTestId('pmht-resize-handle').first();
@@ -1178,8 +1188,12 @@ test.describe('official table parity', () => {
     await page.mouse.up();
 
     await firstBodyCell(page).hover();
-    await expect(addRowButton(page)).toBeVisible();
-    await expect(addColumnButton(page)).toBeVisible();
+    await expect(addRowButton(page)).not.toHaveAttribute('hidden', '');
+    await expect(addColumnButton(page)).not.toHaveAttribute('hidden', '');
+    await hoverCenter(page, addRowButton(page));
+    await expect(addRowButton(page)).toHaveCSS('opacity', '1');
+    await hoverCenter(page, addColumnButton(page));
+    await expect(addColumnButton(page)).toHaveCSS('opacity', '1');
   });
 
   test('resize hides other overlay handles until the drag completes', async ({ page }) => {
