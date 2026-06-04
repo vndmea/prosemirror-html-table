@@ -655,6 +655,19 @@ test.describe('official table parity', () => {
     await expect(columnHandle(page, 0)).toBeHidden();
   });
 
+  test('hovered column handle takes priority over an older selected column handle', async ({ page }) => {
+    await gotoDemo(page);
+    await secondBodyCell(page).hover();
+
+    await clickCenter(page, columnHandle(page, 1));
+    await expect(columnSelectionBand(page)).toBeVisible();
+    await expect(columnHandle(page, 1)).toBeVisible();
+
+    await firstBodyCell(page).hover();
+    await expect(columnHandle(page, 0)).toBeVisible();
+    await expect(columnHandle(page, 1)).toBeHidden();
+  });
+
   test('column selection uses hidden native selection painting', async ({ page }) => {
     await gotoDemo(page);
     await secondBodyCell(page).hover();

@@ -93,6 +93,12 @@ export function isHtmlTableAxisHandleVisible(
     interaction.selectedAxis.index === index &&
     interaction.selectedAxis.tablePos === tablePos;
   const hovered = isHtmlTableAxisHandleHovered(interaction, axis, tablePos, index);
+  const hoveredAxisIndex =
+    interaction.hovered?.tablePos === tablePos
+      ? axis === 'row'
+        ? interaction.hovered.rowIndex
+        : interaction.hovered.columnIndex
+      : null;
 
   if (interaction.tableSelected || interaction.resizing?.tablePos === tablePos) {
     return false;
@@ -100,6 +106,10 @@ export function isHtmlTableAxisHandleVisible(
 
   if (interaction.contextMenuOpen && !selected) {
     return false;
+  }
+
+  if (hoveredAxisIndex !== null) {
+    return hovered;
   }
 
   return hovered || selected;

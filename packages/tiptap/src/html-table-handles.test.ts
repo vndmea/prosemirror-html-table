@@ -210,6 +210,30 @@ describe('html table handles', () => {
     ).toBe(false);
   });
 
+  it('prefers the currently hovered axis handle over an older explicit selection on the same axis', () => {
+    const interaction = createInteractionState({
+      activeTable: {
+        tablePos: 5,
+        table: {} as never,
+      },
+      hovered: {
+        kind: 'cell',
+        tablePos: 5,
+        rowIndex: 0,
+        columnIndex: 2,
+      },
+      selectedAxis: {
+        kind: 'column',
+        index: 1,
+        tablePos: 5,
+      },
+      selectedAxisExplicit: true,
+    });
+
+    expect(isHtmlTableAxisHandleVisible(interaction, 'column', 5, 1)).toBe(false);
+    expect(isHtmlTableAxisHandleVisible(interaction, 'column', 5, 2)).toBe(true);
+  });
+
   it('shows only the active resize handle during resize and hides resizers while menus are open', () => {
     const base = createInteractionState({
       activeTable: {
