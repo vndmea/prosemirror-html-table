@@ -38,7 +38,7 @@ npm install
 npm run dev --workspace vue3-tiptap-table-demo
 ```
 
-playground 内置了一个完整 HTML 表格示例，包含 `caption`、`colgroup`、`thead`、`tbody` 和 `tfoot`，同时提供了行列编辑、表头切换、单元格导航和表格选择相关的工具栏按钮。
+playground 内置了一个完整 HTML 表格示例，包含 `caption`、`colgroup`、`thead`、`tbody` 和 `tfoot`，同时提供行列手柄、多级上下文菜单、resize 与扩展控件、selection overlay 和工具栏命令。
 
 ## Install
 
@@ -85,63 +85,28 @@ const grid = createHtmlTableGrid(tableNode);
 
 ### Core commands
 
-当前 core 包公开了这些表格命令：
-
-```ts
-import {
-  addColumnAfter,
-  addColumnBefore,
-  addRowAfter,
-  addRowBefore,
-  deleteColumn,
-  deleteRow,
-  deleteTable,
-  fixTables,
-  goToNextCell,
-  goToPreviousCell,
-  insertHtmlTable,
-  mergeCells,
-  mergeOrSplit,
-  selectCell,
-  selectColumn,
-  selectRow,
-  selectTable,
-  setCellAttribute,
-  splitCell,
-  toggleHeaderCell,
-  toggleHeaderColumn,
-  toggleHeaderRow,
-} from 'prosemirror-html-table';
-```
-
-当前支持的命令集合：
+当前 core 包公开了感知 section 的命令集合：
 
 ```txt
-insertHtmlTable
-addRowBefore
-addRowAfter
-deleteRow
-addColumnBefore
-addColumnAfter
-deleteColumn
-deleteTable
-mergeCells
-splitCell
-mergeOrSplit
-fixTables
-setCellAttribute
-toggleHeaderCell
-toggleHeaderRow
-toggleHeaderColumn
-goToNextCell
-goToPreviousCell
-selectCell
-selectRow
-selectColumn
-selectTable
+结构：    insertHtmlTable、fixTables、deleteTable
+行：      addRowBefore、addRowAfter、addRowToHead、addRowToBody、addRowToFoot、
+          deleteRow、duplicateRow、moveRowUp、moveRowDown、
+          moveRowToHead、moveRowToBody、moveRowToFoot
+列：      addColumnBefore、addColumnAfter、deleteColumn、duplicateColumn、
+          moveColumnLeft、moveColumnRight
+Section： addHeadSection、removeHeadSection、addFootSection、removeFootSection
+HTML：    setCaption、removeCaption、setColgroup、removeColgroup
+单元格：  mergeCells、splitCell、mergeOrSplit、clearSelectedCells、
+          clearRowContent、clearColumnContent
+格式化：  setCellAttribute、setCellTextAlign、setCellBackgroundColor、
+          setCellVerticalAlign、toggleHeaderCell、toggleHeaderRow、
+          toggleHeaderColumn
+选择：    selectCell、selectRow、selectColumn、selectTable、
+          goToNextCell、goToPreviousCell
+数据：    sortBodyRowsByColumn
 ```
 
-这些命令内部都基于感知 section 的 grid。当前已经覆盖独立单元格选择、矩形合并、已合并单元格拆分，以及通过 `fixTables` 做整表规范化。
+这些命令内部都基于感知 section 的 grid。当前已经覆盖独立单元格选择、矩形合并、已合并单元格拆分、行列移动与复制、section 操作，以及通过 `fixTables` 做整表规范化。
 
 表头相关命令会在 `htmlTableHeaderCell` 和 `htmlTableCell` 之间转换，同时保留单元格属性、内容和 marks。
 
@@ -153,9 +118,13 @@ Tiptap 包目前包含：
 
 ```txt
 - 支持可选 wrapper 的自定义 table node view
-- 列宽拖拽手柄
+- 具有显式选择状态的行列手柄
+- 单元格、行和列操作的多级上下文菜单
+- 行列扩展控件
+- 带拖拽预览的列宽调整手柄
 - 持久化的 colgroup / colwidth 状态
-- selected-cell decorations
+- 单元格、行、列和整表的选择视觉效果
+- 单元格内的原生文字选择
 - Tab / Shift-Tab 导航
 - Shift-Arrow 单元格范围扩展
 ```
@@ -167,10 +136,14 @@ Tiptap 包目前包含：
   HTMLAttributes: {},
   resizable: true,
   renderWrapper: true,
-  handleWidth: 6,
+  handleWidth: 1,
   cellMinWidth: 120,
   lastColumnResizable: true,
   allowTableNodeSelection: true,
+  View: null,
+  wrapperClassName: 'html-table-node__wrapper',
+  selectedCellClassName: 'html-table-cell--selected',
+  selectedTableClassName: 'html-table-node--selected',
 }
 ```
 
@@ -199,7 +172,14 @@ editor.commands.addHtmlTableRowAfter();
 editor.commands.addHtmlTableColumnAfter();
 editor.commands.deleteHtmlTableRow();
 editor.commands.deleteHtmlTableColumn();
+editor.commands.duplicateHtmlTableRow();
+editor.commands.duplicateHtmlTableColumn();
+editor.commands.moveHtmlTableRowDown();
+editor.commands.moveHtmlTableColumnRight();
+editor.commands.sortHtmlTableBodyRowsByColumn({ direction: 'asc' });
 editor.commands.setHtmlTableCellAttribute('colspan', 2);
+editor.commands.setHtmlTableCellTextAlign('center');
+editor.commands.setHtmlTableCellBackgroundColor('#dbeafe');
 editor.commands.toggleHtmlTableHeaderCell();
 editor.commands.toggleHtmlTableHeaderRow();
 editor.commands.toggleHtmlTableHeaderColumn();
@@ -222,15 +202,27 @@ editor.commands.deleteHtmlTable();
 editor.commands.goToNextHtmlTableCell({ cycle: true });
 ```
 
+## 与 `prosemirror-tables` 的差异
+
+本项目不是 `prosemirror-tables` 的直接替代品。
+
+- 本项目保留完整 HTML table section 与元素，而 `prosemirror-tables` 默认使用更简单的表格树结构。
+- `createHtmlTableGrid` 能感知 section，但并不是与 `TableMap` API 兼容的替代实现。
+- 当前 `CellSelection` 和 Tiptap 交互插件覆盖了本项目的编辑 UI，但尚未提供官方 `CellSelection` 与 `tableEditing()` 的全部 API 和插件行为。
+- 单元格范围 clipboard、官方风格的 editing plugin、增量表格修复和兼容适配层仍属于后续工作。
+- `setCellAttribute` 当前只修改当前单元格；需要对 selection 批量格式化时，请使用专用的文本对齐、背景色和垂直对齐命令。
+- 当前 `Shift-Arrow` 范围扩展会将 section 边界视为不可跨越的边界。
+
 ## Roadmap
 
 下一阶段的主要方向：
 
 ```txt
-1. 可选的行列控制 UI 组件
-2. 更丰富的键盘快捷键和 copy/paste 行为
-3. 单元格范围 copy/paste
-4. 行列移动 / 复制控制
+1. 扩展 CellSelection API，并让 selection mapping 全面支持自定义节点名
+2. 增加包含单元格范围 clipboard 和删除行为的 core editing plugin
+3. 将表格修复拆分为增量 transaction API 与 command wrapper
+4. 提供 TableMap 风格及 prosemirror-tables 兼容适配层
+5. 加固非法 HTML / Excel / Word 导入和大表格性能
 ```
 
 ## Development

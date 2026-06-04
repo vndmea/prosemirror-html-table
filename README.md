@@ -38,7 +38,7 @@ npm install
 npm run dev --workspace vue3-tiptap-table-demo
 ```
 
-The playground includes a full HTML table with `caption`, `colgroup`, `thead`, `tbody`, and `tfoot`, plus toolbar buttons for row/column editing, header toggles, cell navigation, and table selection commands.
+The playground includes a full HTML table with `caption`, `colgroup`, `thead`, `tbody`, and `tfoot`, plus row/column handles, nested context menus, resize and extend controls, selection overlays, and toolbar commands.
 
 ## Install
 
@@ -85,63 +85,28 @@ const grid = createHtmlTableGrid(tableNode);
 
 ### Core commands
 
-The core package currently exposes these table commands:
-
-```ts
-import {
-  addColumnAfter,
-  addColumnBefore,
-  addRowAfter,
-  addRowBefore,
-  deleteColumn,
-  deleteRow,
-  deleteTable,
-  fixTables,
-  goToNextCell,
-  goToPreviousCell,
-  insertHtmlTable,
-  mergeCells,
-  mergeOrSplit,
-  selectCell,
-  selectColumn,
-  selectRow,
-  selectTable,
-  setCellAttribute,
-  splitCell,
-  toggleHeaderCell,
-  toggleHeaderColumn,
-  toggleHeaderRow,
-} from 'prosemirror-html-table';
-```
-
-Supported command set:
+The core package exposes a section-aware command set:
 
 ```txt
-insertHtmlTable
-addRowBefore
-addRowAfter
-deleteRow
-addColumnBefore
-addColumnAfter
-deleteColumn
-deleteTable
-mergeCells
-splitCell
-mergeOrSplit
-fixTables
-setCellAttribute
-toggleHeaderCell
-toggleHeaderRow
-toggleHeaderColumn
-goToNextCell
-goToPreviousCell
-selectCell
-selectRow
-selectColumn
-selectTable
+Structure:   insertHtmlTable, fixTables, deleteTable
+Rows:        addRowBefore, addRowAfter, addRowToHead, addRowToBody, addRowToFoot,
+             deleteRow, duplicateRow, moveRowUp, moveRowDown,
+             moveRowToHead, moveRowToBody, moveRowToFoot
+Columns:     addColumnBefore, addColumnAfter, deleteColumn, duplicateColumn,
+             moveColumnLeft, moveColumnRight
+Sections:    addHeadSection, removeHeadSection, addFootSection, removeFootSection
+HTML parts:  setCaption, removeCaption, setColgroup, removeColgroup
+Cells:       mergeCells, splitCell, mergeOrSplit, clearSelectedCells,
+             clearRowContent, clearColumnContent
+Formatting:  setCellAttribute, setCellTextAlign, setCellBackgroundColor,
+             setCellVerticalAlign, toggleHeaderCell, toggleHeaderRow,
+             toggleHeaderColumn
+Selection:   selectCell, selectRow, selectColumn, selectTable,
+             goToNextCell, goToPreviousCell
+Data:        sortBodyRowsByColumn
 ```
 
-These commands use the section-aware grid internally. They now cover dedicated cell selection, rectangular merge, merged-cell splitting, and full-table normalization through `fixTables`.
+These commands use the section-aware grid internally. They cover dedicated cell selection, rectangular merge, merged-cell splitting, row/column move and duplication, section operations, and full-table normalization through `fixTables`.
 
 Header commands convert between `htmlTableHeaderCell` and `htmlTableCell` while preserving cell attributes, content, and marks.
 
@@ -153,9 +118,13 @@ The Tiptap package now includes:
 
 ```txt
 - custom table node view with optional wrapper
-- column resize handles
+- row and column handles with explicit selection state
+- nested context menus for cell, row, and column actions
+- row and column extend controls
+- column resize handles with drag preview
 - persisted colgroup / colwidth state
-- selected-cell decorations
+- cell, row, column, and table selection visuals
+- native text selection inside cells
 - Tab / Shift-Tab navigation
 - Shift-Arrow cell-range expansion
 ```
@@ -167,10 +136,14 @@ Available options:
   HTMLAttributes: {},
   resizable: true,
   renderWrapper: true,
-  handleWidth: 6,
+  handleWidth: 1,
   cellMinWidth: 120,
   lastColumnResizable: true,
   allowTableNodeSelection: true,
+  View: null,
+  wrapperClassName: 'html-table-node__wrapper',
+  selectedCellClassName: 'html-table-cell--selected',
+  selectedTableClassName: 'html-table-node--selected',
 }
 ```
 
@@ -199,7 +172,14 @@ editor.commands.addHtmlTableRowAfter();
 editor.commands.addHtmlTableColumnAfter();
 editor.commands.deleteHtmlTableRow();
 editor.commands.deleteHtmlTableColumn();
+editor.commands.duplicateHtmlTableRow();
+editor.commands.duplicateHtmlTableColumn();
+editor.commands.moveHtmlTableRowDown();
+editor.commands.moveHtmlTableColumnRight();
+editor.commands.sortHtmlTableBodyRowsByColumn({ direction: 'asc' });
 editor.commands.setHtmlTableCellAttribute('colspan', 2);
+editor.commands.setHtmlTableCellTextAlign('center');
+editor.commands.setHtmlTableCellBackgroundColor('#dbeafe');
 editor.commands.toggleHtmlTableHeaderCell();
 editor.commands.toggleHtmlTableHeaderRow();
 editor.commands.toggleHtmlTableHeaderColumn();
@@ -222,15 +202,27 @@ editor.commands.deleteHtmlTable();
 editor.commands.goToNextHtmlTableCell({ cycle: true });
 ```
 
+## Differences from `prosemirror-tables`
+
+This project is not a drop-in replacement for `prosemirror-tables`.
+
+- It preserves full HTML table sections and elements, while the default `prosemirror-tables` model uses a simpler table tree.
+- `createHtmlTableGrid` is section-aware, but it is not an API-compatible replacement for `TableMap`.
+- The current `CellSelection` and Tiptap interaction plugins cover the project's editing UI, but do not yet provide every API and plugin behavior from the official `CellSelection` and `tableEditing()`.
+- Cell-range clipboard behavior, an official-style editing plugin, incremental table repair, and compatibility adapters remain planned work.
+- `setCellAttribute` currently updates the current cell; use the dedicated text-align, background-color, and vertical-align commands for selection-aware bulk formatting.
+- `Shift-Arrow` range expansion currently treats section boundaries as hard boundaries.
+
 ## Roadmap
 
 The next major areas are:
 
 ```txt
-1. optional UI components for row and column controls
-2. richer keyboard shortcuts and copy/paste behavior
-3. copy/paste cell ranges
-4. row and column move / duplicate controls
+1. expand CellSelection APIs and support custom node names throughout selection mapping
+2. add a core editing plugin with cell-range clipboard and delete behavior
+3. split table repair into an incremental transaction API plus command wrapper
+4. provide TableMap-style and prosemirror-tables compatibility adapters
+5. harden malformed HTML / Excel / Word import and large-table performance
 ```
 
 ## Development
