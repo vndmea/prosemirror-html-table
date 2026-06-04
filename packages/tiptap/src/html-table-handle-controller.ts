@@ -17,7 +17,11 @@ import {
   getHtmlTableOverlayHandleText,
   isHtmlTableKeyboardClick,
 } from './html-table-menu-controller.js';
-import type { HtmlTableOverlayPositionState, HtmlTableSelectionScope } from './html-table-overlay-geometry.js';
+import {
+  getHtmlTableVisibleSelectionRect,
+  type HtmlTableOverlayPositionState,
+  type HtmlTableSelectionScope,
+} from './html-table-overlay-geometry.js';
 import { measureHtmlTableGeometry } from './table-dom.js';
 import {
   createColumnSelectionTransaction,
@@ -113,6 +117,50 @@ export function isHtmlTableAxisHandleVisible(
   }
 
   return hovered || selected;
+}
+
+export interface HtmlTableColumnHandleLayout {
+  left: number;
+  width: number;
+}
+
+export function getHtmlTableColumnHandleLayout(
+  geometry: ReturnType<typeof measureHtmlTableGeometry>,
+  tableLeft: number,
+  tableTop: number,
+  columnIndex: number,
+  handleCrossAxisSize: number,
+  handleMainAxisInset: number,
+): HtmlTableColumnHandleLayout | null {
+  const visibleColumnRect = getHtmlTableVisibleSelectionRect(
+    geometry,
+    tableLeft,
+    tableTop,
+    columnIndex,
+    columnIndex,
+    0,
+    Math.max(0, geometry.rows.length - 1),
+  );
+  if (!visibleColumnRect || visibleColumnRect.width <= 0) {
+    return null;
+  }
+
+  const width = Math.max(
+    1,
+    Math.min(
+      visibleColumnRect.width,
+      Math.max(handleCrossAxisSize, visibleColumnRect.width - handleMainAxisInset),
+    ),
+  );
+  const minCenter = visibleColumnRect.left + width / 2;
+  const maxCenter = visibleColumnRect.right - width / 2;
+  const rawCenter = visibleColumnRect.left + visibleColumnRect.width / 2;
+  const clampedCenter = Math.min(Math.max(rawCenter, minCenter), maxCenter);
+
+  return {
+    left: clampedCenter,
+    width,
+  };
 }
 
 export interface HtmlTableHandleControllerOptions {
@@ -232,10 +280,18 @@ export class HtmlTableHandleController {
       const handle = this.columnHandles[column.index];
       if (!handle) continue;
 
+      const layout = getHtmlTableColumnHandleLayout(
+        geometry,
+        positionState.tableLeft,
+        positionState.tableTop,
+        column.index,
+        this.handleCrossAxisSize,
+        this.handleMainAxisInset,
+      );
       handle.dataset.index = String(column.index);
-      handle.style.left = `${positionState.tableLeft + column.left + column.width / 2}px`;
+      handle.style.left = `${layout?.left ?? positionState.tableLeft + column.left + column.width / 2}px`;
       handle.style.top = `${positionState.columnHandleTop}px`;
-      handle.style.width = `${Math.max(this.handleCrossAxisSize, column.width - this.handleMainAxisInset)}px`;
+      handle.style.width = `${layout?.width ?? Math.max(this.handleCrossAxisSize, column.width - this.handleMainAxisInset)}px`;
       handle.style.height = `${this.handleCrossAxisSize}px`;
       const isColumnHovered = isHtmlTableAxisHandleHovered(interaction, 'column', tablePos, column.index);
       const isColumnSelected =
@@ -252,7 +308,8 @@ export class HtmlTableHandleController {
         isColumnMenuOpen ? menu.primaryAction?.label ?? null : null,
       );
       const columnControls = getHtmlTableContextMenuAriaControls(this.contextMenuId, isColumnMenuOpen);
-      handle.hidden = !isHtmlTableAxisHandleVisible(interaction, 'column', tablePos, column.index);
+      handle.hidden =
+        !layout || !isHtmlTableAxisHandleVisible(interaction, 'column', tablePos, column.index);
       handle.tabIndex = handle.hidden ? -1 : 0;
       handle.setAttribute('aria-label', columnText.label);
       handle.removeAttribute('title');

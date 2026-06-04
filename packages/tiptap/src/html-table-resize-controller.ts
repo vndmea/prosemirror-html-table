@@ -36,6 +36,42 @@ export function isHtmlTableResizeHandleVisible(
   return interaction.resizing.columnIndex === columnIndex;
 }
 
+export interface HtmlTableResizeHandleLayout {
+  left: number;
+  width: number;
+}
+
+export function getHtmlTableResizeHandleLayout(
+  geometry: ReturnType<typeof measureHtmlTableGeometry>,
+  tableLeft: number,
+  columnIndex: number,
+  handleWidth: number,
+): HtmlTableResizeHandleLayout | null {
+  const column = geometry.columns[columnIndex];
+  if (!column) {
+    return null;
+  }
+
+  const visibleLeft = tableLeft + (geometry.visibleTableRect.left - geometry.tableRect.left);
+  const visibleRight = tableLeft + (geometry.visibleTableRect.right - geometry.tableRect.left);
+  const boundary = tableLeft + column.left + column.width;
+  if (boundary < visibleLeft || boundary > visibleRight) {
+    return null;
+  }
+
+  const width = Math.max(1, handleWidth);
+  const halfWidth = width / 2;
+  const clampedCenter = Math.min(
+    Math.max(boundary, visibleLeft + halfWidth),
+    visibleRight - halfWidth,
+  );
+
+  return {
+    left: clampedCenter,
+    width,
+  };
+}
+
 export interface HtmlTableResizeControllerOptions {
   getView: () => EditorView;
   handleWidth: number;
@@ -94,20 +130,23 @@ export class HtmlTableResizeController {
     for (const column of geometry.columns) {
       const resizeHandle = this.resizeHandles[column.index];
       if (!resizeHandle) continue;
+      const layout = getHtmlTableResizeHandleLayout(geometry, tableLeft, column.index, this.handleWidth);
 
       resizeHandle.dataset.index = String(column.index);
       resizeHandle.setAttribute('aria-label', `Resize column ${column.index + 1}`);
       resizeHandle.title = `Resize column ${column.index + 1}`;
-      resizeHandle.style.width = `${this.handleWidth}px`;
-      resizeHandle.style.left = `${tableLeft + column.left + column.width}px`;
+      resizeHandle.style.width = `${layout?.width ?? Math.max(1, this.handleWidth)}px`;
+      resizeHandle.style.left = `${layout?.left ?? tableLeft + column.left + column.width}px`;
       resizeHandle.style.top = `${visibleTableTop}px`;
       resizeHandle.style.height = `${visibleTableHeight}px`;
-      resizeHandle.hidden = !isHtmlTableResizeHandleVisible(
-        interaction,
-        tablePos,
-        column.index,
-        this.isColumnResizable(column.index, geometry.columns.length),
-      );
+      resizeHandle.hidden =
+        !layout
+        || !isHtmlTableResizeHandleVisible(
+          interaction,
+          tablePos,
+          column.index,
+          this.isColumnResizable(column.index, geometry.columns.length),
+        );
       resizeHandle.classList.toggle(
         'is-active',
         interaction.resizing?.tablePos === tablePos && interaction.resizing.columnIndex === column.index,

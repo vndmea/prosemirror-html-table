@@ -348,7 +348,7 @@
 }
 
 .pmht-demo .editor-panel .html-table-overlay__handle--column {
-  min-width: 1.2rem;
+  min-width: 0;
 }
 
 .pmht-demo .editor-panel .html-table-overlay__resize-handle {

@@ -45,6 +45,7 @@ export {
   getHtmlTableSelectionScope,
 } from './html-table-overlay-geometry.js';
 export {
+  getHtmlTableColumnHandleLayout,
   isHtmlTableAxisHandleHovered,
   isHtmlTableAxisHandleVisible,
   isHtmlTableContextMenuExpandedForScope,
@@ -56,6 +57,7 @@ export { isHtmlTableCellHandleVisible } from './html-table-cell-selection-contro
 export { shouldHideHtmlTableExtendButtons } from './html-table-extend-controller.js';
 export {
   isHtmlTableInteractionLockedByResize,
+  getHtmlTableResizeHandleLayout,
   isHtmlTableResizeHandleVisible,
 } from './html-table-resize-controller.js';
 

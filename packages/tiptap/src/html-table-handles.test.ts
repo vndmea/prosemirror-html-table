@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest';
 import type { HtmlTableInteractionState } from './html-table-interaction.js';
 import {
   canRestoreHtmlTableContextMenuFocus,
+  getHtmlTableColumnHandleLayout,
+  getHtmlTableResizeHandleLayout,
   isHtmlTableInteractionLockedByResize,
   isHtmlTableAxisHandleVisible,
   getHtmlTableCellContextTriggerRenderState,
@@ -37,6 +39,7 @@ import {
 } from './html-table-handles.js';
 import type { HtmlTableContextTriggerButtonState } from './html-table-context-menu.js';
 import type { HtmlTableContextMenuState } from './html-table-context-menu.js';
+import { getHtmlTableVisibleSelectionRect } from './html-table-overlay-geometry.js';
 import type { HtmlTableGeometry } from './table-dom.js';
 
 function createInteractionState(
@@ -269,6 +272,52 @@ describe('html table handles', () => {
         },
       }, 5, 1, true),
     ).toBe(true);
+  });
+
+  it('returns no resize handle layout for a fully clipped scrolled-out column boundary', () => {
+    const geometry: HtmlTableGeometry = {
+      tableRect: {
+        left: -120,
+        top: 20,
+        right: 240,
+        bottom: 100,
+        width: 360,
+        height: 80,
+      },
+      wrapperRect: {
+        left: 40,
+        top: 20,
+        right: 240,
+        bottom: 100,
+        width: 200,
+        height: 80,
+      },
+      visibleTableRect: {
+        left: 40,
+        top: 20,
+        right: 240,
+        bottom: 100,
+        width: 200,
+        height: 80,
+      },
+      scrollLeft: 160,
+      scrollTop: 0,
+      columns: [
+        { index: 0, left: 0, width: 120 },
+        { index: 1, left: 120, width: 120 },
+        { index: 2, left: 240, width: 120 },
+      ],
+      rows: [
+        { index: 0, top: 0, height: 40 },
+        { index: 1, top: 40, height: 40 },
+      ],
+    };
+
+    expect(getHtmlTableResizeHandleLayout(geometry, -120, 1, 1)).toEqual({
+      left: 120,
+      width: 1,
+    });
+    expect(getHtmlTableResizeHandleLayout(geometry, -120, 0, 1)).toBeNull();
   });
 
   it('shows the cell handle only for visible cell selections without axis or resize lock', () => {
@@ -563,6 +612,96 @@ describe('html table handles', () => {
     ).toEqual({
       left: 239,
       top: 60,
+    });
+  });
+
+  it('returns no visible rect for a fully clipped scrolled-out column', () => {
+    const geometry: HtmlTableGeometry = {
+      tableRect: {
+        left: -120,
+        top: 20,
+        right: 240,
+        bottom: 100,
+        width: 360,
+        height: 80,
+      },
+      wrapperRect: {
+        left: 40,
+        top: 20,
+        right: 240,
+        bottom: 100,
+        width: 200,
+        height: 80,
+      },
+      visibleTableRect: {
+        left: 40,
+        top: 20,
+        right: 240,
+        bottom: 100,
+        width: 200,
+        height: 80,
+      },
+      scrollLeft: 160,
+      scrollTop: 0,
+      columns: [
+        { index: 0, left: 0, width: 120 },
+        { index: 1, left: 120, width: 120 },
+        { index: 2, left: 240, width: 120 },
+      ],
+      rows: [
+        { index: 0, top: 0, height: 40 },
+        { index: 1, top: 40, height: 40 },
+      ],
+    };
+
+    expect(getHtmlTableVisibleSelectionRect(geometry, -120, 20, 0, 0, 0, 1)).toBeNull();
+  });
+
+  it('clamps a partially visible scrolled column handle fully inside the visible wrapper bounds', () => {
+    const geometry: HtmlTableGeometry = {
+      tableRect: {
+        left: 0,
+        top: 20,
+        right: 720,
+        bottom: 100,
+        width: 720,
+        height: 80,
+      },
+      wrapperRect: {
+        left: 0,
+        top: 20,
+        right: 610,
+        bottom: 100,
+        width: 610,
+        height: 80,
+      },
+      visibleTableRect: {
+        left: 0,
+        top: 20,
+        right: 610,
+        bottom: 100,
+        width: 610,
+        height: 80,
+      },
+      scrollLeft: 0,
+      scrollTop: 0,
+      columns: [
+        { index: 0, left: 0, width: 120 },
+        { index: 1, left: 120, width: 120 },
+        { index: 2, left: 240, width: 120 },
+        { index: 3, left: 360, width: 120 },
+        { index: 4, left: 480, width: 120 },
+        { index: 5, left: 600, width: 120 },
+      ],
+      rows: [
+        { index: 0, top: 0, height: 40 },
+        { index: 1, top: 40, height: 40 },
+      ],
+    };
+
+    expect(getHtmlTableColumnHandleLayout(geometry, 0, 20, 5, 12, 8)).toEqual({
+      left: 605,
+      width: 10,
     });
   });
 
