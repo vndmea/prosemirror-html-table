@@ -119,6 +119,15 @@ async function openColumnMenu(page: Page, index: number) {
   await expect(contextMenu(page)).toBeVisible();
 }
 
+async function hoverCenter(page: Page, target: Locator) {
+  const box = await target.boundingBox();
+  if (!box) {
+    throw new Error('Could not resolve target bounding box for pointer hover.');
+  }
+
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+}
+
 async function openRowMenu(page: Page, index: number) {
   await clickCenter(page, rowHandle(page, index));
   await expect(rowSelectionBand(page)).toBeVisible();
@@ -130,7 +139,7 @@ async function clickMenuAction(page: Page, label: string) {
 }
 
 async function openCellSubmenu(page: Page, label: string) {
-  await clickMenuAction(page, label);
+  await hoverCenter(page, contextMenuAction(page, label));
   await expect(contextSubmenu(page)).toBeVisible();
 }
 
@@ -363,7 +372,7 @@ test.describe('official table parity', () => {
     await firstBodyCell(page).hover();
 
     await openRowMenu(page, 1);
-    await clickMenuAction(page, 'Color');
+    await hoverCenter(page, contextMenuAction(page, 'Color'));
     await expect(contextSubmenu(page)).toBeVisible();
     await expect(page.getByText(/^Back to /)).toHaveCount(0);
     await clickMenuAction(page, 'Background blue');
@@ -620,7 +629,7 @@ test.describe('official table parity', () => {
     await firstBodyCell(page).hover();
 
     await openColumnMenu(page, 0);
-    await clickMenuAction(page, 'Alignment');
+    await hoverCenter(page, contextMenuAction(page, 'Alignment'));
     await expect(contextSubmenu(page)).toBeVisible();
     await expect(page.getByText(/^Back to /)).toHaveCount(0);
     await clickMenuAction(page, 'Align center');

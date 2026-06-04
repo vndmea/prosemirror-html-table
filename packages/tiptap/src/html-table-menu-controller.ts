@@ -437,6 +437,8 @@ export class HtmlTableMenuController {
     this.contextMenuId = options.contextMenuId;
     this.contextMenu = options.contextMenu;
     this.contextSubmenu = this.createContextSubmenu();
+    this.contextMenu.addEventListener('mouseover', (event) => this.handleMenuPointerOver(event));
+    this.contextMenu.addEventListener('focusin', (event) => this.handleMenuFocusIn(event));
     this.contextTriggerButton = options.contextTriggerButton;
     this.cellSelectionHandle = options.cellSelectionHandle;
     this.suppressPointerClick = options.suppressPointerClick;
@@ -539,6 +541,14 @@ export class HtmlTableMenuController {
   handleMenuMouseDown(event: MouseEvent): void {
     this.suppressPointerClick();
     this.runContextMenuActionFromEvent(event);
+  }
+
+  handleMenuPointerOver(event: MouseEvent): void {
+    this.syncHoveredContextSubmenuFromEventTarget(event.target);
+  }
+
+  handleMenuFocusIn(event: FocusEvent): void {
+    this.syncHoveredContextSubmenuFromEventTarget(event.target);
   }
 
   handleMenuClick(event: MouseEvent): void {
@@ -662,6 +672,8 @@ export class HtmlTableMenuController {
     menu.addEventListener('mousedown', (event) => this.handleMenuMouseDown(event));
     menu.addEventListener('click', (event) => this.handleMenuClick(event));
     menu.addEventListener('keydown', (event) => this.handleMenuKeyDown(event));
+    menu.addEventListener('mouseover', (event) => this.handleMenuPointerOver(event));
+    menu.addEventListener('focusin', (event) => this.handleMenuFocusIn(event));
     return menu;
   }
 
@@ -1116,6 +1128,50 @@ export class HtmlTableMenuController {
     this.rerenderOpenContextMenu();
   }
 
+  private openContextSubmenu(submenuId: string, focusFirstAction: boolean): void {
+    if (this.openContextSubmenuId === submenuId) {
+      return;
+    }
+
+    this.openContextSubmenuId = submenuId;
+    this.focusFirstSubmenuActionOnOpen = focusFirstAction;
+    this.submenuTriggerToFocus = null;
+    this.resetContextMenuTypeahead();
+    this.rerenderOpenContextMenu();
+  }
+
+  private syncHoveredContextSubmenuFromEventTarget(target: EventTarget | null): void {
+    const button =
+      target instanceof HTMLElement
+        ? (target.closest('button[data-menu-key]') as HTMLButtonElement | null)
+        : null;
+    if (!button) {
+      return;
+    }
+
+    const submenuId = button.dataset.submenuId;
+    if (submenuId) {
+      this.clearContextMenuFocusForPointerHover();
+      this.openContextSubmenu(submenuId, false);
+      return;
+    }
+
+    if (button.dataset.actionId && this.openContextSubmenuId && this.contextMenu.contains(button)) {
+      this.clearContextMenuFocusForPointerHover();
+      this.closeContextSubmenu(false);
+    }
+  }
+
+  private clearContextMenuFocusForPointerHover(): void {
+    const activeElement = this.root.ownerDocument.activeElement;
+    if (
+      activeElement instanceof HTMLElement &&
+      (this.contextMenu.contains(activeElement) || this.contextSubmenu.contains(activeElement))
+    ) {
+      activeElement.blur();
+    }
+  }
+
   private hideContextSubmenu(): void {
     this.contextSubmenu.hidden = true;
     this.contextSubmenu.replaceChildren();
@@ -1256,11 +1312,7 @@ export class HtmlTableMenuController {
       if (this.openContextSubmenuId === submenuId) {
         this.closeContextSubmenu(true);
       } else {
-        this.openContextSubmenuId = submenuId;
-        this.focusFirstSubmenuActionOnOpen = true;
-        this.submenuTriggerToFocus = null;
-        this.resetContextMenuTypeahead();
-        this.rerenderOpenContextMenu();
+        this.openContextSubmenu(submenuId, true);
       }
       return;
     }

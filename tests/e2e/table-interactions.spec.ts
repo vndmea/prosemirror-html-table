@@ -97,8 +97,17 @@ async function activateMenuAction(page: Page, label: string) {
   await action.dispatchEvent('mousedown');
 }
 
+async function hoverCenter(page: Page, target: Locator) {
+  const box = await target.boundingBox();
+  if (!box) {
+    throw new Error('Could not resolve target bounding box for pointer hover.');
+  }
+
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+}
+
 async function openCellSubmenu(page: Page, label: string) {
-  await activateMenuAction(page, label);
+  await hoverCenter(page, contextMenuAction(page, label));
   await expect(contextSubmenu(page)).toBeVisible();
 }
 
