@@ -232,6 +232,8 @@ describe('html table handles', () => {
 
     expect(isHtmlTableAxisHandleVisible(interaction, 'column', 5, 1)).toBe(false);
     expect(isHtmlTableAxisHandleVisible(interaction, 'column', 5, 2)).toBe(true);
+    expect(isHtmlTableAxisHandleVisible(interaction, 'row', 5, 0)).toBe(true);
+    expect(isHtmlTableAxisHandleVisible(interaction, 'row', 5, 1)).toBe(false);
   });
 
   it('shows only the active resize handle during resize and hides resizers while menus are open', () => {

@@ -120,18 +120,12 @@ async function dragBetweenCells(page: Page, start: Locator, end: Locator) {
 async function openColumnMenu(page: Page, index: number) {
   await clickCenter(page, columnHandle(page, index));
   await expect(columnSelectionBand(page)).toBeVisible();
-  if (await contextMenu(page).isHidden()) {
-    await clickCenter(page, columnHandle(page, index));
-  }
   await expect(contextMenu(page)).toBeVisible();
 }
 
 async function openRowMenu(page: Page, index: number) {
   await clickCenter(page, rowHandle(page, index));
   await expect(rowSelectionBand(page)).toBeVisible();
-  if (await contextMenu(page).isHidden()) {
-    await clickCenter(page, rowHandle(page, index));
-  }
   await expect(contextMenu(page)).toBeVisible();
 }
 
@@ -146,8 +140,6 @@ async function openCellSubmenu(page: Page, label: string) {
 
 async function openTableMenu(page: Page) {
   await firstBodyCell(page).hover();
-  await clickCenter(page, tableHandle(page));
-  await expect(contextMenu(page)).toBeHidden();
   await clickCenter(page, tableHandle(page));
   await expect(contextMenu(page)).toBeVisible();
 }
@@ -186,13 +178,11 @@ test.describe('official table parity', () => {
 
     await clickCenter(page, tableHandle(page));
 
+    await expect(contextMenu(page)).toBeVisible();
+    await expect(contextMenu(page)).toHaveAttribute('data-scope', 'table');
     await expect(rowSelectionBand(page)).toBeHidden();
     await expect(columnSelectionBand(page)).toBeHidden();
     await expect(selectedCells(page)).toHaveCount(0);
-
-    await clickCenter(page, tableHandle(page));
-    await expect(contextMenu(page)).toBeVisible();
-    await expect(contextMenu(page)).toHaveAttribute('data-scope', 'table');
 
     const initialCaptionCount = await table(page).locator('caption').count();
     await clickMenuAction(page, initialCaptionCount > 0 ? 'Remove caption' : 'Add caption');
@@ -220,7 +210,6 @@ test.describe('official table parity', () => {
     await firstBodyCell(page).hover();
 
     await clickCenter(page, tableHandle(page));
-    await clickCenter(page, tableHandle(page));
     await expect(contextMenu(page)).toBeVisible();
     await expect(contextMenu(page)).toHaveAttribute('data-scope', 'table');
 
@@ -237,7 +226,6 @@ test.describe('official table parity', () => {
     await gotoDemo(page);
     await firstBodyCell(page).hover();
 
-    await clickCenter(page, tableHandle(page));
     await clickCenter(page, tableHandle(page));
     await expect(contextMenu(page)).toBeVisible();
     await expect(contextMenu(page)).toHaveAttribute('data-scope', 'table');
@@ -256,7 +244,6 @@ test.describe('official table parity', () => {
     await firstBodyCell(page).hover();
 
     await clickCenter(page, tableHandle(page));
-    await clickCenter(page, tableHandle(page));
     await expect(contextMenu(page)).toBeVisible();
     await expect(contextMenu(page)).toHaveAttribute('data-scope', 'table');
 
@@ -273,7 +260,6 @@ test.describe('official table parity', () => {
     await gotoDemo(page);
     await firstBodyCell(page).hover();
 
-    await clickCenter(page, tableHandle(page));
     await clickCenter(page, tableHandle(page));
     await expect(contextMenu(page)).toBeVisible();
     await expect(contextMenu(page)).toHaveAttribute('data-scope', 'table');
@@ -381,8 +367,7 @@ test.describe('official table parity', () => {
     await expect(rowSelectionBand(page)).toBeVisible();
     await expect(columnSelectionBand(page)).toBeHidden();
     await expect(selectedCells(page)).toHaveCount(rowCellCount);
-
-    await openRowMenu(page, 1);
+    await expect(contextMenu(page)).toBeVisible();
     await expect(contextMenu(page)).toHaveAttribute('data-scope', 'row');
 
     await clickMenuAction(page, 'Duplicate row');
@@ -419,11 +404,27 @@ test.describe('official table parity', () => {
 
     await clickCenter(page, rowHandle(page, 2));
     await expect(rowSelectionBand(page)).toBeVisible();
+    await expect(contextMenu(page)).toBeVisible();
 
     await page.locator('.hero').hover();
     await expect(rowHandle(page, 2)).toBeVisible();
     await expect(rowHandle(page, 0)).toBeHidden();
     await expect(rowHandle(page, 1)).toBeHidden();
+  });
+
+  test('hovered row handle takes priority over an older selected row handle', async ({ page }) => {
+    await gotoDemo(page);
+    await bodyRowCell(page, 1, 0).hover();
+
+    await clickCenter(page, rowHandle(page, 2));
+    await expect(rowSelectionBand(page)).toBeVisible();
+    await expect(rowHandle(page, 2)).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(contextMenu(page)).toBeHidden();
+
+    await firstBodyCell(page).hover();
+    await expect(rowHandle(page, 1)).toBeVisible();
+    await expect(rowHandle(page, 2)).toBeHidden();
   });
 
   test('row add-after action targets the captured row snapshot', async ({ page }) => {
@@ -609,8 +610,6 @@ test.describe('official table parity', () => {
 
     await expect(columnSelectionBand(page)).toBeVisible();
     await expect(selectedCells(page)).toHaveCount(totalRowCount);
-
-    await clickCenter(page, columnHandle(page, lastColumnIndex));
     await expect(contextMenu(page)).toBeVisible();
     await expect(contextMenu(page)).toHaveAttribute('data-scope', 'column');
 
@@ -649,6 +648,7 @@ test.describe('official table parity', () => {
 
     await clickCenter(page, columnHandle(page, 1));
     await expect(columnSelectionBand(page)).toBeVisible();
+    await expect(contextMenu(page)).toBeVisible();
 
     await page.locator('.hero').hover();
     await expect(columnHandle(page, 1)).toBeVisible();
@@ -662,6 +662,8 @@ test.describe('official table parity', () => {
     await clickCenter(page, columnHandle(page, 1));
     await expect(columnSelectionBand(page)).toBeVisible();
     await expect(columnHandle(page, 1)).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(contextMenu(page)).toBeHidden();
 
     await firstBodyCell(page).hover();
     await expect(columnHandle(page, 0)).toBeVisible();

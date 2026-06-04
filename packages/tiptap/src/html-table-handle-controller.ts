@@ -506,6 +506,7 @@ export class HtmlTableHandleController {
 
     this.view.focus();
     this.view.dispatch(transaction);
+    this.toggleContextMenuFromControl(getHtmlTableInteractionState(this.view.state), handle);
   }
 
   private handleTableMouseDown(event: MouseEvent): void {
@@ -554,6 +555,7 @@ export class HtmlTableHandleController {
     const transaction = this.view.state.tr.setSelection(NodeSelection.create(this.view.state.doc, tablePos));
     this.view.focus();
     this.view.dispatch(transaction);
+    this.toggleContextMenuFromControl(getHtmlTableInteractionState(this.view.state), handle);
   }
 
   private handleContextTriggerMouseDown(event: MouseEvent): void {

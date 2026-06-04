@@ -266,6 +266,7 @@ export class HtmlTableOverlayView {
 
     event.preventDefault();
     event.stopPropagation();
+    this.suppressNextDocumentClick = false;
   }
 
   private handleDocumentClickCapture(event: MouseEvent): void {

@@ -56,18 +56,12 @@ function secondBodyCell(page: Page) {
 async function openRowMenu(page: Page, rowIndex: number) {
   await clickCenter(page, rowHandle(page, rowIndex));
   await expect(rowSelectionBand(page)).toBeVisible();
-  if (await contextMenu(page).isHidden()) {
-    await clickCenter(page, rowHandle(page, rowIndex));
-  }
   await expect(contextMenu(page)).toBeVisible();
 }
 
 async function openColumnMenu(page: Page, columnIndex: number) {
   await clickCenter(page, columnHandle(page, columnIndex));
   await expect(columnSelectionBand(page)).toBeVisible();
-  if (await contextMenu(page).isHidden()) {
-    await clickCenter(page, columnHandle(page, columnIndex));
-  }
   await expect(contextMenu(page)).toBeVisible();
 }
 
