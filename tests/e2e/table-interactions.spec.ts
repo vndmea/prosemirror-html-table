@@ -215,6 +215,27 @@ test.describe('table interactions', () => {
     expect(submenuBox.x).toBeGreaterThanOrEqual(menuBox.x + menuBox.width - 8);
   });
 
+  test('context menu actions stay vertically stable while hovering main and submenu items', async ({ page }) => {
+    await gotoDemo(page);
+
+    await dragBetweenCells(page, firstBodyCell(page), secondBodyCell(page));
+    await page.getByTestId('pmht-cell-handle').click();
+    await expect(contextMenu(page)).toBeVisible();
+
+    const colorAction = contextMenuAction(page, 'Color');
+    const colorTop = (await colorAction.boundingBox())?.y;
+    await hoverCenter(page, colorAction);
+    await expect(contextSubmenu(page)).toBeVisible();
+    expect((await contextMenuAction(page, 'Color').boundingBox())?.y).toBe(colorTop);
+
+    const submenuAction = contextSubmenu(page).getByTestId('pmht-context-menu-action').first();
+    const submenuActionTop = (await submenuAction.boundingBox())?.y;
+    await hoverCenter(page, submenuAction);
+    expect((await contextSubmenu(page).getByTestId('pmht-context-menu-action').first().boundingBox())?.y).toBe(
+      submenuActionTop,
+    );
+  });
+
   test('dragging on cell text keeps native text selection instead of starting cell selection', async ({ page }) => {
     await gotoDemo(page);
 

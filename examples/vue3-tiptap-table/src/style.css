@@ -558,6 +558,7 @@
   line-height: 1.2;
   text-align: left;
   pointer-events: auto;
+  transform: none;
   transition:
     background 0.15s ease,
     box-shadow 0.15s ease,
