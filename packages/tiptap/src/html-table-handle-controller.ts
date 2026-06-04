@@ -215,7 +215,7 @@ export class HtmlTableHandleController {
       handle.hidden = !isHtmlTableAxisHandleVisible(interaction, 'row', tablePos, row.index);
       handle.tabIndex = handle.hidden ? -1 : 0;
       handle.setAttribute('aria-label', rowText.label);
-      handle.title = rowText.title;
+      handle.removeAttribute('title');
       handle.setAttribute('aria-haspopup', 'menu');
       handle.setAttribute('aria-expanded', isRowMenuOpen ? 'true' : 'false');
       if (rowControls) {
@@ -255,7 +255,7 @@ export class HtmlTableHandleController {
       handle.hidden = !isHtmlTableAxisHandleVisible(interaction, 'column', tablePos, column.index);
       handle.tabIndex = handle.hidden ? -1 : 0;
       handle.setAttribute('aria-label', columnText.label);
-      handle.title = columnText.title;
+      handle.removeAttribute('title');
       handle.setAttribute('aria-haspopup', 'menu');
       handle.setAttribute('aria-expanded', isColumnMenuOpen ? 'true' : 'false');
       if (columnControls) {
@@ -311,7 +311,7 @@ export class HtmlTableHandleController {
     this.tableHandle.hidden = !visible;
     this.tableHandle.tabIndex = visible ? 0 : -1;
     this.tableHandle.setAttribute('aria-label', tableText.label);
-    this.tableHandle.title = tableText.title;
+    this.tableHandle.removeAttribute('title');
     this.tableHandle.setAttribute('aria-haspopup', 'menu');
     this.tableHandle.setAttribute('aria-expanded', isMenuOpen ? 'true' : 'false');
     if (controls) {
@@ -386,7 +386,6 @@ export class HtmlTableHandleController {
     handle.tabIndex = -1;
     handle.hidden = true;
     handle.setAttribute('aria-label', 'Select table');
-    handle.title = 'Select table';
     handle.setAttribute('aria-haspopup', 'menu');
     handle.addEventListener('mousedown', (event) => this.handleTableMouseDown(event));
     handle.addEventListener('click', (event) => this.handleTableClick(event));
