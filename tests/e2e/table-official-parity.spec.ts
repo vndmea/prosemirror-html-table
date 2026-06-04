@@ -14,10 +14,6 @@ function tableWrapper(page: Page) {
   return page.getByTestId('pmht-table-wrapper').first();
 }
 
-function tableHandle(page: Page) {
-  return page.getByTestId('pmht-table-handle');
-}
-
 function rowHandle(page: Page, index: number) {
   return page.getByTestId('pmht-row-handle').nth(index);
 }
@@ -138,12 +134,6 @@ async function openCellSubmenu(page: Page, label: string) {
   await expect(contextSubmenu(page)).toBeVisible();
 }
 
-async function openTableMenu(page: Page) {
-  await firstBodyCell(page).hover();
-  await clickCenter(page, tableHandle(page));
-  await expect(contextMenu(page)).toBeVisible();
-}
-
 async function expandTableForHorizontalScroll(page: Page, columnsToAdd = 5) {
   for (let index = 0; index < columnsToAdd; index += 1) {
     await firstBodyCell(page).hover();
@@ -161,198 +151,6 @@ async function expandTableForHorizontalScroll(page: Page, columnsToAdd = 5) {
 }
 
 test.describe('official table parity', () => {
-  test('table handle stays table-scoped when selecting the table', async ({ page }) => {
-    await gotoDemo(page);
-    await firstBodyCell(page).hover();
-
-    await expect(tableHandle(page)).toBeVisible();
-
-    const handleBox = await tableHandle(page).boundingBox();
-    const tableBox = await table(page).boundingBox();
-    if (!handleBox || !tableBox) {
-      throw new Error('Could not resolve table handle geometry.');
-    }
-
-    expect(Math.abs(handleBox.x + handleBox.width / 2 - tableBox.x)).toBeLessThan(24);
-    expect(Math.abs(handleBox.y + handleBox.height / 2 - tableBox.y)).toBeLessThan(24);
-
-    await clickCenter(page, tableHandle(page));
-
-    await expect(contextMenu(page)).toBeVisible();
-    await expect(contextMenu(page)).toHaveAttribute('data-scope', 'table');
-    await expect(rowSelectionBand(page)).toBeHidden();
-    await expect(columnSelectionBand(page)).toBeHidden();
-    await expect(selectedCells(page)).toHaveCount(0);
-
-    const initialCaptionCount = await table(page).locator('caption').count();
-    await clickMenuAction(page, initialCaptionCount > 0 ? 'Remove caption' : 'Add caption');
-
-    await expect(contextMenu(page)).toBeHidden();
-    await expect(table(page).locator('caption')).toHaveCount(initialCaptionCount === 0 ? 1 : 0);
-    await expect(rowSelectionBand(page)).toBeHidden();
-    await expect(columnSelectionBand(page)).toBeHidden();
-  });
-
-  test('selected table handle stays visible after mouse leave', async ({ page }) => {
-    await gotoDemo(page);
-    await firstBodyCell(page).hover();
-
-    await clickCenter(page, tableHandle(page));
-    await page.locator('.hero').hover();
-
-    await expect(tableHandle(page)).toBeVisible();
-    await expect(rowSelectionBand(page)).toBeHidden();
-    await expect(columnSelectionBand(page)).toBeHidden();
-  });
-
-  test('table menu toggles footer section while keeping table-scoped behavior', async ({ page }) => {
-    await gotoDemo(page);
-    await firstBodyCell(page).hover();
-
-    await clickCenter(page, tableHandle(page));
-    await expect(contextMenu(page)).toBeVisible();
-    await expect(contextMenu(page)).toHaveAttribute('data-scope', 'table');
-
-    const initialFootCount = await table(page).locator('tfoot').count();
-    await clickMenuAction(page, initialFootCount > 0 ? 'Remove footer section' : 'Add footer section');
-
-    await expect(contextMenu(page)).toBeHidden();
-    await expect(table(page).locator('tfoot')).toHaveCount(initialFootCount === 0 ? 1 : 0);
-    await expect(rowSelectionBand(page)).toBeHidden();
-    await expect(columnSelectionBand(page)).toBeHidden();
-  });
-
-  test('table menu toggles colgroup while keeping table-scoped behavior', async ({ page }) => {
-    await gotoDemo(page);
-    await firstBodyCell(page).hover();
-
-    await clickCenter(page, tableHandle(page));
-    await expect(contextMenu(page)).toBeVisible();
-    await expect(contextMenu(page)).toHaveAttribute('data-scope', 'table');
-
-    const initialColgroupCount = await table(page).locator('colgroup').count();
-    await clickMenuAction(page, initialColgroupCount > 0 ? 'Remove colgroup' : 'Add colgroup');
-
-    await expect(contextMenu(page)).toBeHidden();
-    await expect(table(page).locator('colgroup')).toHaveCount(initialColgroupCount === 0 ? 1 : 0);
-    await expect(rowSelectionBand(page)).toBeHidden();
-    await expect(columnSelectionBand(page)).toBeHidden();
-  });
-
-  test('table menu toggles header section while keeping table-scoped behavior', async ({ page }) => {
-    await gotoDemo(page);
-    await firstBodyCell(page).hover();
-
-    await clickCenter(page, tableHandle(page));
-    await expect(contextMenu(page)).toBeVisible();
-    await expect(contextMenu(page)).toHaveAttribute('data-scope', 'table');
-
-    const initialHeadCount = await table(page).locator('thead').count();
-    await clickMenuAction(page, initialHeadCount > 0 ? 'Remove header section' : 'Add header section');
-
-    await expect(contextMenu(page)).toBeHidden();
-    await expect(table(page).locator('thead')).toHaveCount(initialHeadCount === 0 ? 1 : 0);
-    await expect(rowSelectionBand(page)).toBeHidden();
-    await expect(columnSelectionBand(page)).toBeHidden();
-  });
-
-  test('table menu lifecycle keeps table scope stable across inside click, Escape, and outside click', async ({ page }) => {
-    await gotoDemo(page);
-    await firstBodyCell(page).hover();
-
-    await clickCenter(page, tableHandle(page));
-    await expect(contextMenu(page)).toBeVisible();
-    await expect(contextMenu(page)).toHaveAttribute('data-scope', 'table');
-    await expect(rowSelectionBand(page)).toBeHidden();
-    await expect(columnSelectionBand(page)).toBeHidden();
-
-    await contextMenu(page).click({ position: { x: 3, y: 3 } });
-    await expect(contextMenu(page)).toBeVisible();
-
-    await page.keyboard.press('Escape');
-    await expect(contextMenu(page)).toBeHidden();
-
-    await clickCenter(page, tableHandle(page));
-    await expect(contextMenu(page)).toBeVisible();
-    await page.locator('.hero').click();
-    await expect(contextMenu(page)).toBeHidden();
-  });
-
-  test('table delete action removes the table and closes the menu', async ({ page }) => {
-    await gotoDemo(page);
-    await openTableMenu(page);
-    await expect(contextMenu(page)).toHaveAttribute('data-scope', 'table');
-
-    await clickMenuAction(page, 'Delete table');
-
-    await expect(contextMenu(page)).toBeHidden();
-    await expect(page.getByTestId('pmht-table')).toHaveCount(0);
-    await expect(page.getByTestId('pmht-table-handle')).toHaveCount(0);
-  });
-
-  test('after horizontal scroll, table handle stays anchored to the visible table origin', async ({ page }) => {
-    await page.setViewportSize({ width: 780, height: 900 });
-    await gotoDemo(page);
-
-    await expandTableForHorizontalScroll(page);
-
-    await page.evaluate(() => {
-      const wrapper = document.querySelector('[data-testid="pmht-table-wrapper"]') as HTMLElement | null;
-      if (wrapper) {
-        wrapper.scrollLeft = wrapper.scrollWidth;
-      }
-    });
-
-    await table(page).locator('tbody tr').first().locator('td,th').last().hover();
-    await expect(tableHandle(page)).toBeVisible();
-
-    const handleBox = await tableHandle(page).boundingBox();
-    const wrapperBox = await tableWrapper(page).boundingBox();
-    const tableBox = await table(page).boundingBox();
-    if (!handleBox || !wrapperBox || !tableBox) {
-      throw new Error('Could not resolve scrolled table handle geometry.');
-    }
-
-    expect(Math.abs(handleBox.x + handleBox.width / 2 - wrapperBox.x)).toBeLessThan(24);
-    expect(Math.abs(handleBox.y + handleBox.height / 2 - tableBox.y)).toBeLessThan(24);
-  });
-
-  test('horizontal scroll remeasures an already visible table handle without extra hover', async ({ page }) => {
-    await page.setViewportSize({ width: 780, height: 900 });
-    await gotoDemo(page);
-
-    await firstBodyCell(page).hover();
-    await expect(tableHandle(page)).toBeVisible();
-    const beforeScrollBox = await tableHandle(page).boundingBox();
-    if (!beforeScrollBox) {
-      throw new Error('Could not resolve table handle geometry before scroll remeasure.');
-    }
-
-    await expandTableForHorizontalScroll(page);
-    await page.evaluate(() => {
-      const wrapper = document.querySelector('[data-testid="pmht-table-wrapper"]') as HTMLElement | null;
-      if (wrapper) {
-        wrapper.scrollLeft = wrapper.scrollWidth;
-      }
-    });
-
-    const wrapperBox = await tableWrapper(page).boundingBox();
-    await expect.poll(async () => {
-      const box = await tableHandle(page).boundingBox();
-      return box ? box.x + box.width / 2 : null;
-    }).not.toBeNull();
-
-    const afterScrollBox = await tableHandle(page).boundingBox();
-    if (!wrapperBox || !afterScrollBox) {
-      throw new Error('Could not resolve table handle geometry after scroll remeasure.');
-    }
-
-    expect(afterScrollBox.x + afterScrollBox.width / 2).toBeLessThanOrEqual(
-      beforeScrollBox.x + beforeScrollBox.width / 2,
-    );
-    expect(Math.abs(afterScrollBox.x + afterScrollBox.width / 2 - wrapperBox.x)).toBeLessThan(24);
-  });
-
   test('row handle keeps row scope explicit through selection and menu actions', async ({ page }) => {
     await gotoDemo(page);
 
@@ -1337,7 +1135,7 @@ test.describe('official table parity', () => {
     await expect(addRowButton(page)).toBeVisible();
     await expect(addColumnButton(page)).toBeVisible();
 
-    await openTableMenu(page);
+    await openRowMenu(page, 1);
     await expect(addRowButton(page)).toBeHidden();
     await expect(addColumnButton(page)).toBeHidden();
 
@@ -1381,7 +1179,6 @@ test.describe('official table parity', () => {
     await dragBetweenCells(page, firstBodyCell(page), secondBodyCell(page));
 
     const resizeHandle = page.getByTestId('pmht-resize-handle').first();
-    await expect(tableHandle(page)).toBeVisible();
     await expect(cellHandle(page)).toBeVisible();
     await expect(resizeHandle).toBeVisible();
 
@@ -1393,13 +1190,11 @@ test.describe('official table parity', () => {
     await page.mouse.move(resizeBox.x + resizeBox.width / 2, resizeBox.y + resizeBox.height / 2);
     await page.mouse.down();
 
-    await expect(tableHandle(page)).toBeHidden();
     await expect(cellHandle(page)).toBeHidden();
 
     await page.mouse.move(resizeBox.x + resizeBox.width / 2 + 24, resizeBox.y + resizeBox.height / 2, { steps: 4 });
     await page.mouse.up();
 
-    await expect(tableHandle(page)).toBeVisible();
     await expect(cellHandle(page)).toBeVisible();
     await expect(resizeHandle).toBeVisible();
   });

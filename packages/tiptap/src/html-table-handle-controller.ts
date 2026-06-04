@@ -29,15 +29,14 @@ import {
 } from './table-utils.js';
 
 export function isTableHandleVisible(
-  allowTableNodeSelection: boolean,
-  interaction: HtmlTableInteractionState,
-  tablePos: number,
+  _allowTableNodeSelection: boolean,
+  _interaction: HtmlTableInteractionState,
+  _tablePos: number,
 ): boolean {
-  return (
-    allowTableNodeSelection &&
-    interaction.activeTable?.tablePos === tablePos &&
-    interaction.resizing?.tablePos !== tablePos
-  );
+  void _allowTableNodeSelection;
+  void _interaction;
+  void _tablePos;
+  return false;
 }
 
 export function isHtmlTableContextMenuExpandedForScope(
