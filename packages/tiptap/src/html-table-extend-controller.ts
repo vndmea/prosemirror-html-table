@@ -65,11 +65,15 @@ export class HtmlTableExtendController {
     this.addRowButton.tabIndex = hidden ? -1 : 0;
     this.addRowButton.style.left = `${visibleTableLeft + visibleTableWidth / 2}px`;
     this.addRowButton.style.top = `${visibleTableTop + visibleTableHeight + this.extendButtonOffset}px`;
+    this.addRowButton.style.width = `${visibleTableWidth}px`;
+    this.addRowButton.style.height = `12px`;
 
     this.addColumnButton.hidden = hidden;
     this.addColumnButton.tabIndex = hidden ? -1 : 0;
     this.addColumnButton.style.left = `${visibleTableLeft + visibleTableWidth + this.extendButtonOffset}px`;
     this.addColumnButton.style.top = `${visibleTableTop + visibleTableHeight / 2}px`;
+    this.addColumnButton.style.width = `12px`;
+    this.addColumnButton.style.height = `${visibleTableHeight}px`;
   }
 
   private get view(): EditorView {

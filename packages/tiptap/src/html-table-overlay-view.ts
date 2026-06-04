@@ -39,7 +39,7 @@ import { getTableSelectionInfo } from './table-utils.js';
 const ROW_HANDLE_OFFSET = 10;
 const COLUMN_HANDLE_OFFSET = 10;
 const MIN_HANDLE_INSET = 8;
-const EXTEND_BUTTON_OFFSET = 14;
+const EXTEND_BUTTON_OFFSET = 9;
 const HANDLE_CROSS_AXIS_SIZE = 12;
 const HANDLE_MAIN_AXIS_INSET = 8;
 let htmlTableContextMenuIdCounter = 0;

@@ -1272,6 +1272,8 @@ test.describe('official table parity', () => {
 
   test('extend buttons stay anchored to the table edges without creating vertical overflow', async ({ page }) => {
     await gotoDemo(page);
+    await expect(addRowButton(page)).toBeHidden();
+    await expect(addColumnButton(page)).toBeHidden();
     await firstBodyCell(page).hover();
 
     await expect(addRowButton(page)).toBeVisible();
@@ -1328,6 +1330,8 @@ test.describe('official table parity', () => {
 
   test('extend buttons hide while a context menu is open and return after it closes', async ({ page }) => {
     await gotoDemo(page);
+    await expect(addRowButton(page)).toBeHidden();
+    await expect(addColumnButton(page)).toBeHidden();
     await firstBodyCell(page).hover();
 
     await expect(addRowButton(page)).toBeVisible();
@@ -1339,12 +1343,15 @@ test.describe('official table parity', () => {
 
     await page.keyboard.press('Escape');
     await expect(contextMenu(page)).toBeHidden();
+    await firstBodyCell(page).hover();
     await expect(addRowButton(page)).toBeVisible();
     await expect(addColumnButton(page)).toBeVisible();
   });
 
   test('extend buttons hide during resize and return after resize ends', async ({ page }) => {
     await gotoDemo(page);
+    await expect(addRowButton(page)).toBeHidden();
+    await expect(addColumnButton(page)).toBeHidden();
     await firstBodyCell(page).hover();
 
     const resizeHandle = page.getByTestId('pmht-resize-handle').first();
@@ -1363,6 +1370,7 @@ test.describe('official table parity', () => {
     await page.mouse.move(resizeBox.x + resizeBox.width / 2 + 32, resizeBox.y + resizeBox.height / 2, { steps: 4 });
     await page.mouse.up();
 
+    await firstBodyCell(page).hover();
     await expect(addRowButton(page)).toBeVisible();
     await expect(addColumnButton(page)).toBeVisible();
   });
