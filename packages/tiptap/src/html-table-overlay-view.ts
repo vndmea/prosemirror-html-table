@@ -1,5 +1,6 @@
 import { PluginKey } from '@tiptap/pm/state';
 import type { EditorView } from '@tiptap/pm/view';
+import { CellSelection } from 'prosemirror-html-table';
 
 import type { HtmlTableTiptapOptions } from './options.js';
 import {
@@ -191,7 +192,10 @@ export class HtmlTableOverlayView {
       ROW_HANDLE_OFFSET,
       COLUMN_HANDLE_OFFSET,
     );
-    const selectionInfo = getTableSelectionInfo(this.view.state.doc, this.view.state.selection);
+    const selectionInfo =
+      this.view.state.selection instanceof CellSelection || this.view.state.selection.empty
+        ? getTableSelectionInfo(this.view.state.doc, this.view.state.selection)
+        : undefined;
     const contextTrigger = getHtmlTableContextTriggerButtonState(this.view.state, interaction);
     const contextMenu = getHtmlTableContextMenuState(this.view.state, interaction);
 

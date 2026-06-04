@@ -189,7 +189,10 @@ export function createSelectionDecorations(
   options: HtmlTableTiptapOptions,
 ): DecorationSet {
   const decorations: Decoration[] = [];
-  const selectionInfo = getTableSelectionInfo(state.doc, state.selection);
+  const selectionInfo =
+    state.selection instanceof CellSelection || state.selection.empty
+      ? getTableSelectionInfo(state.doc, state.selection)
+      : undefined;
 
   if (selectionInfo) {
     for (const cell of selectionInfo.cells) {

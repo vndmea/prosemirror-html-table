@@ -1,5 +1,5 @@
 import { Schema } from 'prosemirror-model';
-import { EditorState, NodeSelection } from 'prosemirror-state';
+import { EditorState, NodeSelection, TextSelection } from 'prosemirror-state';
 import { describe, expect, it } from 'vitest';
 
 import { CellSelection, createHtmlTableNode, createHtmlTableNodeSpecs } from 'prosemirror-html-table';
@@ -298,6 +298,46 @@ describe('table width utilities', () => {
 
     expect(found.length).toBeGreaterThan(0);
     expect(found.some((decoration) => decoration.from === 0 && decoration.to === table.nodeSize)).toBe(true);
+  });
+
+  it('does not render selected cell decorations for text selections inside a cell', () => {
+    const table = schema.nodes.htmlTable!.create(null, [
+      schema.nodes.htmlTableBody!.create(null, [
+        schema.nodes.htmlTableRow!.create(null, [
+          schema.nodes.htmlTableCell!.create(null, [
+            schema.nodes.paragraph!.create(null, schema.text('Cell text')),
+          ]),
+        ]),
+      ]),
+    ]);
+    const doc = schema.nodes.doc!.create(null, [table]);
+    const cellPosition = findNodePositions(doc, 'htmlTableCell')[0]!;
+    const state = EditorState.create({
+      schema,
+      doc,
+      selection: TextSelection.create(doc, cellPosition + 2, cellPosition + 6),
+    });
+
+    const decorations = createSelectionDecorations(state, defaultHtmlTableTiptapOptions);
+
+    expect(decorations.find(0, doc.content.size)).toEqual([]);
+  });
+
+  it('renders selected cell decorations for cell selections', () => {
+    const table = createHtmlTableNode(schema, { rows: 1, cols: 1 });
+    const doc = schema.nodes.doc!.create(null, [table]);
+    const cellPosition = findNodePositions(doc, 'htmlTableCell')[0]!;
+    const state = EditorState.create({
+      schema,
+      doc,
+      selection: CellSelection.create(doc, cellPosition),
+    });
+
+    const decorations = createSelectionDecorations(state, defaultHtmlTableTiptapOptions);
+    const found = decorations.find(0, doc.content.size);
+    const cell = doc.nodeAt(cellPosition)!;
+
+    expect(found.some((decoration) => decoration.from === cellPosition && decoration.to === cellPosition + cell.nodeSize)).toBe(true);
   });
 });
 

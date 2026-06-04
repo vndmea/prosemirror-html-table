@@ -1,5 +1,5 @@
 import type { Node as ProseMirrorNode } from '@tiptap/pm/model';
-import { NodeSelection, Plugin, PluginKey, TextSelection, type EditorState, type Selection } from '@tiptap/pm/state';
+import { NodeSelection, Plugin, PluginKey, type EditorState, type Selection } from '@tiptap/pm/state';
 import type { EditorView } from '@tiptap/pm/view';
 import { CellSelection, createHtmlTableGrid, type HtmlTableCellRef } from 'prosemirror-html-table';
 
@@ -428,9 +428,6 @@ class HtmlTableInteractionView {
       headCellPos: cellContext.cellPos,
       selectionStarted: false,
     };
-    event.preventDefault();
-    this.ownerDocument.getSelection()?.removeAllRanges();
-    this.suppressNativeSelection();
     this.ownerDocument.addEventListener('mousemove', this.onDocumentMouseMove);
   }
 
@@ -547,6 +544,11 @@ class HtmlTableInteractionView {
       return;
     }
 
+    if (activeCellDrag.selectionStarted) {
+      event.preventDefault();
+      this.ownerDocument.getSelection()?.removeAllRanges();
+    }
+
     const cellContext = getCellSelectionDragContext(
       this.view,
       this.ownerDocument.elementFromPoint(event.clientX, event.clientY),
@@ -580,7 +582,10 @@ class HtmlTableInteractionView {
       return;
     }
 
-    activeCellDrag.selectionStarted = true;
+    if (!activeCellDrag.selectionStarted) {
+      activeCellDrag.selectionStarted = true;
+      this.suppressNativeSelection();
+    }
     this.ownerDocument.getSelection()?.removeAllRanges();
     event.preventDefault();
     this.view.dispatch(this.view.state.tr.setSelection(nextSelection));
@@ -588,16 +593,6 @@ class HtmlTableInteractionView {
 
   private handleDocumentMouseUp(event: MouseEvent): void {
     const activeCellDrag = this.activeCellDrag;
-    if (activeCellDrag && !activeCellDrag.selectionStarted) {
-      const nextSelection = TextSelection.near(this.view.state.doc.resolve(activeCellDrag.anchorCellPos + 1));
-      if (!nextSelection.eq(this.view.state.selection)) {
-        this.ownerDocument.getSelection()?.removeAllRanges();
-        event.preventDefault();
-        event.stopPropagation();
-        this.view.dispatch(this.view.state.tr.setSelection(nextSelection));
-      }
-    }
-
     if (
       activeCellDrag?.selectionStarted
       && activeCellDrag.anchorCellPos !== activeCellDrag.headCellPos

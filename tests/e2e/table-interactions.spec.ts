@@ -78,6 +78,19 @@ async function dragBetweenCells(page: Page, start: Locator, end: Locator) {
   await page.mouse.up();
 }
 
+async function dragAcrossTextInCell(page: Page, cell: Locator) {
+  const box = await cell.boundingBox();
+  if (!box) {
+    throw new Error('Could not resolve cell bounding box for text selection drag.');
+  }
+
+  const y = box.y + box.height / 2;
+  await page.mouse.move(box.x + 18, y);
+  await page.mouse.down();
+  await page.mouse.move(box.x + Math.min(90, box.width - 18), y, { steps: 8 });
+  await page.mouse.up();
+}
+
 async function clickCenter(page: Page, target: Locator) {
   const box = await target.boundingBox();
   if (!box) {
@@ -200,6 +213,43 @@ test.describe('table interactions', () => {
     }
 
     expect(submenuBox.x).toBeGreaterThanOrEqual(menuBox.x + menuBox.width - 8);
+  });
+
+  test('dragging on cell text keeps native text selection instead of starting cell selection', async ({ page }) => {
+    await gotoDemo(page);
+
+    await dragAcrossTextInCell(page, firstBodyCell(page));
+
+    await expect(page.getByTestId('pmht-selected-cell')).toHaveCount(0);
+    await expect(page.getByTestId('pmht-cell-handle')).toBeHidden();
+    await expect(page.locator('.ProseMirror')).not.toHaveClass(/ProseMirror-hideselection/);
+    await expect.poll(async () => {
+      return page.evaluate(() => window.getSelection()?.toString() ?? '');
+    }).not.toBe('');
+  });
+
+  test('dragging from cell text into another cell switches to cell selection without native text painting', async ({ page }) => {
+    await gotoDemo(page);
+
+    const startBox = await firstBodyCell(page).boundingBox();
+    const endBox = await secondBodyCell(page).boundingBox();
+    if (!startBox || !endBox) {
+      throw new Error('Could not resolve cell bounding boxes for cross-cell selection drag.');
+    }
+
+    await page.mouse.move(startBox.x + 18, startBox.y + startBox.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(endBox.x + 18, endBox.y + endBox.height / 2, { steps: 8 });
+
+    await expect(page.getByTestId('pmht-selected-cell')).toHaveCount(2);
+    await expect(page.locator('.ProseMirror')).toHaveClass(/ProseMirror-hideselection/);
+    await expect(page.getByTestId('pmht-cell-handle')).toBeVisible();
+
+    await page.mouse.up();
+
+    await expect(page.getByTestId('pmht-selected-cell')).toHaveCount(2);
+    await expect(page.locator('.ProseMirror')).toHaveClass(/ProseMirror-hideselection/);
+    await expect(page.getByTestId('pmht-cell-handle')).toBeVisible();
   });
 
   test('menus close on Escape and outside click, but not on non-action inside clicks', async ({ page }) => {
