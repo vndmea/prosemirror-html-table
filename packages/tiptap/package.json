@@ -10,6 +10,10 @@
     "url": "git+https://github.com/vndmea/prosemirror-html-table.git",
     "directory": "packages/tiptap"
   },
+  "homepage": "https://github.com/vndmea/prosemirror-html-table#readme",
+  "bugs": {
+    "url": "https://github.com/vndmea/prosemirror-html-table/issues"
+  },
   "keywords": [
     "tiptap",
     "prosemirror",
@@ -17,9 +21,14 @@
     "html-table",
     "typescript"
   ],
-  "sideEffects": false,
+  "sideEffects": [
+    "./dist/styles.css",
+    "*.css"
+  ],
   "files": [
-    "dist"
+    "dist",
+    "README.md",
+    "LICENSE"
   ],
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
@@ -29,10 +38,11 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "require": "./dist/index.cjs"
-    }
+    },
+    "./styles.css": "./dist/styles.css"
   },
   "scripts": {
-    "build": "tsup",
+    "build": "tsup && node ../../scripts/copy-package-assets.mjs packages/tiptap",
     "typecheck": "tsc --noEmit"
   },
   "peerDependencies": {
@@ -42,5 +52,9 @@
   "devDependencies": {
     "@tiptap/core": "^3.0.0",
     "prosemirror-html-table": "0.1.0"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
   }
 }

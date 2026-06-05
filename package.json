@@ -14,8 +14,8 @@
     "examples/*"
   ],
   "scripts": {
-    "clean": "rimraf packages/*/dist examples/*/dist coverage docs",
-    "build": "npm run build --workspaces --if-present",
+    "clean": "rimraf packages/*/dist examples/*/dist coverage docs/site",
+    "build": "npm run build:packages",
     "build:packages": "npm run build -w prosemirror-html-table && npm run build -w tiptap-html-table",
     "build:demo:pages": "cross-env GITHUB_PAGES=true npm run build -w vue3-tiptap-table-demo",
     "typecheck": "tsc --noEmit -p tsconfig.json",
@@ -33,11 +33,17 @@
     "playwright:install": "playwright install",
     "playwright:install:with-deps": "playwright install --with-deps",
     "coverage": "vitest run --coverage",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "pack:core": "npm pack -w prosemirror-html-table --dry-run",
+    "pack:tiptap": "npm pack -w tiptap-html-table --dry-run",
+    "pack:check": "npm run build:packages && npm run pack:core && npm run pack:tiptap",
+    "release:version": "changeset version",
+    "release:publish": "npm run build:packages && changeset publish"
   },
   "devDependencies": {
-    "@playwright/test": "^1.54.1",
+    "@changesets/cli": "^2.31.0",
     "@eslint/js": "^9.0.0",
+    "@playwright/test": "^1.54.1",
     "@types/node": "^22.0.0",
     "@vitest/coverage-v8": "^3.0.0",
     "cross-env": "^7.0.0",

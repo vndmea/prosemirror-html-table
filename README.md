@@ -163,6 +163,7 @@ Available options:
 ```ts
 import { Editor } from '@tiptap/core';
 import { HtmlTableExtensions } from 'tiptap-html-table';
+import 'tiptap-html-table/styles.css';
 
 const editor = new Editor({
   extensions: [

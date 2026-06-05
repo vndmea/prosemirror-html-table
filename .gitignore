@@ -2,7 +2,7 @@ node_modules
 coverage
 packages/*/dist
 examples/*/dist
-docs
+docs/site
 test-results
 *.tsbuildinfo
 .DS_Store

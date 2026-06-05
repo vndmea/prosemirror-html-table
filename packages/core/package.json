@@ -10,6 +10,10 @@
     "url": "git+https://github.com/vndmea/prosemirror-html-table.git",
     "directory": "packages/core"
   },
+  "homepage": "https://github.com/vndmea/prosemirror-html-table#readme",
+  "bugs": {
+    "url": "https://github.com/vndmea/prosemirror-html-table/issues"
+  },
   "keywords": [
     "prosemirror",
     "table",
@@ -19,7 +23,9 @@
   ],
   "sideEffects": false,
   "files": [
-    "dist"
+    "dist",
+    "README.md",
+    "LICENSE"
   ],
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
@@ -44,5 +50,9 @@
     "prosemirror-model": "^1.0.0",
     "prosemirror-state": "^1.0.0",
     "prosemirror-view": "^1.0.0"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
   }
 }
