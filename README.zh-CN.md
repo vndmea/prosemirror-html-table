@@ -83,6 +83,17 @@ import { createHtmlTableGrid } from 'prosemirror-html-table';
 const grid = createHtmlTableGrid(tableNode);
 ```
 
+### TableMap 风格适配层
+
+`HtmlTableMap` 在 `createHtmlTableGrid` 之上提供了一个能感知 section 的兼容层。它会保留相对 table 起点的位置，并暴露 `width`、`height`、`map`、`cellPositions`，以及与官方 `TableMap` 对齐的 `findCell`、`rectBetween`、`cellsInRect`、`positionAt`、`nextCell`。
+
+```ts
+import { HtmlTableMap } from 'prosemirror-html-table';
+
+const tableMap = HtmlTableMap.get(tableNode);
+const firstCellRect = tableMap.findCell(tableMap.map[0]!);
+```
+
 ### Core commands
 
 当前 core 包公开了感知 section 的命令集合：
@@ -207,7 +218,7 @@ editor.commands.goToNextHtmlTableCell({ cycle: true });
 本项目不是 `prosemirror-tables` 的直接替代品。
 
 - 本项目保留完整 HTML table section 与元素，而 `prosemirror-tables` 默认使用更简单的表格树结构。
-- `createHtmlTableGrid` 能感知 section，但并不是与 `TableMap` API 兼容的替代实现。
+- `HtmlTableMap` 现在提供了一个能感知 section 的 `TableMap` 风格适配层，但完整的 `prosemirror-tables` 命令和插件兼容性仍未全部覆盖。
 - 当前 `CellSelection` 和 Tiptap 交互插件覆盖了本项目的编辑 UI，但尚未提供官方 `CellSelection` 与 `tableEditing()` 的全部 API 和插件行为。
 - 单元格范围 clipboard、官方风格的 editing plugin、增量表格修复和兼容适配层仍属于后续工作。
 - `setCellAttribute` 当前只修改当前单元格；需要对 selection 批量格式化时，请使用专用的文本对齐、背景色和垂直对齐命令。
@@ -221,7 +232,7 @@ editor.commands.goToNextHtmlTableCell({ cycle: true });
 1. 扩展 CellSelection API，并让 selection mapping 全面支持自定义节点名
 2. 增加包含单元格范围 clipboard 和删除行为的 core editing plugin
 3. 将表格修复拆分为增量 transaction API 与 command wrapper
-4. 提供 TableMap 风格及 prosemirror-tables 兼容适配层
+4. 在 `HtmlTableMap` 之外继续扩展兼容适配层
 5. 加固非法 HTML / Excel / Word 导入和大表格性能
 ```
 

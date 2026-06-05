@@ -59,6 +59,7 @@ export {
 } from './commands.js';
 export { htmlTableNodeNames } from './names.js';
 export { createHtmlTableGrid, getCellAt, isCellAnchor } from './grid.js';
+export { HtmlTableMap } from './table-map.js';
 export { normalizeHtmlTable } from './normalize.js';
 export { createHtmlTableNodeSpecs, normalizeHtmlTableSchemaOptions } from './schema.js';
 export { CellSelection } from './selection.js';
@@ -82,6 +83,7 @@ export type {
   HtmlTableRowRef,
   HtmlTableSectionName,
 } from './grid.js';
+export type { HtmlTableMapOptions, HtmlTableRect } from './table-map.js';
 
 export type {
   HtmlTableCellAttributeSpec,

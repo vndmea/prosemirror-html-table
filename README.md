@@ -83,6 +83,17 @@ import { createHtmlTableGrid } from 'prosemirror-html-table';
 const grid = createHtmlTableGrid(tableNode);
 ```
 
+### TableMap-style adapter
+
+`HtmlTableMap` adds a section-aware compatibility layer on top of `createHtmlTableGrid`. It keeps table-relative positions, exposes `width`, `height`, `map`, and `cellPositions`, and mirrors the official `TableMap` helpers for `findCell`, `rectBetween`, `cellsInRect`, `positionAt`, and `nextCell`.
+
+```ts
+import { HtmlTableMap } from 'prosemirror-html-table';
+
+const tableMap = HtmlTableMap.get(tableNode);
+const firstCellRect = tableMap.findCell(tableMap.map[0]!);
+```
+
 ### Core commands
 
 The core package exposes a section-aware command set:
@@ -207,7 +218,7 @@ editor.commands.goToNextHtmlTableCell({ cycle: true });
 This project is not a drop-in replacement for `prosemirror-tables`.
 
 - It preserves full HTML table sections and elements, while the default `prosemirror-tables` model uses a simpler table tree.
-- `createHtmlTableGrid` is section-aware, but it is not an API-compatible replacement for `TableMap`.
+- `HtmlTableMap` now provides a section-aware `TableMap`-style adapter, but full `prosemirror-tables` command and plugin compatibility is still incomplete.
 - The current `CellSelection` and Tiptap interaction plugins cover the project's editing UI, but do not yet provide every API and plugin behavior from the official `CellSelection` and `tableEditing()`.
 - Cell-range clipboard behavior, an official-style editing plugin, incremental table repair, and compatibility adapters remain planned work.
 - `setCellAttribute` currently updates the current cell; use the dedicated text-align, background-color, and vertical-align commands for selection-aware bulk formatting.
@@ -221,7 +232,7 @@ The next major areas are:
 1. expand CellSelection APIs and support custom node names throughout selection mapping
 2. add a core editing plugin with cell-range clipboard and delete behavior
 3. split table repair into an incremental transaction API plus command wrapper
-4. provide TableMap-style and prosemirror-tables compatibility adapters
+4. expand compatibility adapters beyond `HtmlTableMap`
 5. harden malformed HTML / Excel / Word import and large-table performance
 ```
 
