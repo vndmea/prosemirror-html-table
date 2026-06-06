@@ -288,6 +288,63 @@ describe('html table context actions', () => {
     expect(actions.find((action) => action.id === 'toggleHeaderCell')?.label).toBe('Unset header cell');
   });
 
+  it('disables toggleHeaderCell when multiple logical cells are selected', () => {
+    const table = createHtmlTableNode(schema, { rows: 2, cols: 2 });
+    const doc = schema.nodes.doc!.create(null, [table]);
+    const cellPositions = findNodePositions(doc, 'htmlTableCell');
+    const state = EditorState.create({
+      schema,
+      doc,
+      selection: CellSelection.create(doc, cellPositions[0]!, cellPositions[1]!),
+      plugins: [createHtmlTableInteractionPlugin()],
+    });
+
+    const actions = getHtmlTableContextActions(state, getHtmlTableInteractionState(state));
+
+    expect(actions.find((action) => action.id === 'toggleHeaderCell')).toMatchObject({
+      enabled: false,
+      label: 'Set header cell',
+    });
+  });
+
+  it('keeps toggleHeaderCell enabled for a merged single logical cell selection', () => {
+    const table = createHtmlTableNode(schema, { rows: 2, cols: 2 });
+    const doc = schema.nodes.doc!.create(null, [table]);
+    const cellPositions = findNodePositions(doc, 'htmlTableCell');
+    const baseState = EditorState.create({
+      schema,
+      doc,
+      selection: CellSelection.create(doc, cellPositions[0]!, cellPositions[3]!),
+      plugins: [createHtmlTableInteractionPlugin()],
+    });
+
+    let mergedState = baseState;
+    const merged = getHtmlTableContextActionCommand({
+      id: 'mergeCells',
+      label: 'Merge cells',
+      scope: 'cell',
+      enabled: true,
+    })(baseState, (transaction) => {
+      mergedState = baseState.apply(transaction);
+    });
+
+    expect(merged).toBe(true);
+
+    const mergedCellPositions = findNodePositions(mergedState.doc, 'htmlTableCell');
+    const singleCellState = EditorState.create({
+      schema,
+      doc: mergedState.doc,
+      selection: CellSelection.create(mergedState.doc, mergedCellPositions[0]!),
+      plugins: [createHtmlTableInteractionPlugin()],
+    });
+
+    const actions = getHtmlTableContextActions(singleCellState, getHtmlTableInteractionState(singleCellState));
+
+    expect(actions.find((action) => action.id === 'toggleHeaderCell')).toMatchObject({
+      enabled: true,
+    });
+  });
+
   it('marks row and column header toggle actions as active when the selection is fully header cells', () => {
     const table = createHtmlTableNode(schema, { rows: 2, cols: 2 });
     const doc = schema.nodes.doc!.create(null, [table]);

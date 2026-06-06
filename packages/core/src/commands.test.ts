@@ -1183,6 +1183,18 @@ describe('html table commands', () => {
     expect(getSelectedCellNode(nextState)?.textContent).toBe('');
   });
 
+  it('does not toggle a header cell when multiple logical cells are selected', () => {
+    const state = createStateWithTable(2, 2);
+    const cellPositions = findNodePositions(state.doc, 'htmlTableHeaderCell');
+    const selectedState = EditorState.create({
+      schema,
+      doc: state.doc,
+      selection: CellSelection.create(state.doc, cellPositions[0]!, cellPositions[1]!),
+    });
+
+    expect(toggleHeaderCell()(selectedState)).toBe(false);
+  });
+
   it('toggles the selected row between header and body cell types', () => {
     const nextState = applyCommand(createStateWithTable(2, 2), toggleHeaderRow());
     const firstRow = getBody(getTable(nextState.doc)).child(0);

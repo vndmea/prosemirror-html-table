@@ -181,6 +181,10 @@ export function getHtmlTableContextActions(
     ];
   }
 
+  if (!selectionInfo) {
+    return [];
+  }
+
   if (scope === 'row') {
     const rowHeaderActive = areSelectedCellsHeader(selectionInfo);
     const textAlign = getCommonSelectedCellAttribute(state, selectionInfo, 'textAlign');
@@ -289,7 +293,9 @@ export function getHtmlTableContextActions(
   const textAlign = getCommonSelectedCellAttribute(state, selectionInfo, 'textAlign');
   const backgroundColor = getCommonSelectedCellAttribute(state, selectionInfo, 'backgroundColor');
   const verticalAlign = getCommonSelectedCellAttribute(state, selectionInfo, 'verticalAlign');
-  const headerCellActive = areSelectedCellsHeader(selectionInfo);
+  const singleSelectedCell = selectionInfo.cells.length === 1;
+  const headerCellActive = singleSelectedCell ? areSelectedCellsHeader(selectionInfo) : undefined;
+  const toggleHeaderCellCommand = singleSelectedCell ? toggleHeaderCell(options) : () => false;
 
   return [
     createAction('setCellTextAlignLeft', scope, setCellTextAlign('left', options), state, {
@@ -328,7 +334,7 @@ export function getHtmlTableContextActions(
     createAction(
       'toggleHeaderCell',
       scope,
-      toggleHeaderCell(options),
+      toggleHeaderCellCommand,
       state,
       headerCellActive === undefined ? {} : { active: headerCellActive },
     ),

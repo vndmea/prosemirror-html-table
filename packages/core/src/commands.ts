@@ -619,7 +619,14 @@ export function setCellAttribute(
 
 export function toggleHeaderCell(options: HtmlTableCommandOptions = {}): Command {
   return (state, dispatch) => {
-    const context = findCellContext(state, options);
+    const selectionInfo = getCellSelectionInfo(state, options);
+    if (state.selection instanceof CellSelection && (!selectionInfo || selectionInfo.cells.length !== 1)) {
+      return false;
+    }
+
+    const context = selectionInfo
+      ? findCellContextByCell(selectionInfo.context, selectionInfo.cells[0]!)
+      : findCellContext(state, options);
     if (!context) return false;
 
     const table = updateCellAt(context, context.cell, (cell) =>
