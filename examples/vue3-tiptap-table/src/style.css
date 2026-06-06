@@ -65,7 +65,7 @@
 .html-table-example--shell {
   margin: 0 auto;
   max-width: 1280px;
-  padding: 0.75rem 1rem 1rem;
+  /* padding: 0.75rem 1rem 1rem; */
 }
 
 .html-table-example__hero {
@@ -116,7 +116,7 @@
 
 .html-table-example__editor-panel .tiptap {
   min-height: 380px;
-  padding: 0.85rem 1rem;
+  /* padding: 0.85rem 1rem; */
   outline: none;
 }
 
@@ -157,4 +157,9 @@
   .html-table-example--shell {
     padding: 0.6rem 0.7rem 0.8rem;
   }
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
 }
