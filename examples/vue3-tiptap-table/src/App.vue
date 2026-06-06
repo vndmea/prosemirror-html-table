@@ -71,36 +71,6 @@ const toolbarButtons: ToolbarButton[] = [
     }) ?? false,
   },
   {
-    label: 'Row before',
-    title: 'Insert row before',
-    action: () => editor.value?.commands.addHtmlTableRowBefore() ?? false,
-  },
-  {
-    label: 'Row after',
-    title: 'Insert row after',
-    action: () => editor.value?.commands.addHtmlTableRowAfter() ?? false,
-  },
-  {
-    label: 'Del row',
-    title: 'Delete row',
-    action: () => editor.value?.commands.deleteHtmlTableRow() ?? false,
-  },
-  {
-    label: 'Column before',
-    title: 'Insert column before',
-    action: () => editor.value?.commands.addHtmlTableColumnBefore() ?? false,
-  },
-  {
-    label: 'Column after',
-    title: 'Insert column after',
-    action: () => editor.value?.commands.addHtmlTableColumnAfter() ?? false,
-  },
-  {
-    label: 'Delete column',
-    title: 'Delete column',
-    action: () => editor.value?.commands.deleteHtmlTableColumn() ?? false,
-  },
-  {
     label: 'Set caption',
     title: 'Set table caption',
     action: () => editor.value?.commands.setHtmlTableCaption('Updated table caption') ?? false,
@@ -131,64 +101,9 @@ const toolbarButtons: ToolbarButton[] = [
     action: () => editor.value?.commands.splitHtmlTableCell() ?? false,
   },
   {
-    label: 'Merge or split',
-    title: 'Merge or split cells',
-    action: () => editor.value?.commands.mergeOrSplitHtmlTableCells() ?? false,
-  },
-  {
     label: 'Set colspan=2',
     title: 'Set colspan to 2',
     action: () => editor.value?.commands.setHtmlTableCellAttribute('colspan', 2) ?? false,
-  },
-  {
-    label: 'Toggle header cell',
-    title: 'Toggle header cell',
-    action: () => editor.value?.commands.toggleHtmlTableHeaderCell() ?? false,
-  },
-  {
-    label: 'Toggle header row',
-    title: 'Toggle header row',
-    action: () => editor.value?.commands.toggleHtmlTableHeaderRow() ?? false,
-  },
-  {
-    label: 'Toggle header column',
-    title: 'Toggle header column',
-    action: () => editor.value?.commands.toggleHtmlTableHeaderColumn() ?? false,
-  },
-  {
-    label: 'Add thead',
-    title: 'Add head section',
-    action: () => editor.value?.commands.addHtmlTableHeadSection() ?? false,
-  },
-  {
-    label: 'Remove thead',
-    title: 'Remove head section',
-    action: () => editor.value?.commands.removeHtmlTableHeadSection() ?? false,
-  },
-  {
-    label: 'Add tfoot',
-    title: 'Add foot section',
-    action: () => editor.value?.commands.addHtmlTableFootSection() ?? false,
-  },
-  {
-    label: 'Remove tfoot',
-    title: 'Remove foot section',
-    action: () => editor.value?.commands.removeHtmlTableFootSection() ?? false,
-  },
-  {
-    label: 'Row -> thead',
-    title: 'Move row to head',
-    action: () => editor.value?.commands.moveHtmlTableRowToHead() ?? false,
-  },
-  {
-    label: 'Row -> tbody',
-    title: 'Move row to body',
-    action: () => editor.value?.commands.moveHtmlTableRowToBody() ?? false,
-  },
-  {
-    label: 'Row -> tfoot',
-    title: 'Move row to foot',
-    action: () => editor.value?.commands.moveHtmlTableRowToFoot() ?? false,
   },
   {
     label: 'Previous cell',
@@ -243,9 +158,10 @@ onBeforeUnmount(() => {
         <code>tbody</code>, and <code>tfoot</code>. Drag column edges to resize,
         click the row and column handles to select full axes, use
         <code>Tab</code>/<code>Shift+Tab</code> to move, and use
-        <code>Shift+Arrow</code> to extend cell selection. Use the toolbar to edit
-        captions, colgroups, and explicit head/body/foot sections in addition to
-        the logical table grid.
+        <code>Shift+Arrow</code> to extend cell selection. Use the selection menus
+        for row, column, and cell actions, and keep the toolbar for table setup,
+        explicit caption/colgroup changes, navigation, and targeted commands that
+        are not exposed from those menus.
       </p>
     </section>
 
