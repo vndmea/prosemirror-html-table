@@ -1,6 +1,7 @@
 import { cpSync, existsSync, mkdirSync } from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
+import { fileURLToPath } from 'node:url';
 
 const packagePath = process.argv[2];
 
@@ -9,9 +10,11 @@ if (!packagePath) {
   process.exit(1);
 }
 
-const cwd = process.cwd();
-const sourceDir = path.join(cwd, packagePath, 'src');
-const distDir = path.join(cwd, packagePath, 'dist');
+const scriptDir = path.dirname(fileURLToPath(import.meta.url));
+const repoRoot = path.resolve(scriptDir, '..');
+const packageDir = path.resolve(repoRoot, packagePath);
+const sourceDir = path.join(packageDir, 'src');
+const distDir = path.join(packageDir, 'dist');
 const assets = ['styles.css'];
 
 mkdirSync(distDir, { recursive: true });
