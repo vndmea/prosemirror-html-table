@@ -1,4 +1,4 @@
-.pmht-demo {
+.html-table-example {
   color: #1f2937;
   background: #f8fafc;
   font-family:
@@ -9,12 +9,12 @@
   min-height: 100vh;
 }
 
-.pmht-demo,
-.pmht-demo * {
+.html-table-example,
+.html-table-example * {
   box-sizing: border-box;
 }
 
-.pmht-demo button {
+.html-table-example__toolbar button {
   border: 1px solid #cbd5e1;
   border-radius: 8px;
   background: #ffffff;
@@ -30,39 +30,39 @@
     transform 0.15s ease;
 }
 
-.pmht-demo button:hover {
+.html-table-example__toolbar button:hover {
   background: #f1f5f9;
   border-color: #94a3b8;
   transform: translateY(-1px);
 }
 
-.pmht-demo button.danger {
+.html-table-example__toolbar button.danger {
   border-color: #fecaca;
   color: #991b1b;
 }
 
-.pmht-demo button.danger:hover {
+.html-table-example__toolbar button.danger:hover {
   background: #fef2f2;
   border-color: #fca5a5;
 }
 
-.pmht-demo code {
+.html-table-example code {
   border-radius: 6px;
   background: #e2e8f0;
   padding: 0.1rem 0.3rem;
 }
 
-.pmht-demo.demo-shell {
+.html-table-example--shell {
   margin: 0 auto;
   max-width: 1280px;
   padding: 0.75rem 1rem 1rem;
 }
 
-.pmht-demo .hero {
+.html-table-example__hero {
   margin-bottom: 0.55rem;
 }
 
-.pmht-demo .hero h1 {
+.html-table-example__hero h1 {
   margin: 0 0 0.2rem;
   color: #0f172a;
   font-size: 1rem;
@@ -70,7 +70,7 @@
   line-height: 1.3;
 }
 
-.pmht-demo .hero p {
+.html-table-example__hero p {
   margin: 0;
   max-width: none;
   color: #475569;
@@ -78,7 +78,7 @@
   line-height: 1.35;
 }
 
-.pmht-demo .toolbar {
+.html-table-example__toolbar {
   display: flex;
   flex-wrap: wrap;
   gap: 0.32rem;
@@ -87,77 +87,46 @@
   border: 1px solid #e2e8f0;
   border-radius: 12px;
   background: rgba(255, 255, 255, 0.86);
-  /* box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06); */
 }
 
-.pmht-demo .content-grid {
+.html-table-example__content-grid {
   display: block;
 }
 
-.pmht-demo .panel {
+.html-table-example__panel {
   min-width: 0;
-  /* border: 1px solid #e2e8f0; */
   border-radius: 12px;
   background: #ffffff;
-  /* box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06); */
   overflow: hidden;
 }
 
-.pmht-demo .panel.editor-panel {
+.html-table-example__editor-panel {
   overflow: visible;
 }
 
-.pmht-demo .editor-panel .tiptap {
+.html-table-example__editor-panel .tiptap {
   min-height: 380px;
   padding: 0.85rem 1rem;
   outline: none;
 }
 
-.pmht-demo .editor-panel .ProseMirror-hideselection *::selection {
+.html-table-example__editor-panel .ProseMirror-hideselection *::selection {
   background: transparent;
 }
 
-.pmht-demo .editor-panel .ProseMirror-hideselection *::-moz-selection {
+.html-table-example__editor-panel .ProseMirror-hideselection *::-moz-selection {
   background: transparent;
 }
 
-.pmht-demo .editor-panel .ProseMirror-hideselection {
+.html-table-example__editor-panel .ProseMirror-hideselection {
   caret-color: transparent;
 }
 
-/* Demo-only theme overrides for the packaged tiptap-html-table styles. */
-.pmht-demo .editor-panel {
-  --tt-table-border-color: rgba(148, 163, 184, 0.34);
-  --tt-table-selected-bg: rgba(37, 99, 235, 0.08);
-  --tt-table-axis-selected-bg: rgba(37, 99, 235, 0.05);
-  --tt-table-selected-stroke: #2563eb;
-  --tt-table-column-resize-handle-bg: #2563eb;
-  --tt-table-handle-bg-color: #ffffff;
-  --tt-table-extend-icon-color: #64748b;
-  --pmht-table-selected-shadow: none;
-  --pmht-overlay-surface: #ffffff;
-  --pmht-overlay-surface-muted: #f8fafc;
-  --pmht-overlay-border: rgba(148, 163, 184, 0.28);
-  --pmht-overlay-shadow: 0 6px 16px rgba(15, 23, 42, 0.08);
-  --pmht-overlay-shadow-strong: 0 10px 24px rgba(15, 23, 42, 0.12);
-  --pmht-overlay-selected-fill: var(--tt-table-selected-bg);
-  --pmht-overlay-selected-stroke: var(--tt-table-selected-stroke);
-  --pmht-overlay-selected-stroke-strong: #1d4ed8;
-  --pmht-overlay-selected-stroke-width: 1px;
-  --pmht-overlay-handle-rest: var(--tt-table-handle-bg-color);
-  --pmht-overlay-handle-hover: #f8fafc;
-  --pmht-overlay-handle-selected: rgba(37, 99, 235, 0.92);
-  --pmht-overlay-handle-menu: #1d4ed8;
-  --pmht-overlay-guide: var(--tt-table-column-resize-handle-bg);
-  --pmht-overlay-danger: #b91c1c;
-  --pmht-overlay-danger-bg: rgba(220, 38, 38, 0.08);
-}
-
-.pmht-demo .editor-panel p {
+.html-table-example__editor-panel p {
   margin: 0.35rem 0;
 }
 
-.pmht-demo .output-panel pre {
+.html-table-example__output-panel pre {
   max-height: 620px;
   margin: 0;
   overflow: auto;
@@ -169,13 +138,13 @@
   white-space: pre-wrap;
 }
 
-.pmht-demo .output-panel code {
+.html-table-example__output-panel code {
   background: transparent;
   padding: 0;
 }
 
 @media (max-width: 960px) {
-  .pmht-demo.demo-shell {
+  .html-table-example--shell {
     padding: 0.6rem 0.7rem 0.8rem;
   }
 }

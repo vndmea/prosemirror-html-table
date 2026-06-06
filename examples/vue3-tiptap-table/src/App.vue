@@ -234,8 +234,8 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <main class="pmht-demo demo-shell">
-    <section class="hero">
+  <main class="html-table-example html-table-example--shell">
+    <section class="html-table-example__hero">
       <h1>Vue 3 + Tiptap v3 full HTML table demo</h1>
       <p>
         This demo uses <code>tiptap-html-table</code> to edit a table with
@@ -249,7 +249,7 @@ onBeforeUnmount(() => {
       </p>
     </section>
 
-    <section class="toolbar" aria-label="Table commands">
+    <section class="html-table-example__toolbar" aria-label="Table commands">
       <button
         v-for="button in toolbarButtons"
         :key="button.title"
@@ -262,8 +262,8 @@ onBeforeUnmount(() => {
       </button>
     </section>
 
-    <section class="content-grid">
-      <div class="panel editor-panel">
+    <section class="html-table-example__content-grid">
+      <div class="html-table-example__panel html-table-example__editor-panel">
         <div data-testid="pmht-editor">
           <EditorContent v-if="editor" :editor="editor" />
         </div>
