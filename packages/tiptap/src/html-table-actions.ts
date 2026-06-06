@@ -14,7 +14,7 @@ import {
   deleteTable,
   duplicateColumn,
   duplicateRow,
-  mergeOrSplit,
+  mergeCells,
   moveColumnLeft,
   moveColumnRight,
   moveRowDown,
@@ -30,6 +30,7 @@ import {
   setCaption,
   setCellTextAlign,
   setCellVerticalAlign,
+  splitCell,
   setColgroup,
   sortBodyRowsByColumn,
   toggleHeaderCell,
@@ -87,7 +88,8 @@ export type HtmlTableContextActionId =
   | 'setCellVerticalAlignMiddle'
   | 'setCellVerticalAlignBottom'
   | 'clearSelectedCells'
-  | 'mergeOrSplitCells'
+  | 'mergeCells'
+  | 'splitCell'
   | 'toggleHeaderCell';
 
 export interface HtmlTableContextAction {
@@ -321,7 +323,8 @@ export function getHtmlTableContextActions(
       active: verticalAlign === 'bottom',
     }),
     createAction('clearSelectedCells', scope, clearSelectedCells(options), state),
-    createAction('mergeOrSplitCells', scope, mergeOrSplit(options), state),
+    createAction('mergeCells', scope, mergeCells(options), state),
+    createAction('splitCell', scope, splitCell(options), state),
     createAction(
       'toggleHeaderCell',
       scope,
@@ -411,8 +414,10 @@ export function getHtmlTableContextActionCommand(
       return setCellVerticalAlign('bottom', options);
     case 'clearSelectedCells':
       return clearSelectedCells(options);
-    case 'mergeOrSplitCells':
-      return mergeOrSplit(options);
+    case 'mergeCells':
+      return mergeCells(options);
+    case 'splitCell':
+      return splitCell(options);
     case 'toggleHeaderCell':
       return toggleHeaderCell(options);
   }
@@ -711,7 +716,8 @@ const ACTION_LABELS: Record<HtmlTableContextActionId, string> = {
   setCellVerticalAlignMiddle: 'Align middle',
   setCellVerticalAlignBottom: 'Align bottom',
   clearSelectedCells: 'Clear selected cells',
-  mergeOrSplitCells: 'Merge or split cells',
+  mergeCells: 'Merge cells',
+  splitCell: 'Split cell',
   toggleHeaderCell: 'Toggle header cell',
 };
 
@@ -753,7 +759,8 @@ const ACTION_GROUPS: Record<HtmlTableContextActionId, HtmlTableContextActionGrou
   setCellVerticalAlignMiddle: 'format',
   setCellVerticalAlignBottom: 'format',
   clearSelectedCells: 'content',
-  mergeOrSplitCells: 'structure',
+  mergeCells: 'structure',
+  splitCell: 'structure',
   toggleHeaderCell: 'structure',
 };
 
@@ -783,7 +790,8 @@ const ACTION_ARIA_KEYSHORTCUTS: Partial<Record<HtmlTableContextActionId, string>
   sortBodyRowsAsc: 'Alt+ArrowUp',
   sortBodyRowsDesc: 'Alt+ArrowDown',
   clearSelectedCells: 'Delete',
-  mergeOrSplitCells: 'Enter',
+  mergeCells: 'Enter',
+  splitCell: 'Enter',
   toggleHeaderRow: 'Shift+R',
   toggleHeaderColumn: 'Shift+C',
   toggleHeaderCell: 'Shift+H',
@@ -800,7 +808,8 @@ const PRIMARY_ACTION_ORDER: HtmlTableContextActionId[] = [
   'toggleCaption',
   'addRowAfter',
   'addColumnAfter',
-  'mergeOrSplitCells',
+  'mergeCells',
+  'splitCell',
   'toggleColgroup',
   'toggleFootSection',
   'duplicateRow',

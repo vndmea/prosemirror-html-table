@@ -36,6 +36,16 @@
   transform: translateY(-1px);
 }
 
+.html-table-example__toolbar button:disabled,
+.html-table-example__toolbar button:disabled:hover {
+  border-color: #e2e8f0;
+  background: #f8fafc;
+  color: #94a3b8;
+  cursor: not-allowed;
+  opacity: 0.72;
+  transform: none;
+}
+
 .html-table-example__toolbar button.danger {
   border-color: #fecaca;
   color: #991b1b;

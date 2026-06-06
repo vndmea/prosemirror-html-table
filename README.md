@@ -38,7 +38,7 @@ npm install
 npm run dev --workspace vue3-tiptap-table-demo
 ```
 
-The playground includes a full HTML table with `caption`, `colgroup`, `thead`, `tbody`, and `tfoot`, plus row/column handles, nested context menus, resize and extend controls, selection overlays, and toolbar commands.
+The playground includes a full HTML table with `caption`, `colgroup`, `thead`, `tbody`, and `tfoot`, plus row/column handles, nested context menus, resize and extend controls, selection overlays, and a compact toolbar for table-level commands.
 
 ## Install
 
@@ -203,7 +203,6 @@ editor.commands.selectHtmlTableColumn();
 editor.commands.selectHtmlTable();
 editor.commands.mergeHtmlTableCells();
 editor.commands.splitHtmlTableCell();
-editor.commands.mergeOrSplitHtmlTableCells();
 editor.commands.fixHtmlTables();
 editor.commands.deleteHtmlTable();
 ```

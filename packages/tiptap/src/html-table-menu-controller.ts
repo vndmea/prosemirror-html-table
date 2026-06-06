@@ -58,7 +58,8 @@ const ALIGNMENT_ACTION_IDS: HtmlTableContextActionId[] = [
 ];
 
 const CELL_STRUCTURE_ACTION_IDS: HtmlTableContextActionId[] = [
-  'mergeOrSplitCells',
+  'mergeCells',
+  'splitCell',
   'toggleHeaderCell',
 ];
 

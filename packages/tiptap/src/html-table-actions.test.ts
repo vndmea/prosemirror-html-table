@@ -165,7 +165,8 @@ describe('html table context actions', () => {
       'setCellVerticalAlignMiddle',
       'setCellVerticalAlignBottom',
       'clearSelectedCells',
-      'mergeOrSplitCells',
+      'mergeCells',
+      'splitCell',
       'toggleHeaderCell',
     ]);
     expect(actions.every((action) => action.scope === 'cell')).toBe(true);
@@ -443,8 +444,8 @@ describe('html table context actions', () => {
 
   it('derives aria-keyshortcuts for the actions that expose keyboard affordances', () => {
     expect(getHtmlTableContextActionShortcutState({
-      id: 'mergeOrSplitCells',
-      label: 'Merge or split cells',
+      id: 'mergeCells',
+      label: 'Merge cells',
       scope: 'cell',
       enabled: true,
     })).toEqual({
@@ -665,7 +666,32 @@ describe('html table context actions', () => {
       getHtmlTableContextActions(mergedCellState, getHtmlTableInteractionState(mergedCellState)),
     );
 
-    expect(mergedCellPrimary?.id).toBe('mergeOrSplitCells');
+    expect(mergedCellPrimary?.id).toBe('mergeCells');
+
+    let mergedState = mergedCellState;
+    const merged = getHtmlTableContextActionCommand({
+      id: 'mergeCells',
+      label: 'Merge cells',
+      scope: 'cell',
+      enabled: true,
+    })(mergedCellState, (transaction) => {
+      mergedState = mergedCellState.apply(transaction);
+    });
+
+    expect(merged).toBe(true);
+
+    const mergedCellPositions = findNodePositions(mergedState.doc, 'htmlTableCell');
+    const mergedSingleState = EditorState.create({
+      schema,
+      doc: mergedState.doc,
+      selection: CellSelection.create(mergedState.doc, mergedCellPositions[0]!),
+      plugins: [createHtmlTableInteractionPlugin()],
+    });
+    const splitCellPrimary = getPrimaryHtmlTableContextAction(
+      getHtmlTableContextActions(mergedSingleState, getHtmlTableInteractionState(mergedSingleState)),
+    );
+
+    expect(splitCellPrimary?.id).toBe('splitCell');
 
     const singleCellState = EditorState.create({
       schema,

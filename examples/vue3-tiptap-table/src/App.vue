@@ -1,10 +1,14 @@
 <script setup lang="ts">
+import type { Node as ProseMirrorNode } from '@tiptap/pm/model';
+import { NodeSelection, type EditorState } from '@tiptap/pm/state';
 import Document from '@tiptap/extension-document';
 import Paragraph from '@tiptap/extension-paragraph';
 import Text from '@tiptap/extension-text';
 import { EditorContent, useEditor } from '@tiptap/vue-3';
-import { onBeforeUnmount } from 'vue';
+import { computed, onBeforeUnmount, ref } from 'vue';
 import { HtmlTableExtensions } from 'tiptap-html-table';
+
+const toolbarRevision = ref(0);
 
 const editor = useEditor({
   extensions: [
@@ -44,12 +48,16 @@ const editor = useEditor({
       </tfoot>
     </table>
   `,
+  onTransaction: () => {
+    toolbarRevision.value += 1;
+  },
 });
 
 type ToolbarButton = {
   label: string;
   title: string;
   action: () => boolean;
+  disabled: boolean;
   danger?: boolean;
 };
 
@@ -58,90 +66,127 @@ function run(command: () => boolean): void {
   editor.value?.commands.focus();
 }
 
-const toolbarButtons: ToolbarButton[] = [
-  {
-    label: 'Insert table',
-    title: 'Insert table',
-    action: () => editor.value?.commands.insertHtmlTable({
-      rows: 3,
-      cols: 3,
-      withHeaderRow: true,
-      withCaption: true,
-      captionText: 'New table',
-    }) ?? false,
-  },
-  {
-    label: 'Set caption',
-    title: 'Set table caption',
-    action: () => editor.value?.commands.setHtmlTableCaption('Updated table caption') ?? false,
-  },
-  {
-    label: 'Remove caption',
-    title: 'Remove table caption',
-    action: () => editor.value?.commands.removeHtmlTableCaption() ?? false,
-  },
-  {
-    label: 'Set colgroup',
-    title: 'Set colgroup widths',
-    action: () => editor.value?.commands.setHtmlTableColgroup([180, 260, 220]) ?? false,
-  },
-  {
-    label: 'Remove colgroup',
-    title: 'Remove colgroup',
-    action: () => editor.value?.commands.removeHtmlTableColgroup() ?? false,
-  },
-  {
-    label: 'Merge cells',
-    title: 'Merge cells',
-    action: () => editor.value?.commands.mergeHtmlTableCells() ?? false,
-  },
-  {
-    label: 'Split cell',
-    title: 'Split cell',
-    action: () => editor.value?.commands.splitHtmlTableCell() ?? false,
-  },
-  {
-    label: 'Set colspan=2',
-    title: 'Set colspan to 2',
-    action: () => editor.value?.commands.setHtmlTableCellAttribute('colspan', 2) ?? false,
-  },
-  {
-    label: 'Previous cell',
-    title: 'Go to previous cell',
-    action: () => editor.value?.commands.goToPreviousHtmlTableCell({ cycle: true }) ?? false,
-  },
-  {
-    label: 'Next cell',
-    title: 'Go to next cell',
-    action: () => editor.value?.commands.goToNextHtmlTableCell({ cycle: true }) ?? false,
-  },
-  {
-    label: 'Select cell',
-    title: 'Select cell',
-    action: () => editor.value?.commands.selectHtmlTableCell() ?? false,
-  },
-  {
-    label: 'Select row',
-    title: 'Select row',
-    action: () => editor.value?.commands.selectHtmlTableRow() ?? false,
-  },
-  {
-    label: 'Select column',
-    title: 'Select column',
-    action: () => editor.value?.commands.selectHtmlTableColumn() ?? false,
-  },
-  {
-    label: 'Fix tables',
-    title: 'Normalize tables',
-    action: () => editor.value?.commands.fixHtmlTables() ?? false,
-  },
-  {
-    label: 'Delete table',
-    title: 'Delete table',
-    action: () => editor.value?.commands.deleteHtmlTable() ?? false,
-    danger: true,
-  },
-];
+function getActiveTable(state: EditorState): ProseMirrorNode | null {
+  if (state.selection instanceof NodeSelection && state.selection.node.type.name === 'htmlTable') {
+    return state.selection.node;
+  }
+
+  for (let depth = state.selection.$from.depth; depth >= 0; depth -= 1) {
+    const node = state.selection.$from.node(depth);
+    if (node.type.name === 'htmlTable') {
+      return node;
+    }
+  }
+
+  return null;
+}
+
+function hasTableChild(table: ProseMirrorNode | null, typeName: string): boolean {
+  if (!table) {
+    return false;
+  }
+
+  for (let index = 0; index < table.childCount; index += 1) {
+    if (table.child(index).type.name === typeName) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+const toolbarButtons = computed<ToolbarButton[]>(() => {
+  toolbarRevision.value;
+
+  const currentEditor = editor.value;
+  const table = currentEditor ? getActiveTable(currentEditor.state) : null;
+  const hasCaption = hasTableChild(table, 'htmlTableCaption');
+  const hasColgroup = hasTableChild(table, 'htmlTableColgroup');
+  const hasHead = hasTableChild(table, 'htmlTableHead');
+  const hasFoot = hasTableChild(table, 'htmlTableFoot');
+
+  return [
+    {
+      label: 'Insert table',
+      title: 'Insert table',
+      action: () => currentEditor?.commands.insertHtmlTable({
+        rows: 3,
+        cols: 3,
+        withHeaderRow: true,
+        withCaption: true,
+        captionText: 'New table',
+      }) ?? false,
+      disabled: !(currentEditor?.can().insertHtmlTable({
+        rows: 3,
+        cols: 3,
+        withHeaderRow: true,
+        withCaption: true,
+        captionText: 'New table',
+      }) ?? false),
+    },
+    {
+      label: 'Set caption',
+      title: 'Set table caption',
+      action: () => currentEditor?.commands.setHtmlTableCaption('Updated table caption') ?? false,
+      disabled: hasCaption || !(currentEditor?.can().setHtmlTableCaption('Updated table caption') ?? false),
+    },
+    {
+      label: 'Remove caption',
+      title: 'Remove table caption',
+      action: () => currentEditor?.commands.removeHtmlTableCaption() ?? false,
+      disabled: !hasCaption || !(currentEditor?.can().removeHtmlTableCaption() ?? false),
+    },
+    {
+      label: 'Set colgroup',
+      title: 'Set colgroup widths',
+      action: () => currentEditor?.commands.setHtmlTableColgroup([180, 260, 220]) ?? false,
+      disabled: hasColgroup || !(currentEditor?.can().setHtmlTableColgroup([180, 260, 220]) ?? false),
+    },
+    {
+      label: 'Remove colgroup',
+      title: 'Remove colgroup',
+      action: () => currentEditor?.commands.removeHtmlTableColgroup() ?? false,
+      disabled: !hasColgroup || !(currentEditor?.can().removeHtmlTableColgroup() ?? false),
+    },
+    {
+      label: 'Add header section',
+      title: 'Add header section',
+      action: () => currentEditor?.commands.addHtmlTableHeadSection() ?? false,
+      disabled: hasHead || !(currentEditor?.can().addHtmlTableHeadSection() ?? false),
+    },
+    {
+      label: 'Move header to body',
+      title: 'Move header section to body',
+      action: () => currentEditor?.commands.removeHtmlTableHeadSection() ?? false,
+      disabled: !hasHead || !(currentEditor?.can().removeHtmlTableHeadSection() ?? false),
+    },
+    {
+      label: 'Add footer section',
+      title: 'Add footer section',
+      action: () => currentEditor?.commands.addHtmlTableFootSection() ?? false,
+      disabled: hasFoot || !(currentEditor?.can().addHtmlTableFootSection() ?? false),
+    },
+    {
+      label: 'Move footer to body',
+      title: 'Move footer section to body',
+      action: () => currentEditor?.commands.removeHtmlTableFootSection() ?? false,
+      disabled: !hasFoot || !(currentEditor?.can().removeHtmlTableFootSection() ?? false),
+    },
+    {
+      label: 'Fix tables',
+      title: 'Normalize tables',
+      action: () => currentEditor?.commands.fixHtmlTables() ?? false,
+      disabled: !(currentEditor?.can().fixHtmlTables() ?? false),
+    },
+    {
+      label: 'Delete table',
+      title: 'Delete table',
+      action: () => currentEditor?.commands.deleteHtmlTable() ?? false,
+      disabled: !(currentEditor?.can().deleteHtmlTable() ?? false),
+      danger: true,
+    },
+  ];
+});
 
 onBeforeUnmount(() => {
   editor.value?.destroy();
@@ -160,8 +205,9 @@ onBeforeUnmount(() => {
         <code>Tab</code>/<code>Shift+Tab</code> to move, and use
         <code>Shift+Arrow</code> to extend cell selection. Use the selection menus
         for row, column, and cell actions, and keep the toolbar for table setup,
-        explicit caption/colgroup changes, navigation, and targeted commands that
-        are not exposed from those menus.
+        explicit caption/colgroup toggles, section structure changes, table
+        cleanup, and other table-level commands that stay outside the selection
+        menus.
       </p>
     </section>
 
@@ -171,6 +217,7 @@ onBeforeUnmount(() => {
         :key="button.title"
         type="button"
         :class="{ danger: button.danger }"
+        :disabled="button.disabled"
         :title="button.title"
         @click="run(button.action)"
       >

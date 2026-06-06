@@ -38,7 +38,7 @@ npm install
 npm run dev --workspace vue3-tiptap-table-demo
 ```
 
-playground 内置了一个完整 HTML 表格示例，包含 `caption`、`colgroup`、`thead`、`tbody` 和 `tfoot`，同时提供行列手柄、多级上下文菜单、resize 与扩展控件、selection overlay 和工具栏命令。
+playground 内置了一个完整 HTML 表格示例，包含 `caption`、`colgroup`、`thead`、`tbody` 和 `tfoot`，同时提供行列手柄、多级上下文菜单、resize 与扩展控件、selection overlay，以及一个聚焦表级操作的精简工具栏。
 
 ## Install
 
@@ -203,7 +203,6 @@ editor.commands.selectHtmlTableColumn();
 editor.commands.selectHtmlTable();
 editor.commands.mergeHtmlTableCells();
 editor.commands.splitHtmlTableCell();
-editor.commands.mergeOrSplitHtmlTableCells();
 editor.commands.fixHtmlTables();
 editor.commands.deleteHtmlTable();
 ```
