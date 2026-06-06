@@ -1,4 +1,8 @@
+import { Schema } from 'prosemirror-model';
+import { EditorState, TextSelection } from '@tiptap/pm/state';
 import { describe, expect, it } from 'vitest';
+
+import { createHtmlTableNode, createHtmlTableNodeSpecs } from 'prosemirror-html-table';
 
 import {
   HtmlTable,
@@ -114,5 +118,90 @@ describe('HtmlTableExtensions', () => {
     expect(cellAttributes.verticalAlign?.renderHTML?.({ verticalAlign: 'middle' })).toEqual({
       style: 'vertical-align: middle;',
     });
+  });
+
+  it('keeps an empty caption in place when Backspace is pressed at the start', () => {
+    const schema = new Schema({
+      nodes: {
+        doc: { content: 'block+' },
+        text: { group: 'inline' },
+        paragraph: {
+          group: 'block',
+          content: 'inline*',
+          toDOM: () => ['p', 0],
+          parseDOM: [{ tag: 'p' }],
+        },
+        ...createHtmlTableNodeSpecs(),
+      },
+    });
+    const table = createHtmlTableNode(schema, { rows: 1, cols: 1, withCaption: true });
+    const doc = schema.nodes.doc!.create(null, [table]);
+    const state = EditorState.create({
+      schema,
+      doc,
+      selection: TextSelection.create(doc, 2),
+    });
+    const captionExtension = HtmlTableCaption as unknown as {
+      config: {
+        addKeyboardShortcuts?: () => Record<string, () => boolean>;
+      };
+    };
+    const shortcuts = captionExtension.config.addKeyboardShortcuts?.call({
+      editor: { state },
+    });
+
+    expect(shortcuts?.Backspace).toBeTypeOf('function');
+    expect(shortcuts?.Backspace?.()).toBe(true);
+  });
+
+  it('does not intercept Backspace for non-empty captions', () => {
+    const schema = new Schema({
+      nodes: {
+        doc: { content: 'block+' },
+        text: { group: 'inline' },
+        paragraph: {
+          group: 'block',
+          content: 'inline*',
+          toDOM: () => ['p', 0],
+          parseDOM: [{ tag: 'p' }],
+        },
+        ...createHtmlTableNodeSpecs(),
+      },
+    });
+    const table = createHtmlTableNode(schema, {
+      rows: 1,
+      cols: 1,
+      withCaption: true,
+      captionText: 'Summary',
+    });
+    const doc = schema.nodes.doc!.create(null, [table]);
+    const state = EditorState.create({
+      schema,
+      doc,
+      selection: TextSelection.create(doc, 8),
+    });
+    const captionExtension = HtmlTableCaption as unknown as {
+      config: {
+        addKeyboardShortcuts?: () => Record<string, () => boolean>;
+      };
+    };
+    const shortcuts = captionExtension.config.addKeyboardShortcuts?.call({
+      editor: { state },
+    });
+
+    expect(shortcuts?.Backspace).toBeTypeOf('function');
+    expect(shortcuts?.Backspace?.()).toBe(false);
+  });
+
+  it('renders caption nodes with a placeholder attribute', () => {
+    const renderHTML = (HtmlTableCaption as unknown as {
+      config: {
+        renderHTML?: (props: { HTMLAttributes: Record<string, unknown> }) => unknown[];
+      };
+    }).config.renderHTML;
+
+    expect(renderHTML?.({
+      HTMLAttributes: {},
+    })).toEqual(['caption', { 'data-placeholder': 'Type table caption' }, 0]);
   });
 });

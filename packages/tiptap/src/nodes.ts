@@ -1,4 +1,5 @@
 import { mergeAttributes, Node, type NodeViewRendererProps } from '@tiptap/core';
+import { type EditorState } from '@tiptap/pm/state';
 import {
   CellSelection,
   createTiptapHtmlTableCellAttributes,
@@ -11,6 +12,8 @@ import { createHtmlTableInteractionPlugin } from './html-table-interaction.js';
 import { defaultHtmlTableTiptapOptions, type HtmlTableTiptapOptions } from './options.js';
 import { HtmlTableNodeView } from './table-view.js';
 import { createHtmlTableSelectionPlugin, findAdjacentCell, getTableSelectionInfo } from './table-utils.js';
+
+const DEFAULT_CAPTION_PLACEHOLDER = 'Type table caption';
 
 export interface CreateHtmlTableExtensionsOptions {
   table?: Partial<HtmlTableTiptapOptions>;
@@ -99,12 +102,20 @@ export const HtmlTableCaption = Node.create({
 
   defining: true,
 
+  addKeyboardShortcuts() {
+    return {
+      Backspace: () => shouldKeepEmptyCaption(this.editor.state),
+    };
+  },
+
   parseHTML() {
     return [{ tag: 'caption' }];
   },
 
   renderHTML({ HTMLAttributes }) {
-    return ['caption', HTMLAttributes, 0];
+    return ['caption', mergeAttributes(HTMLAttributes, {
+      'data-placeholder': DEFAULT_CAPTION_PLACEHOLDER,
+    }), 0];
   },
 });
 
@@ -218,6 +229,16 @@ export const HtmlTableRow = Node.create({
 export const HtmlTableCell = createHtmlTableCellExtension('htmlTableCell', 'td');
 
 export const HtmlTableHeaderCell = createHtmlTableCellExtension('htmlTableHeaderCell', 'th');
+
+function shouldKeepEmptyCaption(state: EditorState): boolean {
+  const { selection } = state;
+  const { $from, empty } = selection;
+
+  return empty
+    && $from.parent.type.name === 'htmlTableCaption'
+    && $from.parent.textContent.length === 0
+    && $from.parentOffset === 0;
+}
 
 export function createHtmlTableExtensions(options: CreateHtmlTableExtensionsOptions = {}) {
   const tableExtension = options.table ? HtmlTable.configure(options.table) : HtmlTable;
