@@ -54,6 +54,8 @@ describe('html table context actions', () => {
       'deleteTable',
       'toggleCaption',
       'toggleColgroup',
+      'fitTableToWidth',
+      'distributeColumns',
       'toggleHeadSection',
       'toggleFootSection',
     ]);
@@ -422,6 +424,31 @@ describe('html table context actions', () => {
 
     expect(applied).toBe(true);
     expect(transactionState.doc.firstChild?.firstChild?.type.name).toBe('htmlTableHead');
+  });
+
+  it('resolves table width actions from context actions', () => {
+    const table = createHtmlTableNode(schema, { rows: 2, cols: 2 });
+    const doc = schema.nodes.doc!.create(null, [table]);
+    const state = EditorState.create({
+      schema,
+      doc,
+      selection: NodeSelection.create(doc, 0),
+      plugins: [createHtmlTableInteractionPlugin()],
+    });
+    const actions = getHtmlTableContextActions(state, getHtmlTableInteractionState(state));
+    const fitAction = actions.find((action) => action.id === 'fitTableToWidth');
+
+    expect(fitAction).toBeDefined();
+
+    let transactionState = state;
+    const applied = getHtmlTableContextActionCommand(fitAction!, { width: 640 })(state, (transaction) => {
+      transactionState = state.apply(transaction);
+    });
+    const nextTable = transactionState.doc.firstChild;
+
+    expect(applied).toBe(true);
+    expect(nextTable?.attrs.width).toBe(640);
+    expect(nextTable?.child(0).type.name).toBe('htmlTableColgroup');
   });
 
   it('marks toggleCaption as active when the current table already has a caption', () => {

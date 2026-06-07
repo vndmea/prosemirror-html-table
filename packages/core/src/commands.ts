@@ -41,6 +41,23 @@ export interface MoveHtmlTableColumnToIndexOptions extends HtmlTableCommandOptio
   toColumnIndex: number;
 }
 
+export interface FitHtmlTableToWidthOptions extends HtmlTableCommandOptions {
+  width?: number | string;
+  preserveColumnRatios?: boolean;
+  minColumnWidth?: number;
+}
+
+export interface DistributeHtmlTableColumnsOptions extends HtmlTableCommandOptions {
+  width?: number | string;
+  minColumnWidth?: number;
+}
+
+export interface SetHtmlTableColumnWidthOptions extends HtmlTableCommandOptions {
+  columnIndex: number;
+  width: number;
+  minColumnWidth?: number;
+}
+
 // export interface HtmlTableCellStyleOptions extends HtmlTableCommandOptions {}
 
 interface TableContext {
@@ -466,6 +483,87 @@ export function removeColgroup(options: HtmlTableCommandOptions = {}): Command {
 
     tableChildren.splice(colgroupIndex, 1);
     return replaceTable(state, dispatch, context, context.table.copy(Fragment.fromArray(tableChildren)));
+  };
+}
+
+export function fitTableToWidth(options: FitHtmlTableToWidthOptions = {}): Command {
+  return (state, dispatch) => {
+    const context = findTableContext(state, options);
+    if (!context) return false;
+
+    const grid = createHtmlTableGrid(context.table, { names: context.names });
+    const columnCount = Math.max(1, grid.width);
+    const minColumnWidth = normalizeMinimumColumnWidth(options.minColumnWidth);
+    const currentWidths = getTableColumnWidths(context.table, context.names, columnCount, minColumnWidth);
+    const targetWidth = resolveTableTargetWidth(options.width, context.table, currentWidths, minColumnWidth);
+    if (targetWidth === null) return false;
+
+    const widths = distributeTableWidths(
+      targetWidth,
+      columnCount,
+      minColumnWidth,
+      options.preserveColumnRatios === false ? undefined : currentWidths,
+    );
+
+    return replaceTable(
+      state,
+      dispatch,
+      context,
+      updateTableWidthAndColumns(state.schema, context.table, context.names, options.width ?? targetWidth, widths),
+    );
+  };
+}
+
+export function distributeColumns(options: DistributeHtmlTableColumnsOptions = {}): Command {
+  return (state, dispatch) => {
+    const context = findTableContext(state, options);
+    if (!context) return false;
+
+    const grid = createHtmlTableGrid(context.table, { names: context.names });
+    const columnCount = Math.max(1, grid.width);
+    const minColumnWidth = normalizeMinimumColumnWidth(options.minColumnWidth);
+    const currentWidths = getTableColumnWidths(context.table, context.names, columnCount, minColumnWidth);
+    const targetWidth = resolveTableTargetWidth(options.width, context.table, currentWidths, minColumnWidth);
+    if (targetWidth === null) return false;
+
+    return replaceTable(
+      state,
+      dispatch,
+      context,
+      updateTableWidthAndColumns(
+        state.schema,
+        context.table,
+        context.names,
+        options.width ?? targetWidth,
+        distributeTableWidths(targetWidth, columnCount, minColumnWidth),
+      ),
+    );
+  };
+}
+
+export function setColumnWidth(options: SetHtmlTableColumnWidthOptions): Command {
+  return (state, dispatch) => {
+    const context = findTableContext(state, options);
+    if (!context) return false;
+
+    const grid = createHtmlTableGrid(context.table, { names: context.names });
+    const columnCount = Math.max(1, grid.width);
+    if (options.columnIndex < 0 || options.columnIndex >= columnCount) return false;
+
+    const minColumnWidth = normalizeMinimumColumnWidth(options.minColumnWidth);
+    const width = normalizeColumnWidth(options.width);
+    if (width === null) return false;
+
+    const widths = getTableColumnWidths(context.table, context.names, columnCount, minColumnWidth);
+    widths[options.columnIndex] = Math.max(minColumnWidth, width);
+    const tableWidth = widths.reduce((sum, value) => sum + Math.max(minColumnWidth, value ?? minColumnWidth), 0);
+
+    return replaceTable(
+      state,
+      dispatch,
+      context,
+      updateTableWidthAndColumns(state.schema, context.table, context.names, tableWidth, widths),
+    );
   };
 }
 
@@ -1433,6 +1531,14 @@ function findTableContext(state: EditorState, options: HtmlTableCommandOptions):
     ...options.names,
   };
 
+  if (state.selection instanceof NodeSelection && state.selection.node.type.name === names.table) {
+    return {
+      names,
+      table: state.selection.node,
+      tablePos: state.selection.from,
+    };
+  }
+
   if (typeof options.tablePos === 'number' && Number.isInteger(options.tablePos)) {
     const table = state.doc.nodeAt(options.tablePos);
     if (table?.type.name === names.table) {
@@ -2066,6 +2172,65 @@ function createColgroup(
   return colgroupType.create(null, cols);
 }
 
+function updateTableWidthAndColumns(
+  schema: Schema,
+  table: ProseMirrorNode,
+  names: HtmlTableNodeNames,
+  tableWidth: number | string,
+  widths: number[],
+): ProseMirrorNode {
+  const tableChildren = getChildren(table);
+  const grid = createHtmlTableGrid(table, { names });
+  forEachSection(table, names, (section, _sectionName, sectionChildIndex) => {
+    const rows = getChildren(section).map((row) => {
+      const rowIndex = grid.rows.find((item) => item.node === row)?.rowIndex ?? -1;
+      const rowChildren = getChildren(row).map((cellNode, cellIndex) => {
+        const cell = grid.cells.find((item) => item.rowIndex === rowIndex && item.cellIndex === cellIndex && item.node === cellNode);
+        if (!cell) return cellNode;
+
+        return cellNode.type.create(
+          {
+            ...cellNode.attrs,
+            colwidth: widths.slice(cell.columnIndex, cell.columnIndex + cell.colSpan),
+          },
+          cellNode.content,
+          cellNode.marks,
+        );
+      });
+
+      return row.copy(Fragment.fromArray(rowChildren));
+    });
+
+    tableChildren[sectionChildIndex] = section.copy(Fragment.fromArray(rows));
+  });
+
+  const colgroupIndex = findChildIndex(table, names.colgroup);
+  const nextColgroup = createColgroup(
+    schema,
+    names,
+    widths.length,
+    widths,
+    colgroupIndex >= 0 ? table.child(colgroupIndex) : undefined,
+  );
+
+  if (colgroupIndex >= 0) {
+    tableChildren[colgroupIndex] = nextColgroup;
+  } else {
+    tableChildren.splice(findColgroupInsertIndex(tableChildren, names), 0, nextColgroup);
+  }
+
+  return normalizeHtmlTable(
+    table.type.create(
+      {
+        ...table.attrs,
+        width: normalizeTableWidthAttribute(tableWidth),
+      },
+      Fragment.fromArray(tableChildren),
+      table.marks,
+    ),
+  );
+}
+
 function expandColgroupWidths(colgroup: ProseMirrorNode, targetWidth: number): Array<number | null> {
   const widths: Array<number | null> = [];
 
@@ -2083,6 +2248,111 @@ function expandColgroupWidths(colgroup: ProseMirrorNode, targetWidth: number): A
 function normalizeColumnWidth(value: unknown): number | null {
   const width = Number(value);
   return Number.isFinite(width) && width > 0 ? width : null;
+}
+
+function normalizeMinimumColumnWidth(value: unknown): number {
+  return normalizeColumnWidth(value) ?? 48;
+}
+
+function normalizeTableWidthAttribute(value: number | string): number | string {
+  if (typeof value === 'number') {
+    return Math.round(value);
+  }
+
+  const numericWidth = normalizeColumnWidth(value);
+  return numericWidth === null ? value : Math.round(numericWidth);
+}
+
+function resolveTableTargetWidth(
+  width: number | string | undefined,
+  table: ProseMirrorNode,
+  currentWidths: number[],
+  minColumnWidth: number,
+): number | null {
+  const explicitWidth = normalizeColumnWidth(width);
+  if (explicitWidth !== null) return explicitWidth;
+  if (width !== undefined) return null;
+
+  const tableWidth = normalizeColumnWidth(table.attrs.width);
+  if (tableWidth !== null) return tableWidth;
+
+  const currentWidth = currentWidths.reduce((sum, value) => sum + Math.max(minColumnWidth, value), 0);
+  return currentWidth > 0 ? currentWidth : null;
+}
+
+function getTableColumnWidths(
+  table: ProseMirrorNode,
+  names: HtmlTableNodeNames,
+  columnCount: number,
+  minColumnWidth: number,
+): number[] {
+  const colgroupIndex = findChildIndex(table, names.colgroup);
+  const colgroupWidths =
+    colgroupIndex >= 0
+      ? expandColgroupWidths(table.child(colgroupIndex), columnCount).map((width) => width ?? minColumnWidth)
+      : [];
+
+  return Array.from({ length: columnCount }, (_value, index) => Math.max(minColumnWidth, colgroupWidths[index] ?? minColumnWidth));
+}
+
+function distributeTableWidths(
+  totalWidth: number,
+  columnCount: number,
+  minColumnWidth: number,
+  ratioWidths?: number[],
+): number[] {
+  const minimumTotal = minColumnWidth * columnCount;
+  if (totalWidth <= minimumTotal) {
+    return Array.from({ length: columnCount }, () => Math.round(minColumnWidth));
+  }
+
+  if (!ratioWidths) {
+    return roundColumnWidths(Array.from({ length: columnCount }, () => totalWidth / columnCount), Math.round(totalWidth));
+  }
+
+  const weights = ratioWidths.map((width) => Math.max(0, width));
+  const totalWeight = weights.reduce((sum, value) => sum + value, 0);
+  if (totalWeight <= 0) {
+    return roundColumnWidths(Array.from({ length: columnCount }, () => totalWidth / columnCount), Math.round(totalWidth));
+  }
+
+  const widths = weights.map((weight) => totalWidth * (weight / totalWeight));
+  const fixed = new Set<number>();
+
+  while (true) {
+    let changed = false;
+    for (let index = 0; index < widths.length; index += 1) {
+      if (!fixed.has(index) && widths[index]! < minColumnWidth) {
+        widths[index] = minColumnWidth;
+        fixed.add(index);
+        changed = true;
+      }
+    }
+
+    if (!changed) break;
+
+    const fixedTotal = Array.from(fixed).reduce((sum, index) => sum + widths[index]!, 0);
+    const remainingWidth = totalWidth - fixedTotal;
+    const remainingWeight = weights.reduce((sum, weight, index) => fixed.has(index) ? sum : sum + weight, 0);
+    if (remainingWidth <= 0 || remainingWeight <= 0) break;
+
+    for (let index = 0; index < widths.length; index += 1) {
+      if (!fixed.has(index)) {
+        widths[index] = remainingWidth * (weights[index]! / remainingWeight);
+      }
+    }
+  }
+
+  return roundColumnWidths(widths, Math.round(totalWidth));
+}
+
+function roundColumnWidths(widths: number[], targetWidth: number): number[] {
+  const rounded = widths.map((width) => Math.max(1, Math.round(width)));
+  const delta = targetWidth - rounded.reduce((sum, width) => sum + width, 0);
+  if (rounded.length > 0) {
+    rounded[rounded.length - 1] = Math.max(1, rounded[rounded.length - 1]! + delta);
+  }
+  return rounded;
 }
 
 function replaceTableAndSelectRow(

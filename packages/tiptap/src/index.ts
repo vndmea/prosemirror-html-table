@@ -42,11 +42,14 @@ export {
 
 export { defaultHtmlTableTiptapOptions } from './options.js';
 export type {
+  DistributeHtmlTableColumnsOptions,
+  FitHtmlTableToWidthOptions,
   HtmlTableCellNavigationOptions,
   HtmlTableCommandOptions,
   InsertHtmlTableCommandOptions,
   MoveHtmlTableColumnToIndexOptions,
   MoveHtmlTableRowToIndexOptions,
+  SetHtmlTableColumnWidthOptions,
 } from './commands.js';
 export type {
   HtmlTableContextAction,

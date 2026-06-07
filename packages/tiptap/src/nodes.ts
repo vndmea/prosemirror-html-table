@@ -37,6 +37,23 @@ export const HtmlTable = Node.create<HtmlTableTiptapOptions>({
     return createHtmlTableCommands();
   },
 
+  addAttributes() {
+    return {
+      width: {
+        default: null,
+        parseHTML: (element) => element.getAttribute('width') ?? (element.style.width || null),
+        renderHTML: (attrs) => {
+          if (!attrs.width) return {};
+          const width = String(attrs.width);
+          return {
+            width,
+            style: `width: ${/^\d+(\.\d+)?$/.test(width) ? `${width}px` : width}`,
+          };
+        },
+      },
+    };
+  },
+
   addKeyboardShortcuts() {
     const moveSelection =
       (direction: 'left' | 'right' | 'up' | 'down') =>

@@ -1,4 +1,6 @@
 import type { RawCommands } from '@tiptap/core';
+import { NodeSelection, type EditorState } from '@tiptap/pm/state';
+import type { EditorView } from '@tiptap/pm/view';
 import {
   addFootSection as addCoreFootSection,
   addHeadSection as addCoreHeadSection,
@@ -13,6 +15,7 @@ import {
   clearRowContent as clearCoreRowContent,
   clearSelectedCells as clearCoreSelectedCells,
   deleteColumn as deleteCoreColumn,
+  distributeColumns as distributeCoreColumns,
   duplicateColumn as duplicateCoreColumn,
   duplicateRow as duplicateCoreRow,
   removeColgroup as removeCoreColgroup,
@@ -23,6 +26,7 @@ import {
   goToNextCell as goToCoreNextCell,
   goToPreviousCell as goToCorePreviousCell,
   insertHtmlTable as insertCoreHtmlTable,
+  fitTableToWidth as fitCoreTableToWidth,
   mergeCells as mergeCoreCells,
   mergeOrSplit as mergeOrSplitCoreCells,
   moveColumnToIndex as moveCoreColumnToIndex,
@@ -42,6 +46,7 @@ import {
   selectTable as selectCoreTable,
   setColgroup as setCoreColgroup,
   setCaption as setCoreCaption,
+  setColumnWidth as setCoreColumnWidth,
   setCellAttribute as setCoreCellAttribute,
   setCellBackgroundColor as setCoreCellBackgroundColor,
   setCellTextAlign as setCoreCellTextAlign,
@@ -51,14 +56,19 @@ import {
   toggleHeaderCell as toggleCoreHeaderCell,
   toggleHeaderColumn as toggleCoreHeaderColumn,
   toggleHeaderRow as toggleCoreHeaderRow,
+  type DistributeHtmlTableColumnsOptions,
+  type FitHtmlTableToWidthOptions,
   type HtmlTableCellNavigationOptions,
   type HtmlTableCommandOptions,
   type MoveHtmlTableColumnToIndexOptions,
   type MoveHtmlTableRowToIndexOptions,
+  type SetHtmlTableColumnWidthOptions,
   type InsertHtmlTableCommandOptions,
   type HtmlTableSectionTargetOptions,
   type HtmlTableSortRowsOptions,
 } from 'prosemirror-html-table';
+
+import { getRenderedHtmlTableContext } from './table-dom.js';
 
 declare module '@tiptap/core' {
   interface Commands<ReturnType> {
@@ -95,6 +105,9 @@ declare module '@tiptap/core' {
       moveHtmlTableRowToFoot: (options?: HtmlTableSectionTargetOptions) => ReturnType;
       setHtmlTableCaption: (text: string, options?: HtmlTableCommandOptions) => ReturnType;
       setHtmlTableColgroup: (widths?: Array<number | null>, options?: HtmlTableCommandOptions) => ReturnType;
+      fitHtmlTableToWidth: (options?: FitHtmlTableToWidthOptions) => ReturnType;
+      distributeHtmlTableColumns: (options?: DistributeHtmlTableColumnsOptions) => ReturnType;
+      setHtmlTableColumnWidth: (options: SetHtmlTableColumnWidthOptions) => ReturnType;
       setHtmlTableCellTextAlign: (textAlign: string | null, options?: HtmlTableCommandOptions) => ReturnType;
       setHtmlTableCellBackgroundColor: (backgroundColor: string | null, options?: HtmlTableCommandOptions) => ReturnType;
       setHtmlTableCellVerticalAlign: (verticalAlign: string | null, options?: HtmlTableCommandOptions) => ReturnType;
@@ -280,6 +293,27 @@ export function createHtmlTableCommands(): Partial<RawCommands> {
       ({ state, dispatch }) =>
         setCoreColgroup(widths, options)(state, dispatch),
 
+    fitHtmlTableToWidth:
+      (options: FitHtmlTableToWidthOptions = {}) =>
+      ({ state, dispatch, view }) => {
+        const width = options.width ?? measureHtmlTableContentWidth(state, view, options);
+        if (width === null) return false;
+        return fitCoreTableToWidth({ ...options, width })(state, dispatch);
+      },
+
+    distributeHtmlTableColumns:
+      (options: DistributeHtmlTableColumnsOptions = {}) =>
+      ({ state, dispatch, view }) => {
+        const width = options.width ?? measureHtmlTableContentWidth(state, view, options);
+        if (width === null) return false;
+        return distributeCoreColumns({ ...options, width })(state, dispatch);
+      },
+
+    setHtmlTableColumnWidth:
+      (options: SetHtmlTableColumnWidthOptions) =>
+      ({ state, dispatch }) =>
+        setCoreColumnWidth(options)(state, dispatch),
+
     setHtmlTableCellTextAlign:
       (textAlign: string | null, options?: HtmlTableCommandOptions) =>
       ({ state, dispatch }) =>
@@ -378,9 +412,59 @@ export function createHtmlTableCommands(): Partial<RawCommands> {
 }
 
 export type {
+  DistributeHtmlTableColumnsOptions,
+  FitHtmlTableToWidthOptions,
   HtmlTableCellNavigationOptions,
   HtmlTableCommandOptions,
   InsertHtmlTableCommandOptions,
   MoveHtmlTableColumnToIndexOptions,
   MoveHtmlTableRowToIndexOptions,
+  SetHtmlTableColumnWidthOptions,
 } from 'prosemirror-html-table';
+
+function measureHtmlTableContentWidth(
+  state: EditorState,
+  view: EditorView | undefined,
+  options: HtmlTableCommandOptions,
+): number | null {
+  if (!view) return null;
+
+  const tablePos = options.tablePos ?? findHtmlTablePos(state);
+  if (tablePos === null) return null;
+
+  const context = getRenderedHtmlTableContext(view, tablePos);
+  if (!context) return null;
+
+  const parent = context.wrapper.parentElement;
+  const measuredElement = parent ?? context.wrapper;
+  const measuredWidth = getElementContentWidth(measuredElement);
+  if (measuredWidth > 0) return measuredWidth;
+
+  const fallbackWidth = context.dom.getBoundingClientRect().width;
+  return fallbackWidth > 0 ? fallbackWidth : null;
+}
+
+function findHtmlTablePos(state: EditorState): number | null {
+  const { selection } = state;
+  if (selection instanceof NodeSelection && selection.node.type.name === 'htmlTable') {
+    return selection.from;
+  }
+
+  const $from = selection.$from;
+  for (let depth = $from.depth; depth > 0; depth -= 1) {
+    if ($from.node(depth).type.name === 'htmlTable') {
+      return $from.before(depth);
+    }
+  }
+
+  return null;
+}
+
+function getElementContentWidth(element: HTMLElement): number {
+  const styles = element.ownerDocument.defaultView?.getComputedStyle(element);
+  const paddingLeft = styles ? Number.parseFloat(styles.paddingLeft) || 0 : 0;
+  const paddingRight = styles ? Number.parseFloat(styles.paddingRight) || 0 : 0;
+  const borderLeft = styles ? Number.parseFloat(styles.borderLeftWidth) || 0 : 0;
+  const borderRight = styles ? Number.parseFloat(styles.borderRightWidth) || 0 : 0;
+  return element.clientWidth - paddingLeft - paddingRight - borderLeft - borderRight;
+}

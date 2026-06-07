@@ -51,8 +51,25 @@ function createTableSpec(config: NormalizedHtmlTableSchemaOptions): NodeSpec {
     content: `${names.caption}? ${names.colgroup}? ${names.head}? ${names.body}+ ${names.foot}?`,
     tableRole: 'table',
     isolating: true,
-    parseDOM: [{ tag: 'table' }],
-    toDOM: () => ['table', 0],
+    attrs: {
+      width: { default: null },
+    },
+    parseDOM: [
+      {
+        tag: 'table',
+        getAttrs: (dom) => {
+          const element = dom as HTMLElement;
+          return {
+            width: element.getAttribute('width') ?? (element.style.width || null),
+          };
+        },
+      },
+    ],
+    toDOM: (node) => {
+      const attrs: Record<string, string> = {};
+      if (node.attrs.width) attrs.width = String(node.attrs.width);
+      return ['table', attrs, 0];
+    },
   };
 }
 

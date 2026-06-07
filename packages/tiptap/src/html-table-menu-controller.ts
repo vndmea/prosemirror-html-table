@@ -1,6 +1,11 @@
 import { NodeSelection } from '@tiptap/pm/state';
+import type { EditorState } from '@tiptap/pm/state';
 import type { EditorView } from '@tiptap/pm/view';
-import { CellSelection } from 'prosemirror-html-table';
+import {
+  CellSelection,
+  distributeColumns,
+  fitTableToWidth,
+} from 'prosemirror-html-table';
 
 import {
   getHtmlTableContextActionMenuItemState,
@@ -25,6 +30,7 @@ import {
   getHtmlTableSelectionScope,
   type HtmlTableSelectionScope,
 } from './html-table-overlay-geometry.js';
+import { getRenderedHtmlTableContext } from './table-dom.js';
 import {
   createColumnSelectionTransaction,
   createRowSelectionTransaction,
@@ -1324,6 +1330,11 @@ export class HtmlTableMenuController {
     event.stopPropagation();
 
     const { state, interaction } = this.getContextMenuActionInvocation();
+    if (this.runMeasuredTableWidthAction(actionId as HtmlTableContextActionId, state, interaction)) {
+      this.view.focus();
+      return;
+    }
+
     runHtmlTableContextMenuAction(state, interaction, actionId as HtmlTableContextActionId, (transaction) => {
       this.contextMenuContext = null;
       this.restoreContextMenuFocusOnClose = false;
@@ -1337,6 +1348,60 @@ export class HtmlTableMenuController {
       );
     });
     this.view.focus();
+  }
+
+  private runMeasuredTableWidthAction(
+    actionId: HtmlTableContextActionId,
+    state: EditorState,
+    interaction: HtmlTableInteractionState,
+  ): boolean {
+    if (actionId !== 'fitTableToWidth' && actionId !== 'distributeColumns') {
+      return false;
+    }
+
+    const tablePos = interaction.activeTable?.tablePos;
+    if (tablePos === undefined) {
+      return false;
+    }
+
+    const width = this.measureTableContentWidth(tablePos);
+    if (width === null) {
+      return false;
+    }
+
+    const command = actionId === 'fitTableToWidth'
+      ? fitTableToWidth({ tablePos, width })
+      : distributeColumns({ tablePos, width });
+
+    return command(state, (transaction) => {
+      this.contextMenuContext = null;
+      this.restoreContextMenuFocusOnClose = false;
+      this.openContextSubmenuId = null;
+      this.focusFirstSubmenuActionOnOpen = false;
+      this.submenuTriggerToFocus = null;
+      this.view.dispatch(
+        transaction.setMeta(htmlTableInteractionPluginKey, {
+          contextMenuOpen: false,
+        }),
+      );
+    });
+  }
+
+  private measureTableContentWidth(tablePos: number): number | null {
+    const context = getRenderedHtmlTableContext(this.view, tablePos);
+    if (!context) return null;
+
+    const measuredElement = context.wrapper.parentElement ?? context.wrapper;
+    const styles = measuredElement.ownerDocument.defaultView?.getComputedStyle(measuredElement);
+    const paddingLeft = styles ? Number.parseFloat(styles.paddingLeft) || 0 : 0;
+    const paddingRight = styles ? Number.parseFloat(styles.paddingRight) || 0 : 0;
+    const borderLeft = styles ? Number.parseFloat(styles.borderLeftWidth) || 0 : 0;
+    const borderRight = styles ? Number.parseFloat(styles.borderRightWidth) || 0 : 0;
+    const contentWidth = measuredElement.clientWidth - paddingLeft - paddingRight - borderLeft - borderRight;
+    if (contentWidth > 0) return contentWidth;
+
+    const fallbackWidth = context.dom.getBoundingClientRect().width;
+    return fallbackWidth > 0 ? fallbackWidth : null;
   }
 }
 

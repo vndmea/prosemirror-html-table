@@ -104,7 +104,8 @@ Rows:        addRowBefore, addRowAfter, addRowToHead, addRowToBody, addRowToFoot
              deleteRow, duplicateRow, moveRowUp, moveRowDown,
              moveRowToHead, moveRowToBody, moveRowToFoot
 Columns:     addColumnBefore, addColumnAfter, deleteColumn, duplicateColumn,
-             moveColumnLeft, moveColumnRight
+             moveColumnLeft, moveColumnRight, setColumnWidth,
+             fitTableToWidth, distributeColumns
 Sections:    addHeadSection, removeHeadSection, addFootSection, removeFootSection
 HTML parts:  setCaption, removeCaption, setColgroup, removeColgroup
 Cells:       mergeCells, splitCell, mergeOrSplit, clearSelectedCells,
@@ -133,6 +134,7 @@ The Tiptap package now includes:
 - nested context menus for cell, row, and column actions
 - row and column extend controls
 - column resize handles with drag preview
+- table width fitting and even column distribution from the table menu
 - persisted colgroup / colwidth state
 - cell, row, column, and table selection visuals
 - native text selection inside cells
@@ -167,6 +169,8 @@ Available options:
 ```
 
 Row and column handles support drag reorder by default. Cross-section row drag stays disabled unless `allowCrossSectionRowDrag` is enabled.
+
+Use `editor.commands.fitHtmlTableToWidth()` to measure the current table wrapper and persist table width plus `colgroup` / `colwidth` values. Use `editor.commands.distributeHtmlTableColumns()` to assign equal column widths.
 
 Keyboard shortcuts:
 

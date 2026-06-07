@@ -12,8 +12,10 @@ import {
   deleteColumn,
   deleteRow,
   deleteTable,
+  distributeColumns,
   duplicateColumn,
   duplicateRow,
+  fitTableToWidth,
   mergeCells,
   moveColumnLeft,
   moveColumnRight,
@@ -36,6 +38,8 @@ import {
   toggleHeaderCell,
   toggleHeaderColumn,
   toggleHeaderRow,
+  type DistributeHtmlTableColumnsOptions,
+  type FitHtmlTableToWidthOptions,
   type HtmlTableCommandOptions,
 } from 'prosemirror-html-table';
 
@@ -54,6 +58,8 @@ export type HtmlTableContextActionId =
   | 'deleteTable'
   | 'toggleCaption'
   | 'toggleColgroup'
+  | 'fitTableToWidth'
+  | 'distributeColumns'
   | 'toggleHeadSection'
   | 'toggleFootSection'
   | 'addRowBefore'
@@ -119,6 +125,11 @@ export interface HtmlTableContextActionGroup {
 
 export type HtmlTableContextActionMenuItemRole = 'menuitem';
 
+export type HtmlTableContextActionOptions =
+  FitHtmlTableToWidthOptions &
+  DistributeHtmlTableColumnsOptions &
+  HtmlTableCommandOptions;
+
 export interface HtmlTableContextActionMenuItemState {
   role: HtmlTableContextActionMenuItemRole;
   checked: boolean | null;
@@ -131,7 +142,7 @@ export interface HtmlTableContextActionShortcutState {
 export function getHtmlTableContextActions(
   state: EditorState,
   interaction: HtmlTableInteractionState,
-  options: HtmlTableCommandOptions = {},
+  options: HtmlTableContextActionOptions = {},
 ): HtmlTableContextAction[] {
   const table = interaction.activeTable?.table;
   const tablePos = interaction.activeTable?.tablePos ?? null;
@@ -164,6 +175,8 @@ export function getHtmlTableContextActions(
         state,
         { active: hasColgroup },
       ),
+      createAction('fitTableToWidth', scope, fitTableToWidth(options), state),
+      createAction('distributeColumns', scope, distributeColumns(options), state),
       createAction(
         'toggleHeadSection',
         scope,
@@ -343,7 +356,7 @@ export function getHtmlTableContextActions(
 
 export function getHtmlTableContextActionCommand(
   action: HtmlTableContextAction,
-  options: HtmlTableCommandOptions = {},
+  options: HtmlTableContextActionOptions = {},
 ): Command {
   switch (action.id) {
     case 'deleteTable':
@@ -352,6 +365,10 @@ export function getHtmlTableContextActionCommand(
       return resolveTableScopeCommand(action.id, Boolean(action.active), options);
     case 'toggleColgroup':
       return resolveTableScopeCommand(action.id, Boolean(action.active), options);
+    case 'fitTableToWidth':
+      return fitTableToWidth(options);
+    case 'distributeColumns':
+      return distributeColumns(options);
     case 'toggleHeadSection':
       return resolveTableScopeCommand(action.id, Boolean(action.active), options);
     case 'toggleFootSection':
@@ -433,7 +450,7 @@ export function runHtmlTableContextAction(
   state: EditorState,
   action: HtmlTableContextAction,
   dispatch?: Parameters<Command>[1],
-  options: HtmlTableCommandOptions = {},
+  options: HtmlTableContextActionOptions = {},
   interaction?: HtmlTableInteractionState,
 ): boolean {
   const command = getHtmlTableContextActionCommand(action, options);
@@ -511,7 +528,7 @@ export function getHtmlTableContextActionShortcutState(
 function resolveTableScopeCommand(
   id: Extract<HtmlTableContextActionId, 'deleteTable' | 'toggleCaption' | 'toggleColgroup' | 'toggleHeadSection' | 'toggleFootSection'>,
   active: boolean,
-  options: HtmlTableCommandOptions,
+  options: HtmlTableContextActionOptions,
 ): Command {
   const baseCommand =
     id === 'deleteTable'
@@ -688,6 +705,8 @@ const ACTION_LABELS: Record<HtmlTableContextActionId, string> = {
   deleteTable: 'Delete table',
   toggleCaption: 'Toggle caption',
   toggleColgroup: 'Toggle colgroup',
+  fitTableToWidth: 'Fit table to width',
+  distributeColumns: 'Distribute columns evenly',
   toggleHeadSection: 'Toggle header section',
   toggleFootSection: 'Toggle footer section',
   addRowBefore: 'Add row before',
@@ -731,6 +750,8 @@ const ACTION_GROUPS: Record<HtmlTableContextActionId, HtmlTableContextActionGrou
   deleteTable: 'danger',
   toggleCaption: 'table',
   toggleColgroup: 'table',
+  fitTableToWidth: 'table',
+  distributeColumns: 'table',
   toggleHeadSection: 'table',
   toggleFootSection: 'table',
   addRowBefore: 'insert',
@@ -817,6 +838,8 @@ const PRIMARY_ACTION_ORDER: HtmlTableContextActionId[] = [
   'mergeCells',
   'splitCell',
   'toggleColgroup',
+  'fitTableToWidth',
+  'distributeColumns',
   'toggleFootSection',
   'duplicateRow',
   'duplicateColumn',

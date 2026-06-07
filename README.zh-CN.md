@@ -104,7 +104,8 @@ const firstCellRect = tableMap.findCell(tableMap.map[0]!);
           deleteRow、duplicateRow、moveRowUp、moveRowDown、
           moveRowToHead、moveRowToBody、moveRowToFoot
 列：      addColumnBefore、addColumnAfter、deleteColumn、duplicateColumn、
-          moveColumnLeft、moveColumnRight
+          moveColumnLeft、moveColumnRight、setColumnWidth、
+          fitTableToWidth、distributeColumns
 Section： addHeadSection、removeHeadSection、addFootSection、removeFootSection
 HTML：    setCaption、removeCaption、setColgroup、removeColgroup
 单元格：  mergeCells、splitCell、mergeOrSplit、clearSelectedCells、
@@ -133,6 +134,7 @@ Tiptap 包目前包含：
 - 单元格、行和列操作的多级上下文菜单
 - 行列扩展控件
 - 带拖拽预览的列宽调整手柄
+- 表格菜单中的适配宽度与平均分配列宽
 - 持久化的 colgroup / colwidth 状态
 - 单元格、行、列和整表的选择视觉效果
 - 单元格内的原生文字选择
@@ -167,6 +169,8 @@ Tiptap 包目前包含：
 ```
 
 默认支持通过行/列 handle 拖拽重排；只有在开启 `allowCrossSectionRowDrag` 时，行才允许跨 `thead` / `tbody` / `tfoot` 拖动。
+
+可用 `editor.commands.fitHtmlTableToWidth()` 测量当前 table wrapper，并持久化 table width 与 `colgroup` / `colwidth`；可用 `editor.commands.distributeHtmlTableColumns()` 平均分配列宽。
 
 快捷键：
 

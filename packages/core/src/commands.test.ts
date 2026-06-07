@@ -19,12 +19,14 @@ import {
   createHtmlTableNode,
   createHtmlTableNodeSpecs,
   deleteColumn,
+  distributeColumns,
   removeColgroup,
   deleteRow,
   deleteTable,
   duplicateColumn,
   duplicateRow,
   fixTables,
+  fitTableToWidth,
   goToNextCell,
   goToPreviousCell,
   insertHtmlTable,
@@ -53,6 +55,7 @@ import {
   setCellBackgroundColor,
   setCellTextAlign,
   setCellVerticalAlign,
+  setColumnWidth,
   splitCell,
   sortBodyRowsByColumn,
   toggleHeaderCell,
@@ -441,6 +444,45 @@ describe('html table commands', () => {
 
     expect(nextTable.child(0).type.name).toBe('htmlTableCaption');
     expect(nextTable.child(1).type.name).toBe('htmlTableBody');
+  });
+
+  it('fits a table to a target width and preserves column ratios', () => {
+    const stateWithColgroup = applyCommand(createStateWithTable(2, 2), setColgroup([100, 300]));
+    const nextState = applyCommand(stateWithColgroup, fitTableToWidth({ width: 800, minColumnWidth: 80 }));
+    const table = getTable(nextState.doc);
+    const colgroup = getSection(table, 'htmlTableColgroup');
+    const firstRow = getBody(table).child(0);
+
+    expect(table.attrs.width).toBe(800);
+    expect(colgroup?.child(0).attrs.width).toBe(200);
+    expect(colgroup?.child(1).attrs.width).toBe(600);
+    expect(firstRow.child(0).attrs.colwidth).toEqual([200]);
+    expect(firstRow.child(1).attrs.colwidth).toEqual([600]);
+  });
+
+  it('distributes table columns evenly', () => {
+    const stateWithColgroup = applyCommand(createStateWithTable(2, 3), setColgroup([120, 240, 360]));
+    const nextState = applyCommand(stateWithColgroup, distributeColumns({ width: 900 }));
+    const colgroup = getSection(getTable(nextState.doc), 'htmlTableColgroup');
+
+    expect(colgroup?.child(0).attrs.width).toBe(300);
+    expect(colgroup?.child(1).attrs.width).toBe(300);
+    expect(colgroup?.child(2).attrs.width).toBe(300);
+  });
+
+  it('sets a single column width and updates the table width', () => {
+    const stateWithColgroup = applyCommand(createStateWithTable(2, 2), setColgroup([180, 220]));
+    const nextState = applyCommand(stateWithColgroup, setColumnWidth({ columnIndex: 1, width: 320 }));
+    const table = getTable(nextState.doc);
+    const colgroup = getSection(table, 'htmlTableColgroup');
+
+    expect(table.attrs.width).toBe(500);
+    expect(colgroup?.child(0).attrs.width).toBe(180);
+    expect(colgroup?.child(1).attrs.width).toBe(320);
+  });
+
+  it('does not fit a table when the target width cannot be resolved', () => {
+    expect(fitTableToWidth({ width: '80%' })(createStateWithTable(2, 2))).toBe(false);
   });
 
   it('moves the selected row into the table head and converts cells to headers', () => {
