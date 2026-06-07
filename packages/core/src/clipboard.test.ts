@@ -1,5 +1,5 @@
 import { Fragment, Schema, type MarkSpec, type Node as ProseMirrorNode } from 'prosemirror-model';
-import { EditorState, NodeSelection } from 'prosemirror-state';
+import { EditorState, NodeSelection, TextSelection } from 'prosemirror-state';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -127,6 +127,30 @@ describe('html table clipboard helpers', () => {
     expect(html).toContain('<tfoot>');
   });
 
+  it('serializes and parses clipboard payloads without relying on Buffer', () => {
+    const originalBuffer = globalThis.Buffer;
+    const table = createHtmlTableNode(schema, { rows: 1, cols: 2, withHeaderRow: false });
+    const state = createStateForTable(withCellTexts(table, ['A', 'B']));
+    const cellPositions = findNodePositions(state.doc, 'htmlTableCell');
+    const selectedState = EditorState.create({
+      schema,
+      doc: state.doc,
+      selection: CellSelection.create(state.doc, cellPositions[0]!, cellPositions[1]!),
+    });
+
+    try {
+      // Simulate the browser runtime where Node's Buffer global is unavailable.
+      Reflect.set(globalThis, 'Buffer', undefined);
+      const html = serializeCellSelectionToHtmlTable(selectedState);
+      const parsed = parseHtmlTableClipboard(html!, schema);
+
+      expect(html).toContain('data-pmht-clipboard=');
+      expect(parsed?.rows[0]?.map((cell) => cell.text ?? cell.content?.textBetween(0, cell.content.size, '\n', ' '))).toEqual(['A', 'B']);
+    } finally {
+      Reflect.set(globalThis, 'Buffer', originalBuffer);
+    }
+  });
+
   it('applies TSV clipboard data to the selected cells', () => {
     const table = createHtmlTableNode(schema, { rows: 3, cols: 3, withHeaderRow: false });
     const state = createStateForTable(withCellTexts(table, ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i']));
@@ -145,6 +169,38 @@ describe('html table clipboard helpers', () => {
 
     expect(result).toBe(true);
     expect(getCellTexts(nextState.doc)).toEqual(['X', 'Y', 'c', 'Z', 'W', 'f', 'g', 'h', 'i']);
+  });
+
+  it('pastes from a multi-cell clipboard into the cell that contains a text cursor', () => {
+    const table = createHtmlTableNode(schema, { rows: 1, cols: 4, withHeaderRow: false });
+    const sourceState = createStateForTable(withCellTexts(table, ['A', 'B', 'C', 'D']));
+    const cellPositions = findNodePositions(sourceState.doc, 'htmlTableCell');
+    const copiedState = EditorState.create({
+      schema,
+      doc: sourceState.doc,
+      selection: CellSelection.create(sourceState.doc, cellPositions[0]!, cellPositions[1]!),
+    });
+    const html = serializeCellSelectionToHtmlTable(copiedState)!;
+    const clipboard = parseHtmlTableClipboard(html, schema)!;
+    let nextState = EditorState.create({
+      schema,
+      doc: sourceState.doc,
+      selection: TextSelection.near(sourceState.doc.resolve(cellPositions[2]! + 1)),
+    });
+
+    const result = applyTableClipboardToSelection(nextState, (tr) => {
+      nextState = nextState.apply(tr);
+    }, clipboard);
+
+    expect(result).toBe(true);
+    expect(getCellTexts(nextState.doc)).toEqual(['A', 'B', 'A', 'B']);
+    expect(nextState.selection).toBeInstanceOf(CellSelection);
+    if (nextState.selection instanceof CellSelection) {
+      expect([nextState.selection.anchorCellPos, nextState.selection.headCellPos]).toEqual([
+        cellPositions[2]!,
+        cellPositions[3]!,
+      ]);
+    }
   });
 
   it('reports whole-table cell selections and exposes a selection matrix', () => {

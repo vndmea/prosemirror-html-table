@@ -315,7 +315,7 @@ function serializeClipboardRows(rows: ParsedClipboardCell[][]): SerializedClipbo
 }
 
 function encodeClipboardPayload(payload: SerializedClipboardPayload): string {
-  return Buffer.from(JSON.stringify(payload), 'utf8').toString('base64url');
+  return encodeBase64UrlUtf8(JSON.stringify(payload));
 }
 
 function extractClipboardPayload(html: string): string | null {
@@ -328,7 +328,7 @@ function decodeClipboardPayload(payload: string | null, schema: Schema): ParsedT
   if (!payload) return null;
 
   try {
-    const decoded = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8')) as SerializedClipboardPayload;
+    const decoded = JSON.parse(decodeBase64UrlUtf8(payload)) as SerializedClipboardPayload;
     const rows = decoded.rows.map((row) =>
       row.map<ParsedClipboardCell>((cell) => {
         const parsed: ParsedClipboardCell = {
@@ -753,6 +753,9 @@ function findCurrentCell(
   selection: Selection,
   cellPositions: Map<HtmlTableCellRef, number>,
 ): HtmlTableCellRef | undefined {
+  const ancestorCell = findAncestorCell(grid, selection, cellPositions);
+  if (ancestorCell) return ancestorCell;
+
   const selectedNode = selection.$from.parent;
   return (
     grid.cells.find((cell) => cell.node === selectedNode)
@@ -762,6 +765,29 @@ function findCurrentCell(
     })
     ?? grid.cells[0]
   );
+}
+
+function findAncestorCell(
+  grid: HtmlTableGrid,
+  selection: Selection,
+  cellPositions: Map<HtmlTableCellRef, number>,
+): HtmlTableCellRef | undefined {
+  for (let depth = selection.$from.depth; depth > 0; depth -= 1) {
+    const node = selection.$from.node(depth);
+    if (node.type.name !== htmlTableNodeNames.cell && node.type.name !== htmlTableNodeNames.headerCell) continue;
+
+    const cellPos = selection.$from.before(depth);
+    return (
+      grid.cells.find((cell) => cell.node === node && cellPositions.get(cell) === cellPos)
+      ?? grid.cells.find((cell) => {
+        const pos = cellPositions.get(cell);
+        return typeof pos === 'number' && pos === cellPos;
+      })
+      ?? grid.cells.find((cell) => cell.node === node)
+    );
+  }
+
+  return undefined;
 }
 
 function findCellByPosition(
@@ -937,4 +963,58 @@ function escapeHtml(value: string): string {
 
 function escapeHtmlAttribute(value: string): string {
   return escapeHtml(value);
+}
+
+function encodeBase64UrlUtf8(value: string): string {
+  if (typeof btoa === 'function' && typeof TextEncoder !== 'undefined') {
+    const bytes = new TextEncoder().encode(value);
+    return toBase64Url(btoa(bytesToBinaryString(bytes)));
+  }
+
+  if (typeof globalThis.Buffer !== 'undefined') {
+    return globalThis.Buffer.from(value, 'utf8').toString('base64url');
+  }
+
+  throw new Error('No base64 encoder available for clipboard payload serialization.');
+}
+
+function decodeBase64UrlUtf8(value: string): string {
+  if (typeof atob === 'function' && typeof TextDecoder !== 'undefined') {
+    const binary = atob(fromBase64Url(value));
+    return new TextDecoder().decode(binaryStringToBytes(binary));
+  }
+
+  if (typeof globalThis.Buffer !== 'undefined') {
+    return globalThis.Buffer.from(value, 'base64url').toString('utf8');
+  }
+
+  throw new Error('No base64 decoder available for clipboard payload parsing.');
+}
+
+function toBase64Url(base64: string): string {
+  return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/u, '');
+}
+
+function fromBase64Url(base64Url: string): string {
+  const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+  const padding = base64.length % 4;
+  return padding === 0 ? base64 : `${base64}${'='.repeat(4 - padding)}`;
+}
+
+function bytesToBinaryString(bytes: Uint8Array): string {
+  const chunkSize = 0x8000;
+  let binary = '';
+  for (let index = 0; index < bytes.length; index += chunkSize) {
+    const chunk = bytes.subarray(index, index + chunkSize);
+    binary += String.fromCharCode(...chunk);
+  }
+  return binary;
+}
+
+function binaryStringToBytes(binary: string): Uint8Array {
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+  return bytes;
 }

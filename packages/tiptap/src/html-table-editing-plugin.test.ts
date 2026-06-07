@@ -1,5 +1,5 @@
 import { Fragment, Schema, type Node as ProseMirrorNode } from '@tiptap/pm/model';
-import { EditorState } from '@tiptap/pm/state';
+import { EditorState, TextSelection } from '@tiptap/pm/state';
 import type { EditorView } from '@tiptap/pm/view';
 import { describe, expect, it } from 'vitest';
 
@@ -74,6 +74,37 @@ describe('html table editing plugin', () => {
     expect(event.prevented).toBe(true);
     expect(getCellTexts(view.state.doc)).toEqual(['X', 'Y', 'Z', 'W']);
   });
+
+  it('pastes into the cell that contains the current text cursor', () => {
+    const plugin = createHtmlTableEditingPlugin(defaultHtmlTableTiptapOptions);
+    const sourceState = createStateWithSelection(['A', 'B', 'C', 'D'], [0, 1]);
+    const copyView = createView(sourceState);
+    const copyEvent = createClipboardEvent();
+
+    const copied = plugin.props.handleDOMEvents?.copy?.call(plugin, copyView, copyEvent as unknown as ClipboardEvent);
+    expect(copied).toBe(true);
+
+    const targetState = createStateWithTextCursor(['A', 'B', 'C', 'D'], 2);
+    const targetView = createView(targetState);
+    const pasteEvent = createClipboardEvent({
+      html: copyEvent.clipboardData.getData('text/html'),
+      plain: copyEvent.clipboardData.getData('text/plain'),
+    });
+
+    const handled = plugin.props.handleDOMEvents?.paste?.call(plugin, targetView, pasteEvent as unknown as ClipboardEvent);
+
+    expect(handled).toBe(true);
+    expect(pasteEvent.prevented).toBe(true);
+    expect(getCellTexts(targetView.state.doc)).toEqual(['A', 'B', 'A', 'B']);
+    expect(targetView.state.selection).toBeInstanceOf(CellSelection);
+    if (targetView.state.selection instanceof CellSelection) {
+      const cellPositions = findNodePositions(targetView.state.doc, 'htmlTableCell');
+      expect([targetView.state.selection.anchorCellPos, targetView.state.selection.headCellPos]).toEqual([
+        cellPositions[2]!,
+        cellPositions[3]!,
+      ]);
+    }
+  });
 });
 
 function createStateWithSelection(texts: string[], selection: [number, number]): EditorState {
@@ -84,6 +115,17 @@ function createStateWithSelection(texts: string[], selection: [number, number]):
     schema,
     doc,
     selection: CellSelection.create(doc, cellPositions[selection[0]]!, cellPositions[selection[1]]!),
+  });
+}
+
+function createStateWithTextCursor(texts: string[], cellIndex: number): EditorState {
+  const table = withCellTexts(createHtmlTableNode(schema, { rows: 2, cols: 2, withHeaderRow: false }), texts);
+  const doc = schema.nodes.doc!.create(null, [table]);
+  const cellPositions = findNodePositions(doc, 'htmlTableCell');
+  return EditorState.create({
+    schema,
+    doc,
+    selection: TextSelection.near(doc.resolve(cellPositions[cellIndex]! + 1)),
   });
 }
 
