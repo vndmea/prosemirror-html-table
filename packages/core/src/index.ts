@@ -62,12 +62,26 @@ export {
   toggleHeaderColumn,
   toggleHeaderRow,
 } from './commands.js';
+export {
+  applyTableClipboardToSelection,
+  clearSelectedCells as clearClipboardSelectedCells,
+  forEachSelectedCell,
+  getBottomRightCell,
+  getSelectionMatrix,
+  getTopLeftCell,
+  isWholeTableSelection,
+  parseHtmlTableClipboard,
+  parsePlainTextTableClipboard,
+  selectedCells,
+  serializeCellSelectionToHtmlTable,
+  serializeCellSelectionToText,
+} from './clipboard.js';
 export { htmlTableNodeNames } from './names.js';
 export { createHtmlTableGrid, getCellAt, isCellAnchor } from './grid.js';
 export { HtmlTableMap } from './table-map.js';
 export { normalizeHtmlTable } from './normalize.js';
 export { createHtmlTableNodeSpecs, normalizeHtmlTableSchemaOptions } from './schema.js';
-export { CellSelection } from './selection.js';
+export { CellSelection, isCellSelection } from './selection.js';
 
 export type { CreateHtmlTableOptions } from './builders.js';
 export type {
@@ -82,6 +96,7 @@ export type {
   InsertHtmlTableCommandOptions,
   HtmlTableSortRowsOptions,
 } from './commands.js';
+export type { ApplyTableClipboardOptions, ParsedClipboardCell, ParsedTableClipboard } from './clipboard.js';
 export type { NormalizeHtmlTableOptions } from './normalize.js';
 export type { HtmlTableNodeNameKey } from './names.js';
 

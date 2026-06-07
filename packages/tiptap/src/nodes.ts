@@ -7,6 +7,7 @@ import {
 } from 'prosemirror-html-table';
 
 import { createHtmlTableCommands } from './commands.js';
+import { createHtmlTableEditingPlugin } from './html-table-editing-plugin.js';
 import { createHtmlTableHandlePlugin } from './html-table-handles.js';
 import { createHtmlTableInteractionPlugin } from './html-table-interaction.js';
 import { defaultHtmlTableTiptapOptions, type HtmlTableTiptapOptions } from './options.js';
@@ -107,12 +108,13 @@ export const HtmlTable = Node.create<HtmlTableTiptapOptions>({
     };
   },
 
-  addProseMirrorPlugins() {
-    return [
-      createHtmlTableInteractionPlugin(),
-      createHtmlTableHandlePlugin(this.options),
-      createHtmlTableSelectionPlugin(this.options),
-    ];
+    addProseMirrorPlugins() {
+      return [
+        createHtmlTableEditingPlugin(this.options),
+        createHtmlTableInteractionPlugin(),
+        createHtmlTableHandlePlugin(this.options),
+        createHtmlTableSelectionPlugin(this.options),
+      ];
   },
 
   addNodeView() {

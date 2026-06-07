@@ -140,6 +140,8 @@ The Tiptap package now includes:
 - native text selection inside cells
 - Tab / Shift-Tab navigation
 - Shift-Arrow cell-range expansion
+- cell-range copy / cut / paste with HTML table + TSV clipboard data
+- Delete / Backspace clearing for partial cell selections
 - Backspace / Delete whole-table removal when every cell is selected
 ```
 
@@ -161,6 +163,9 @@ Available options:
   enableShiftArrowSelection: true,
   constrainShiftArrowToSection: true,
   deleteTableOnAllCellsSelected: true,
+  enableCellRangeClipboard: true,
+  expandTableOnPaste: false,
+  clearCellsOnDelete: true,
   View: null,
   wrapperClassName: 'html-table-node__wrapper',
   selectedCellClassName: 'html-table-cell--selected',
@@ -179,7 +184,9 @@ Keyboard shortcuts:
 | `Tab` | Move to the next cell. At the last cell, optionally add a row and continue. |
 | `Shift-Tab` | Move to the previous cell. |
 | `Shift-ArrowLeft/Right/Up/Down` | Expand the current `CellSelection` to an adjacent cell. |
-| `Backspace` / `Delete` | Delete the whole table when every logical cell is selected. |
+| `Cmd/Ctrl-C` / `Cmd/Ctrl-X` | Copy or cut the current cell range as HTML table + TSV clipboard data. |
+| `Cmd/Ctrl-V` | Paste HTML table fragments or TSV data into the current table selection. |
+| `Backspace` / `Delete` | Clear a partial `CellSelection`, or delete the whole table when every logical cell is selected. |
 | `Mod-Backspace` / `Mod-Delete` | Same whole-table delete behavior on macOS / platform modifier setups. |
 
 By default, `Shift-Arrow` expansion treats `thead`, `tbody`, and `tfoot` boundaries as hard stops. Set `constrainShiftArrowToSection: false` to allow cross-section expansion.
@@ -246,7 +253,7 @@ This project is not a drop-in replacement for `prosemirror-tables`.
 - It preserves full HTML table sections and elements, while the default `prosemirror-tables` model uses a simpler table tree.
 - `HtmlTableMap` now provides a section-aware `TableMap`-style adapter, but full `prosemirror-tables` command and plugin compatibility is still incomplete.
 - The current `CellSelection` and Tiptap interaction plugins cover the project's editing UI, but do not yet provide every API and plugin behavior from the official `CellSelection` and `tableEditing()`.
-- Cell-range clipboard behavior, an official-style editing plugin, incremental table repair, and compatibility adapters remain planned work.
+- Cell-range clipboard and partial-delete behavior are now built in, but incremental table repair and some official `tableEditing()` edge cases still remain.
 - `setCellAttribute` currently updates the current cell; use the dedicated text-align, background-color, and vertical-align commands for selection-aware bulk formatting.
 - `Shift-Arrow` range expansion currently treats section boundaries as hard boundaries.
 
@@ -256,8 +263,8 @@ The next major areas are:
 
 ```txt
 1. expand CellSelection APIs and support custom node names throughout selection mapping
-2. add a core editing plugin with cell-range clipboard and delete behavior
-3. split table repair into an incremental transaction API plus command wrapper
+2. split table repair into an incremental transaction API plus command wrapper
+3. continue closing official `tableEditing()` parity gaps around edge-case paste and repair flows
 4. expand compatibility adapters beyond `HtmlTableMap`
 5. harden malformed HTML / Excel / Word import and large-table performance
 ```

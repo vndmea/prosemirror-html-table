@@ -140,6 +140,8 @@ Tiptap 包目前包含：
 - 单元格内的原生文字选择
 - Tab / Shift-Tab 导航
 - Shift-Arrow 单元格范围扩展
+- 单元格范围的 copy / cut / paste，支持 HTML table 与 TSV clipboard 数据
+- 对部分 CellSelection 的 Delete / Backspace 清空
 - 选中整张表全部单元格时支持 Backspace / Delete 删除整表
 ```
 
@@ -161,6 +163,9 @@ Tiptap 包目前包含：
   enableShiftArrowSelection: true,
   constrainShiftArrowToSection: true,
   deleteTableOnAllCellsSelected: true,
+  enableCellRangeClipboard: true,
+  expandTableOnPaste: false,
+  clearCellsOnDelete: true,
   View: null,
   wrapperClassName: 'html-table-node__wrapper',
   selectedCellClassName: 'html-table-cell--selected',
@@ -179,7 +184,9 @@ Tiptap 包目前包含：
 | `Tab` | 移动到下一个单元格；在最后一个单元格时可按配置自动补一行并继续移动。 |
 | `Shift-Tab` | 移动到上一个单元格。 |
 | `Shift-ArrowLeft/Right/Up/Down` | 将当前 `CellSelection` 扩展到相邻单元格。 |
-| `Backspace` / `Delete` | 当所有逻辑单元格都被选中时删除整张表。 |
+| `Cmd/Ctrl-C` / `Cmd/Ctrl-X` | 以 HTML table + TSV clipboard 数据复制或剪切当前单元格范围。 |
+| `Cmd/Ctrl-V` | 将 HTML table 片段或 TSV 数据粘贴到当前表格选区。 |
+| `Backspace` / `Delete` | 对部分 `CellSelection` 清空内容；当所有逻辑单元格都被选中时删除整张表。 |
 | `Mod-Backspace` / `Mod-Delete` | 在 macOS / 平台修饰键场景下执行同样的整表删除行为。 |
 
 默认情况下，`Shift-Arrow` 会把 `thead`、`tbody`、`tfoot` 的边界当作硬边界。如果需要跨 section 扩展选区，可将 `constrainShiftArrowToSection` 设为 `false`。
@@ -246,7 +253,7 @@ editor.commands.goToNextHtmlTableCell({ cycle: true });
 - 本项目保留完整 HTML table section 与元素，而 `prosemirror-tables` 默认使用更简单的表格树结构。
 - `HtmlTableMap` 现在提供了一个能感知 section 的 `TableMap` 风格适配层，但完整的 `prosemirror-tables` 命令和插件兼容性仍未全部覆盖。
 - 当前 `CellSelection` 和 Tiptap 交互插件覆盖了本项目的编辑 UI，但尚未提供官方 `CellSelection` 与 `tableEditing()` 的全部 API 和插件行为。
-- 单元格范围 clipboard、官方风格的 editing plugin、增量表格修复和兼容适配层仍属于后续工作。
+- 单元格范围 clipboard 与部分删除行为现在已经内建，但增量表格修复和部分官方 `tableEditing()` 边界行为仍属于后续工作。
 - `setCellAttribute` 当前只修改当前单元格；需要对 selection 批量格式化时，请使用专用的文本对齐、背景色和垂直对齐命令。
 - 当前 `Shift-Arrow` 范围扩展会将 section 边界视为不可跨越的边界。
 
@@ -256,8 +263,8 @@ editor.commands.goToNextHtmlTableCell({ cycle: true });
 
 ```txt
 1. 扩展 CellSelection API，并让 selection mapping 全面支持自定义节点名
-2. 增加包含单元格范围 clipboard 和删除行为的 core editing plugin
-3. 将表格修复拆分为增量 transaction API 与 command wrapper
+2. 将表格修复拆分为增量 transaction API 与 command wrapper
+3. 继续补齐官方 `tableEditing()` 在粘贴与修复边界场景下的差异
 4. 在 `HtmlTableMap` 之外继续扩展兼容适配层
 5. 加固非法 HTML / Excel / Word 导入和大表格性能
 ```

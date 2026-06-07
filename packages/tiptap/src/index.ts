@@ -13,6 +13,9 @@ export {
   runHtmlTableContextMenuAction,
 } from './html-table-context-menu.js';
 export {
+  createHtmlTableEditingPlugin,
+} from './html-table-editing-plugin.js';
+export {
   createHtmlTableHandlePlugin,
   htmlTableHandlePluginKey,
 } from './html-table-handles.js';

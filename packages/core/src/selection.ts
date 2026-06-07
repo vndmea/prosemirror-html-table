@@ -58,6 +58,10 @@ export class CellSelection extends Selection {
   }
 }
 
+export function isCellSelection(selection: Selection): selection is CellSelection {
+  return selection instanceof CellSelection;
+}
+
 class CellBookmark implements SelectionBookmark {
   constructor(
     readonly anchorCellPos: number,

@@ -28,6 +28,7 @@ const editor = new Editor({
 - command wrappers built on top of `prosemirror-html-table`
 - node view, interaction plugins, handles, overlays, and context menus
 - table width fitting and even column distribution commands
+- cell-range clipboard, cut, paste, and partial delete behavior
 - default CSS theme exposed via `tiptap-html-table/styles.css`
 
 You can override the default look with your own CSS variables and class-based styles.

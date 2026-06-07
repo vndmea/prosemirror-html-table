@@ -15,6 +15,9 @@ export interface HtmlTableTiptapOptions {
   enableShiftArrowSelection: boolean;
   constrainShiftArrowToSection: boolean;
   deleteTableOnAllCellsSelected: boolean;
+  enableCellRangeClipboard: boolean;
+  expandTableOnPaste: boolean;
+  clearCellsOnDelete: boolean;
   View: typeof HtmlTableNodeView | null;
   wrapperClassName: string;
   selectedCellClassName: string;
@@ -36,6 +39,9 @@ export const defaultHtmlTableTiptapOptions: HtmlTableTiptapOptions = {
   enableShiftArrowSelection: true,
   constrainShiftArrowToSection: true,
   deleteTableOnAllCellsSelected: true,
+  enableCellRangeClipboard: true,
+  expandTableOnPaste: false,
+  clearCellsOnDelete: true,
   View: null,
   wrapperClassName: 'html-table-node__wrapper',
   selectedCellClassName: 'html-table-cell--selected',
