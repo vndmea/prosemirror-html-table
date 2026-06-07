@@ -45,6 +45,10 @@ function contextMenuAction(page: Page, label: string) {
     .first();
 }
 
+function outsideTableTarget(page: Page) {
+  return page.locator('.html-table-example__hero');
+}
+
 function firstBodyCell(page: Page) {
   return table(page).locator('tbody tr').first().locator('td,th').first();
 }
@@ -178,8 +182,8 @@ test.describe('table interactions', () => {
     await page.getByTestId('pmht-cell-handle').click();
     await expect(contextMenu(page)).toBeVisible();
     await openCellSubmenu(page, 'Structure');
-    await expect(contextMenuAction(page, 'Merge or split cells')).toBeEnabled();
-    await activateMenuAction(page, 'Merge or split cells');
+    await expect(contextMenuAction(page, 'Merge cells')).toBeEnabled();
+    await activateMenuAction(page, 'Merge cells');
 
     await expect(contextMenu(page)).toBeHidden();
     await expect(table(page).locator('tbody tr').first().locator('td,th')).toHaveCount(beforeMergeCellCount - 1);
@@ -188,7 +192,8 @@ test.describe('table interactions', () => {
     await page.getByTestId('pmht-cell-handle').click();
     await expect(contextMenu(page)).toBeVisible();
     await openCellSubmenu(page, 'Structure');
-    await activateMenuAction(page, 'Merge or split cells');
+    await expect(contextMenuAction(page, 'Split cell')).toBeEnabled();
+    await activateMenuAction(page, 'Split cell');
 
     await expect(contextMenu(page)).toBeHidden();
     await expect(table(page).locator('tbody tr').first().locator('td,th')).toHaveCount(beforeMergeCellCount);
@@ -285,7 +290,7 @@ test.describe('table interactions', () => {
     await expect(contextMenu(page)).toBeHidden();
 
     await openRowMenu(page, 1);
-    await page.locator('.hero').click();
+    await outsideTableTarget(page).click();
     await expect(contextMenu(page)).toBeHidden();
   });
 

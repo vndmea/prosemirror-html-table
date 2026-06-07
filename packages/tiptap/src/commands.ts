@@ -25,9 +25,11 @@ import {
   insertHtmlTable as insertCoreHtmlTable,
   mergeCells as mergeCoreCells,
   mergeOrSplit as mergeOrSplitCoreCells,
+  moveColumnToIndex as moveCoreColumnToIndex,
   moveRowDown as moveCoreRowDown,
   moveColumnLeft as moveCoreColumnLeft,
   moveColumnRight as moveCoreColumnRight,
+  moveRowToIndex as moveCoreRowToIndex,
   moveRowToBody as moveCoreRowToBody,
   moveRowToFoot as moveCoreRowToFoot,
   moveRowToHead as moveCoreRowToHead,
@@ -51,6 +53,8 @@ import {
   toggleHeaderRow as toggleCoreHeaderRow,
   type HtmlTableCellNavigationOptions,
   type HtmlTableCommandOptions,
+  type MoveHtmlTableColumnToIndexOptions,
+  type MoveHtmlTableRowToIndexOptions,
   type InsertHtmlTableCommandOptions,
   type HtmlTableSectionTargetOptions,
   type HtmlTableSortRowsOptions,
@@ -81,9 +85,11 @@ declare module '@tiptap/core' {
       duplicateHtmlTableRow: (options?: HtmlTableCommandOptions) => ReturnType;
       moveHtmlTableColumnLeft: (options?: HtmlTableCommandOptions) => ReturnType;
       moveHtmlTableColumnRight: (options?: HtmlTableCommandOptions) => ReturnType;
+      moveHtmlTableColumnToIndex: (options: MoveHtmlTableColumnToIndexOptions) => ReturnType;
       sortHtmlTableBodyRowsByColumn: (options?: HtmlTableSortRowsOptions) => ReturnType;
       moveHtmlTableRowUp: (options?: HtmlTableCommandOptions) => ReturnType;
       moveHtmlTableRowDown: (options?: HtmlTableCommandOptions) => ReturnType;
+      moveHtmlTableRowToIndex: (options: MoveHtmlTableRowToIndexOptions) => ReturnType;
       moveHtmlTableRowToHead: (options?: HtmlTableSectionTargetOptions) => ReturnType;
       moveHtmlTableRowToBody: (options?: HtmlTableSectionTargetOptions) => ReturnType;
       moveHtmlTableRowToFoot: (options?: HtmlTableSectionTargetOptions) => ReturnType;
@@ -224,6 +230,11 @@ export function createHtmlTableCommands(): Partial<RawCommands> {
       ({ state, dispatch }) =>
         moveCoreColumnRight(options)(state, dispatch),
 
+    moveHtmlTableColumnToIndex:
+      (options: MoveHtmlTableColumnToIndexOptions) =>
+      ({ state, dispatch }) =>
+        moveCoreColumnToIndex(options)(state, dispatch),
+
     sortHtmlTableBodyRowsByColumn:
       (options?: HtmlTableSortRowsOptions) =>
       ({ state, dispatch }) =>
@@ -238,6 +249,11 @@ export function createHtmlTableCommands(): Partial<RawCommands> {
       (options?: HtmlTableCommandOptions) =>
       ({ state, dispatch }) =>
         moveCoreRowDown(options)(state, dispatch),
+
+    moveHtmlTableRowToIndex:
+      (options: MoveHtmlTableRowToIndexOptions) =>
+      ({ state, dispatch }) =>
+        moveCoreRowToIndex(options)(state, dispatch),
 
     moveHtmlTableRowToHead:
       (options?: HtmlTableSectionTargetOptions) =>
@@ -365,4 +381,6 @@ export type {
   HtmlTableCellNavigationOptions,
   HtmlTableCommandOptions,
   InsertHtmlTableCommandOptions,
+  MoveHtmlTableColumnToIndexOptions,
+  MoveHtmlTableRowToIndexOptions,
 } from 'prosemirror-html-table';

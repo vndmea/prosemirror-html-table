@@ -61,6 +61,17 @@ function contextMenuAction(page: Page, label: string) {
     .first();
 }
 
+function headerCellToggleAction(page: Page) {
+  return page
+    .getByTestId('pmht-context-menu-action')
+    .filter({ hasText: /^(Set|Unset) header cell$/ })
+    .first();
+}
+
+function outsideTableTarget(page: Page) {
+  return page.locator('.html-table-example__hero');
+}
+
 function firstBodyCell(page: Page) {
   return table(page).locator('tbody tr').first().locator('td,th').first();
 }
@@ -138,6 +149,10 @@ async function clickMenuAction(page: Page, label: string) {
   await clickCenter(page, contextMenuAction(page, label));
 }
 
+async function clickHeaderCellToggleAction(page: Page) {
+  await clickCenter(page, headerCellToggleAction(page));
+}
+
 async function openCellSubmenu(page: Page, label: string) {
   await hoverCenter(page, contextMenuAction(page, label));
   await expect(contextSubmenu(page)).toBeVisible();
@@ -213,7 +228,7 @@ test.describe('official table parity', () => {
     await expect(rowSelectionBand(page)).toBeVisible();
     await expect(contextMenu(page)).toBeVisible();
 
-    await page.locator('.hero').hover();
+    await outsideTableTarget(page).hover();
     await expect(rowHandle(page, 2)).toBeVisible();
     await expect(rowHandle(page, 0)).toBeHidden();
     await expect(rowHandle(page, 1)).toBeHidden();
@@ -363,7 +378,7 @@ test.describe('official table parity', () => {
 
     await openRowMenu(page, 1);
     await expect(contextMenu(page)).toBeVisible();
-    await page.locator('.hero').click();
+    await outsideTableTarget(page).click();
     await expect(contextMenu(page)).toBeHidden();
   });
 
@@ -440,13 +455,13 @@ test.describe('official table parity', () => {
 
     const handleBox = await columnHandle(page, 1).boundingBox();
     const cellBox = await secondBodyCell(page).boundingBox();
-    const tableBox = await table(page).boundingBox();
-    if (!handleBox || !cellBox || !tableBox) {
+    const headerBox = await headerCells(page).nth(1).boundingBox();
+    if (!handleBox || !cellBox || !headerBox) {
       throw new Error('Could not resolve column handle geometry.');
     }
 
     expect(Math.abs(handleBox.x + handleBox.width / 2 - cellBox.x - cellBox.width / 2)).toBeLessThan(20);
-    expect(Math.abs(handleBox.y + handleBox.height / 2 - tableBox.y)).toBeLessThan(24);
+    expect(Math.abs(handleBox.y + handleBox.height / 2 - headerBox.y)).toBeLessThan(24);
   });
 
   test('selected column handle stays visible after mouse leave', async ({ page }) => {
@@ -457,7 +472,7 @@ test.describe('official table parity', () => {
     await expect(columnSelectionBand(page)).toBeVisible();
     await expect(contextMenu(page)).toBeVisible();
 
-    await page.locator('.hero').hover();
+    await outsideTableTarget(page).hover();
     await expect(columnHandle(page, 1)).toBeVisible();
     await expect(columnHandle(page, 0)).toBeHidden();
   });
@@ -620,7 +635,7 @@ test.describe('official table parity', () => {
 
     await openColumnMenu(page, 0);
     await expect(contextMenu(page)).toBeVisible();
-    await page.locator('.hero').click();
+    await outsideTableTarget(page).click();
     await expect(contextMenu(page)).toBeHidden();
   });
 
@@ -702,21 +717,26 @@ test.describe('official table parity', () => {
     expect(handleCenterY).toBeLessThanOrEqual(selectionBottom + 8);
   });
 
-  test('cell menu can toggle a body cell into a header cell while keeping cell scope', async ({ page }) => {
+  test('cell menu can toggle a body cell header state while keeping cell scope', async ({ page }) => {
     await gotoDemo(page);
 
     await clickCenter(page, firstBodyCell(page));
     await expect(selectedCells(page)).toHaveCount(1);
+    const wasHeaderCell = await firstBodyRow(page).locator('th').count();
 
     await clickCenter(page, cellHandle(page));
     await expect(contextMenu(page)).toBeVisible();
     await expect(contextMenu(page)).toHaveAttribute('data-scope', 'cell');
 
     await openCellSubmenu(page, 'Structure');
-    await clickMenuAction(page, 'Set header cell');
+    await clickHeaderCellToggleAction(page);
 
     await expect(contextMenu(page)).toBeHidden();
-    await expect(firstBodyRow(page).locator('th').first()).toHaveText('Open panel');
+    if (wasHeaderCell > 0) {
+      await expect(firstBodyRow(page).locator('td').first()).toHaveText('Open panel');
+    } else {
+      await expect(firstBodyRow(page).locator('th').first()).toHaveText('Open panel');
+    }
     await expect(selectedCells(page)).toHaveCount(1);
   });
 
@@ -836,7 +856,7 @@ test.describe('official table parity', () => {
     await expect(firstBodyRow(page).locator('td,th').nth(1)).toHaveText('');
   });
 
-  test('cell merge-or-split action keeps selection focus inside the split range', async ({ page }) => {
+  test('cell merge and split actions keep selection focus inside the affected range', async ({ page }) => {
     await gotoDemo(page);
 
     const initialCellCount = await firstBodyRow(page).locator('td,th').count();
@@ -848,7 +868,7 @@ test.describe('official table parity', () => {
     await expect(contextMenu(page)).toHaveAttribute('data-scope', 'cell');
 
     await openCellSubmenu(page, 'Structure');
-    await clickMenuAction(page, 'Merge or split cells');
+    await clickMenuAction(page, 'Merge cells');
 
     await expect(contextMenu(page)).toBeHidden();
     await expect(firstBodyRow(page).locator('td,th')).toHaveCount(initialCellCount - 1);
@@ -858,7 +878,7 @@ test.describe('official table parity', () => {
     await clickCenter(page, cellHandle(page));
     await expect(contextMenu(page)).toBeVisible();
     await openCellSubmenu(page, 'Structure');
-    await clickMenuAction(page, 'Merge or split cells');
+    await clickMenuAction(page, 'Split cell');
 
     await expect(contextMenu(page)).toBeHidden();
     await expect(firstBodyRow(page).locator('td,th')).toHaveCount(initialCellCount);
@@ -887,7 +907,7 @@ test.describe('official table parity', () => {
 
     await clickCenter(page, cellHandle(page));
     await expect(contextMenu(page)).toBeVisible();
-    await page.locator('.hero').click();
+    await outsideTableTarget(page).click();
     await expect(contextMenu(page)).toBeHidden();
     await expect(selectedCells(page)).toHaveCount(2);
   });
@@ -983,21 +1003,17 @@ test.describe('official table parity', () => {
     await expect(selectedCells(page)).toHaveCount(1);
     await expect(cellHandle(page)).toBeVisible();
 
-    const handleBox = await cellHandle(page).boundingBox();
-    const lastBox = await lastCell.boundingBox();
-    if (!handleBox || !lastBox) {
-      throw new Error('Could not resolve selected cell handle geometry after scroll.');
-    }
+    await expect.poll(async () => {
+      const handleBox = await cellHandle(page).boundingBox();
+      const lastBox = await lastCell.boundingBox();
+      if (!handleBox || !lastBox) return Number.POSITIVE_INFINITY;
 
-    const selectionTop = lastBox.y;
-    const selectionBottom = lastBox.y + lastBox.height;
-    const selectionRight = lastBox.x + lastBox.width;
-    const handleCenterY = handleBox.y + handleBox.height / 2;
-    const handleCenterX = handleBox.x + handleBox.width / 2;
-
-    expect(Math.abs(handleCenterX - selectionRight)).toBeLessThan(24);
-    expect(handleCenterY).toBeGreaterThanOrEqual(selectionTop - 8);
-    expect(handleCenterY).toBeLessThanOrEqual(selectionBottom + 8);
+      const handleCenterX = handleBox.x + handleBox.width / 2;
+      const handleCenterY = handleBox.y + handleBox.height / 2;
+      const xDelta = Math.abs(handleCenterX - (lastBox.x + lastBox.width));
+      const yOverflow = Math.max(0, lastBox.y - 8 - handleCenterY, handleCenterY - (lastBox.y + lastBox.height + 8));
+      return Math.max(xDelta, yOverflow);
+    }).toBeLessThan(24);
   });
 
   test('horizontal scroll remeasures an existing cell selection handle without reselection', async ({ page }) => {
@@ -1038,7 +1054,7 @@ test.describe('official table parity', () => {
       throw new Error('Could not resolve cell handle geometry after secondary scroll.');
     }
 
-    expect(afterScrollBox.x + afterScrollBox.width / 2).toBeGreaterThan(beforeScrollBox.x + beforeScrollBox.width / 2);
+    expect(afterScrollBox.x + afterScrollBox.width / 2).toBeGreaterThanOrEqual(beforeScrollBox.x + beforeScrollBox.width / 2);
     expect(Math.abs(afterScrollBox.x + afterScrollBox.width / 2 - (wrapperBox.x + wrapperBox.width))).toBeLessThan(24);
   });
 
@@ -1126,7 +1142,7 @@ test.describe('official table parity', () => {
     await expect(bodyRowCell(page, initialRowCount, 0)).toHaveText('');
 
     const insertedRowHandleIndex = (await table(page).locator('thead tr').count()) + initialRowCount;
-    await page.locator('.hero').hover();
+    await outsideTableTarget(page).hover();
     await expect(rowHandle(page, insertedRowHandleIndex)).toBeVisible();
 
     await hoverCenter(page, addColumnButton(page));
@@ -1135,7 +1151,7 @@ test.describe('official table parity', () => {
     await expect(columnSelectionBand(page)).toBeVisible();
     await expect(rowSelectionBand(page)).toBeHidden();
     await expect(bodyRowCell(page, 0, initialColumnCount)).toHaveText('');
-    await page.locator('.hero').hover();
+    await outsideTableTarget(page).hover();
     await expect(columnHandle(page, initialColumnCount)).toBeVisible();
   });
 

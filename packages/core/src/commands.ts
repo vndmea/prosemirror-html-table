@@ -10,6 +10,7 @@ import type { HtmlTableNodeNames } from './types.js';
 
 export interface HtmlTableCommandOptions {
   names?: Partial<HtmlTableNodeNames>;
+  tablePos?: number;
 }
 
 export interface HtmlTableCellNavigationOptions extends HtmlTableCommandOptions {
@@ -27,6 +28,17 @@ export interface HtmlTableSortRowsOptions extends HtmlTableCommandOptions {
 
 export interface InsertHtmlTableCommandOptions extends CreateHtmlTableOptions {
   selectInsertedTable?: boolean;
+}
+
+export interface MoveHtmlTableRowToIndexOptions extends HtmlTableCommandOptions {
+  fromRowIndex: number;
+  toRowIndex: number;
+  allowCrossSectionMove?: boolean;
+}
+
+export interface MoveHtmlTableColumnToIndexOptions extends HtmlTableCommandOptions {
+  fromColumnIndex: number;
+  toColumnIndex: number;
 }
 
 // export interface HtmlTableCellStyleOptions extends HtmlTableCommandOptions {}
@@ -253,6 +265,51 @@ export function moveColumnRight(options: HtmlTableCommandOptions = {}): Command 
   return moveColumnHorizontally('right', options);
 }
 
+export function moveColumnToIndex(options: MoveHtmlTableColumnToIndexOptions): Command {
+  return (state, dispatch) => {
+    const context = findTableContext(state, options);
+    if (!context) return false;
+
+    const grid = createHtmlTableGrid(context.table, { names: context.names });
+    const { fromColumnIndex, toColumnIndex } = options;
+    if (
+      fromColumnIndex === toColumnIndex
+      || fromColumnIndex < 0
+      || toColumnIndex < 0
+      || fromColumnIndex >= grid.width
+      || toColumnIndex >= grid.width
+    ) {
+      return false;
+    }
+
+    const step = fromColumnIndex < toColumnIndex ? 1 : -1;
+    for (let columnIndex = fromColumnIndex; columnIndex !== toColumnIndex; columnIndex += step) {
+      if (!canReorderColumnPair(grid, columnIndex, columnIndex + step)) return false;
+    }
+
+    const tableChildren = getChildren(context.table);
+    forEachSection(context.table, context.names, (section, _sectionName, sectionChildIndex) => {
+      const rows = getChildren(section).map((row) => {
+        const rowChildren = getChildren(row);
+        const movedCell = rowChildren[fromColumnIndex];
+        if (!movedCell) return row;
+        rowChildren.splice(fromColumnIndex, 1);
+        rowChildren.splice(toColumnIndex, 0, movedCell);
+        return row.copy(Fragment.fromArray(rowChildren));
+      });
+
+      tableChildren[sectionChildIndex] = section.copy(Fragment.fromArray(rows));
+    });
+
+    moveColgroupColumn(state.schema, tableChildren, context.names, context.table, fromColumnIndex, toColumnIndex, grid.width);
+
+    const nextTable = context.table.copy(Fragment.fromArray(tableChildren));
+    const selectionContext = findCellContext(state, options);
+    const targetRowIndex = selectionContext?.cell.rowIndex ?? 0;
+    return replaceTableAndSelectCell(state, dispatch, context, nextTable, targetRowIndex, toColumnIndex);
+  };
+}
+
 export function sortBodyRowsByColumn(options: HtmlTableSortRowsOptions = {}): Command {
   return (state, dispatch) => {
     const context = findCellContext(state, options);
@@ -458,6 +515,98 @@ export function moveRowUp(options: HtmlTableCommandOptions = {}): Command {
 
 export function moveRowDown(options: HtmlTableCommandOptions = {}): Command {
   return moveRowVertically('down', options);
+}
+
+export function moveRowToIndex(options: MoveHtmlTableRowToIndexOptions): Command {
+  return (state, dispatch) => {
+    const context = findTableContext(state, options);
+    if (!context) return false;
+
+    const grid = createHtmlTableGrid(context.table, { names: context.names });
+    const sourceRow = grid.rows[options.fromRowIndex];
+    const targetRow = grid.rows[options.toRowIndex];
+    if (!sourceRow || !targetRow || options.fromRowIndex === options.toRowIndex) return false;
+
+    const allowCrossSectionMove = options.allowCrossSectionMove ?? false;
+    if (
+      !allowCrossSectionMove
+      && (sourceRow.section !== targetRow.section || sourceRow.sectionIndex !== targetRow.sectionIndex)
+    ) {
+      return false;
+    }
+
+    const step = options.fromRowIndex < options.toRowIndex ? 1 : -1;
+    for (let rowIndex = options.fromRowIndex; rowIndex !== options.toRowIndex; rowIndex += step) {
+      if (!canReorderRowPair(grid, rowIndex, rowIndex + step)) return false;
+    }
+
+    const sourceRowContext = findRowContextByNode(context, sourceRow.node);
+    const targetRowContext = findRowContextByNode(context, targetRow.node);
+    if (!sourceRowContext || !targetRowContext) return false;
+
+    if (
+      sourceRowContext.sectionName === 'body'
+      && sourceRowContext.sectionChildIndex !== targetRowContext.sectionChildIndex
+      && getChildren(sourceRowContext.section).length === 1
+      && countSections(context.table, context.names.body) === 1
+    ) {
+      return false;
+    }
+
+    const tableChildren = getChildren(context.table);
+
+    if (
+      sourceRowContext.sectionChildIndex === targetRowContext.sectionChildIndex
+      && sourceRowContext.sectionName === targetRowContext.sectionName
+    ) {
+      const nextRows = getChildren(sourceRowContext.section);
+      const movedRow = nextRows[sourceRowContext.rowIndexInSection]!;
+      nextRows.splice(sourceRowContext.rowIndexInSection, 1);
+      nextRows.splice(targetRowContext.rowIndexInSection, 0, movedRow);
+      tableChildren[sourceRowContext.sectionChildIndex] = sourceRowContext.section.copy(Fragment.fromArray(nextRows));
+
+      return replaceTableAndSelectRowNode(
+        state,
+        dispatch,
+        context,
+        context.table.copy(Fragment.fromArray(tableChildren)),
+        movedRow,
+      );
+    }
+
+    const sourceRows = getChildren(sourceRowContext.section);
+    const movedSourceRow = sourceRows[sourceRowContext.rowIndexInSection]!;
+    sourceRows.splice(sourceRowContext.rowIndexInSection, 1);
+
+    let targetSectionChildIndex = targetRowContext.sectionChildIndex;
+    if (sourceRows.length === 0) {
+      tableChildren.splice(sourceRowContext.sectionChildIndex, 1);
+      if (sourceRowContext.sectionChildIndex < targetSectionChildIndex) {
+        targetSectionChildIndex -= 1;
+      }
+    } else {
+      tableChildren[sourceRowContext.sectionChildIndex] = sourceRowContext.section.copy(Fragment.fromArray(sourceRows));
+    }
+
+    const targetSection = tableChildren[targetSectionChildIndex];
+    if (!targetSection) return false;
+
+    const movedRow =
+      sourceRowContext.sectionName === targetRowContext.sectionName
+        ? movedSourceRow
+        : convertRowForSection(state.schema, context.names, movedSourceRow, targetRowContext.sectionName);
+    const targetRows = getChildren(targetSection);
+    targetRows.splice(targetRowContext.rowIndexInSection, 0, movedRow);
+    tableChildren[targetSectionChildIndex] = targetSection.copy(Fragment.fromArray(targetRows));
+
+    return replaceTableAndSelectRowNode(
+      state,
+      dispatch,
+      context,
+      normalizeHtmlTable(context.table.copy(Fragment.fromArray(tableChildren)), getNormalizeOptions(options)),
+      movedRow,
+    );
+  };
 }
 
 export function duplicateRow(options: HtmlTableCommandOptions = {}): Command {
@@ -1283,6 +1432,18 @@ function findTableContext(state: EditorState, options: HtmlTableCommandOptions):
     ...htmlTableNodeNames,
     ...options.names,
   };
+
+  if (typeof options.tablePos === 'number' && Number.isInteger(options.tablePos)) {
+    const table = state.doc.nodeAt(options.tablePos);
+    if (table?.type.name === names.table) {
+      return {
+        names,
+        table,
+        tablePos: options.tablePos,
+      };
+    }
+  }
+
   const $from = getSelectionStart(state.selection);
 
   for (let depth = $from.depth; depth > 0; depth -= 1) {
@@ -1961,6 +2122,30 @@ function replaceTableAndSelectRow(
   return true;
 }
 
+function replaceTableAndSelectRowNode(
+  state: EditorState,
+  dispatch: Parameters<Command>[1],
+  context: TableContext,
+  table: ProseMirrorNode,
+  targetRowNode: ProseMirrorNode,
+): boolean {
+  const nextGrid = createHtmlTableGrid(table, { names: context.names });
+  const targetRow = nextGrid.rows.find((row) => row.node === targetRowNode);
+  if (!targetRow) {
+    return replaceTable(state, dispatch, context, table);
+  }
+
+  return replaceTableAndSelectRow(
+    state,
+    dispatch,
+    context,
+    table,
+    targetRow.section,
+    targetRow.sectionIndex,
+    targetRow.rowIndexInSection,
+  );
+}
+
 function replaceTableAndSelectCell(
   state: EditorState,
   dispatch: Parameters<Command>[1],
@@ -2126,6 +2311,25 @@ function swapColgroupColumns(
   const sourceWidth = widths[sourceColumn] ?? null;
   widths[sourceColumn] = widths[targetColumn] ?? null;
   widths[targetColumn] = sourceWidth;
+  tableChildren[colgroupIndex] = createColgroup(schema, names, width, widths);
+}
+
+function moveColgroupColumn(
+  schema: Schema,
+  tableChildren: ProseMirrorNode[],
+  names: HtmlTableNodeNames,
+  table: ProseMirrorNode,
+  sourceColumn: number,
+  targetColumn: number,
+  width: number,
+): void {
+  const colgroupIndex = findChildIndex(table, names.colgroup);
+  if (colgroupIndex < 0) return;
+
+  const widths = expandColgroupWidths(table.child(colgroupIndex), width);
+  const movedWidth = widths[sourceColumn] ?? null;
+  widths.splice(sourceColumn, 1);
+  widths.splice(targetColumn, 0, movedWidth);
   tableChildren[colgroupIndex] = createColgroup(schema, names, width, widths);
 }
 

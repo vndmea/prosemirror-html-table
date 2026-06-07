@@ -152,6 +152,8 @@ Available options:
   cellMinWidth: 120,
   lastColumnResizable: true,
   allowTableNodeSelection: true,
+  enableRowColumnDrag: true,
+  allowCrossSectionRowDrag: false,
   enableTabNavigation: true,
   addRowOnTabAtEnd: true,
   enableShiftArrowSelection: true,
@@ -163,6 +165,8 @@ Available options:
   selectedTableClassName: 'html-table-node--selected',
 }
 ```
+
+Row and column handles support drag reorder by default. Cross-section row drag stays disabled unless `allowCrossSectionRowDrag` is enabled.
 
 Keyboard shortcuts:
 

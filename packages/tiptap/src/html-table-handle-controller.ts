@@ -1,5 +1,6 @@
 import { NodeSelection } from '@tiptap/pm/state';
 import type { EditorView } from '@tiptap/pm/view';
+import { moveColumnToIndex, moveRowToIndex } from 'prosemirror-html-table';
 
 import {
   getHtmlTableContextTriggerButtonState,
@@ -164,7 +165,9 @@ export function getHtmlTableColumnHandleLayout(
 
 export interface HtmlTableHandleControllerOptions {
   allowTableNodeSelection: boolean;
+  allowCrossSectionRowDrag: boolean;
   contextMenuId: string;
+  enableRowColumnDrag: boolean;
   getView: () => EditorView;
   handleCrossAxisSize: number;
   handleMainAxisInset: number;
@@ -177,28 +180,59 @@ export interface HtmlTableHandleControllerOptions {
   ) => void;
 }
 
+interface HtmlTableHandleRenderState {
+  geometry: ReturnType<typeof measureHtmlTableGeometry>;
+  hostRect: DOMRect;
+  positionState: HtmlTableOverlayPositionState;
+  tablePos: number;
+}
+
+interface HtmlTableAxisDragState {
+  axis: 'row' | 'column';
+  handle: HTMLButtonElement;
+  hasDragged: boolean;
+  index: number;
+  isValidTarget: boolean;
+  pointerId: number;
+  startX: number;
+  startY: number;
+  tablePos: number;
+  targetIndex: number | null;
+}
+
 export class HtmlTableHandleController {
   readonly contextTriggerButton: HTMLButtonElement;
   readonly tableHandle: HTMLButtonElement;
 
+  private readonly allowCrossSectionRowDrag: boolean;
   private readonly root: HTMLDivElement;
   private readonly contextMenuId: string;
   private readonly allowTableNodeSelection: boolean;
+  private readonly enableRowColumnDrag: boolean;
   private readonly getView: () => EditorView;
   private readonly suppressPointerClick: () => void;
   private readonly toggleContextMenuFromControl: HtmlTableHandleControllerOptions['toggleContextMenuFromControl'];
   private readonly handleCrossAxisSize: number;
   private readonly handleMainAxisInset: number;
   private readonly minHandleInset: number;
+  private readonly dropIndicator: HTMLDivElement;
   private readonly rowHandlesParent: HTMLDivElement;
   private readonly columnHandlesParent: HTMLDivElement;
+  private dragState: HtmlTableAxisDragState | null = null;
+  private lastRenderState: HtmlTableHandleRenderState | null = null;
   private rowHandles: HTMLButtonElement[] = [];
   private columnHandles: HTMLButtonElement[] = [];
+  private readonly onDocumentPointerMove = (event: PointerEvent) => this.handleDocumentPointerMove(event);
+  private readonly onDocumentPointerUp = (event: PointerEvent) => this.handleDocumentPointerUp(event);
+  private readonly onDocumentPointerCancel = (event: PointerEvent) => this.handleDocumentPointerCancel(event);
+  private readonly onDocumentKeyDown = (event: KeyboardEvent) => this.handleDocumentKeyDown(event);
 
   constructor(options: HtmlTableHandleControllerOptions) {
+    this.allowCrossSectionRowDrag = options.allowCrossSectionRowDrag;
     this.root = options.root;
     this.contextMenuId = options.contextMenuId;
     this.allowTableNodeSelection = options.allowTableNodeSelection;
+    this.enableRowColumnDrag = options.enableRowColumnDrag;
     this.getView = options.getView;
     this.suppressPointerClick = options.suppressPointerClick;
     this.toggleContextMenuFromControl = options.toggleContextMenuFromControl;
@@ -208,6 +242,10 @@ export class HtmlTableHandleController {
 
     this.contextTriggerButton = this.createContextTriggerButton();
     this.tableHandle = this.createTableHandle();
+    this.dropIndicator = this.root.ownerDocument.createElement('div');
+    this.dropIndicator.className = 'html-table-overlay__drop-indicator';
+    this.dropIndicator.hidden = true;
+    this.dropIndicator.setAttribute('aria-hidden', 'true');
     this.rowHandlesParent = this.root.ownerDocument.createElement('div');
     this.rowHandlesParent.className = 'html-table-overlay__rows';
     this.columnHandlesParent = this.root.ownerDocument.createElement('div');
@@ -216,9 +254,14 @@ export class HtmlTableHandleController {
     this.root.append(
       this.contextTriggerButton,
       this.tableHandle,
+      this.dropIndicator,
       this.rowHandlesParent,
       this.columnHandlesParent,
     );
+    this.root.ownerDocument.addEventListener('pointermove', this.onDocumentPointerMove);
+    this.root.ownerDocument.addEventListener('pointerup', this.onDocumentPointerUp, true);
+    this.root.ownerDocument.addEventListener('pointercancel', this.onDocumentPointerCancel, true);
+    this.root.ownerDocument.addEventListener('keydown', this.onDocumentKeyDown);
   }
 
   render(
@@ -227,9 +270,15 @@ export class HtmlTableHandleController {
     trigger: HtmlTableContextTriggerButtonState,
     tablePos: number,
     geometry: ReturnType<typeof measureHtmlTableGeometry>,
-    positionState: Pick<HtmlTableOverlayPositionState, 'tableLeft' | 'tableTop' | 'rowHandleLeft' | 'columnHandleTop'>,
+    positionState: HtmlTableOverlayPositionState,
     hostRect: DOMRect,
   ): void {
+    this.lastRenderState = {
+      geometry,
+      hostRect,
+      positionState,
+      tablePos,
+    };
     this.syncHandleCount('row', geometry.rows.length);
     this.syncHandleCount('column', geometry.columns.length);
     this.syncContextTriggerButton(trigger, hostRect);
@@ -323,6 +372,16 @@ export class HtmlTableHandleController {
       handle.classList.toggle('is-selected', isColumnSelected);
       handle.classList.toggle('is-menu-open', isColumnMenuOpen);
     }
+
+    this.syncDragIndicator();
+  }
+
+  destroy(): void {
+    this.cancelDrag();
+    this.root.ownerDocument.removeEventListener('pointermove', this.onDocumentPointerMove);
+    this.root.ownerDocument.removeEventListener('pointerup', this.onDocumentPointerUp, true);
+    this.root.ownerDocument.removeEventListener('pointercancel', this.onDocumentPointerCancel, true);
+    this.root.ownerDocument.removeEventListener('keydown', this.onDocumentKeyDown);
   }
 
   private get view(): EditorView {
@@ -429,7 +488,8 @@ export class HtmlTableHandleController {
     handle.dataset.axis = axis;
     handle.dataset.testid = axis === 'row' ? 'pmht-row-handle' : 'pmht-column-handle';
     handle.tabIndex = -1;
-    handle.addEventListener('mousedown', (event) => this.handleAxisMouseDown(event));
+    handle.style.touchAction = 'none';
+    handle.addEventListener('pointerdown', (event) => this.handleAxisPointerDown(event));
     handle.addEventListener('click', (event) => this.handleAxisClick(event));
     return handle;
   }
@@ -462,7 +522,7 @@ export class HtmlTableHandleController {
     return button;
   }
 
-  private handleAxisMouseDown(event: MouseEvent): void {
+  private handleAxisPointerDown(event: PointerEvent): void {
     const handle = event.currentTarget as HTMLButtonElement | null;
     const axis = handle?.dataset.axis;
     const index = Number(handle?.dataset.index);
@@ -473,6 +533,7 @@ export class HtmlTableHandleController {
       !activeTable ||
       (axis !== 'row' && axis !== 'column') ||
       !Number.isInteger(index) ||
+      event.button !== 0 ||
       interaction.resizing?.tablePos === activeTable.tablePos
     ) {
       return;
@@ -485,8 +546,19 @@ export class HtmlTableHandleController {
 
     event.preventDefault();
     event.stopPropagation();
-    this.suppressPointerClick();
-    this.activateAxisHandle(axis, index, activeTable.tablePos, table, interaction, handle);
+    this.dragState = {
+      axis,
+      handle,
+      hasDragged: false,
+      index,
+      isValidTarget: false,
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      tablePos: activeTable.tablePos,
+      targetIndex: null,
+    };
+    handle.setPointerCapture?.(event.pointerId);
   }
 
   private handleAxisClick(event: MouseEvent): void {
@@ -517,6 +589,207 @@ export class HtmlTableHandleController {
     event.preventDefault();
     event.stopPropagation();
     this.activateAxisHandle(axis, index, activeTable.tablePos, table, interaction, handle);
+  }
+
+  private handleDocumentPointerMove(event: PointerEvent): void {
+    if (!this.dragState || event.pointerId !== this.dragState.pointerId) {
+      return;
+    }
+
+    const dragDistance = Math.hypot(event.clientX - this.dragState.startX, event.clientY - this.dragState.startY);
+    if (!this.dragState.hasDragged) {
+      if (!this.enableRowColumnDrag || dragDistance < 6) {
+        return;
+      }
+
+      this.dragState.hasDragged = true;
+      this.dragState.handle.classList.add('is-dragging');
+      this.root.classList.add('html-table-overlay--dragging');
+      this.root.ownerDocument.body.style.userSelect = 'none';
+    }
+
+    event.preventDefault();
+    this.updateDragTarget(event.clientX, event.clientY);
+  }
+
+  private handleDocumentPointerUp(event: PointerEvent): void {
+    if (!this.dragState || event.pointerId !== this.dragState.pointerId) {
+      return;
+    }
+
+    const dragState = this.dragState;
+    dragState.handle.releasePointerCapture?.(event.pointerId);
+
+    if (dragState.hasDragged) {
+      event.preventDefault();
+      event.stopPropagation();
+      this.finishDrag(dragState);
+      return;
+    }
+
+    const interaction = getHtmlTableInteractionState(this.view.state);
+    const table = this.view.state.doc.nodeAt(dragState.tablePos);
+    this.cancelDrag();
+    if (!table || table.type.name !== 'htmlTable') {
+      return;
+    }
+
+    this.suppressPointerClick();
+    this.activateAxisHandle(dragState.axis, dragState.index, dragState.tablePos, table, interaction, dragState.handle);
+  }
+
+  private handleDocumentPointerCancel(event: PointerEvent): void {
+    if (!this.dragState || event.pointerId !== this.dragState.pointerId) {
+      return;
+    }
+
+    this.dragState.handle.releasePointerCapture?.(event.pointerId);
+    this.cancelDrag();
+  }
+
+  private handleDocumentKeyDown(event: KeyboardEvent): void {
+    if (event.key !== 'Escape' || !this.dragState) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+    this.cancelDrag();
+  }
+
+  private updateDragTarget(clientX: number, clientY: number): void {
+    if (!this.dragState || !this.lastRenderState || this.lastRenderState.tablePos !== this.dragState.tablePos) {
+      return;
+    }
+
+    const targetIndex = this.findClosestAxisIndex(this.dragState.axis, clientX, clientY, this.lastRenderState.hostRect);
+    this.dragState.targetIndex = targetIndex;
+    this.dragState.isValidTarget = this.canDropAtIndex(this.dragState, targetIndex);
+    this.syncDragIndicator();
+  }
+
+  private findClosestAxisIndex(
+    axis: 'row' | 'column',
+    clientX: number,
+    clientY: number,
+    hostRect: DOMRect,
+  ): number | null {
+    const handles = axis === 'row' ? this.rowHandles : this.columnHandles;
+    const pointerCoordinate = axis === 'row' ? clientY - hostRect.top : clientX - hostRect.left;
+    let bestIndex: number | null = null;
+    let bestDistance = Number.POSITIVE_INFINITY;
+
+    for (const handle of handles) {
+      const index = Number(handle.dataset.index);
+      const center = Number(axis === 'row' ? handle.style.top.replace('px', '') : handle.style.left.replace('px', ''));
+      if (!Number.isInteger(index) || Number.isNaN(center)) {
+        continue;
+      }
+
+      const distance = Math.abs(center - pointerCoordinate);
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        bestIndex = index;
+      }
+    }
+
+    return bestIndex;
+  }
+
+  private canDropAtIndex(dragState: HtmlTableAxisDragState, targetIndex: number | null): boolean {
+    if (targetIndex === null || targetIndex === dragState.index) {
+      return false;
+    }
+
+    return dragState.axis === 'row'
+      ? moveRowToIndex({
+          allowCrossSectionMove: this.allowCrossSectionRowDrag,
+          fromRowIndex: dragState.index,
+          tablePos: dragState.tablePos,
+          toRowIndex: targetIndex,
+        })(this.view.state)
+      : moveColumnToIndex({
+          fromColumnIndex: dragState.index,
+          tablePos: dragState.tablePos,
+          toColumnIndex: targetIndex,
+        })(this.view.state);
+  }
+
+  private finishDrag(dragState: HtmlTableAxisDragState): void {
+    const targetIndex = dragState.targetIndex;
+    const canDrop = this.canDropAtIndex(dragState, targetIndex);
+
+    if (canDrop && targetIndex !== null) {
+      this.view.focus();
+      const command =
+        dragState.axis === 'row'
+          ? moveRowToIndex({
+              allowCrossSectionMove: this.allowCrossSectionRowDrag,
+              fromRowIndex: dragState.index,
+              tablePos: dragState.tablePos,
+              toRowIndex: targetIndex,
+            })
+          : moveColumnToIndex({
+              fromColumnIndex: dragState.index,
+              tablePos: dragState.tablePos,
+              toColumnIndex: targetIndex,
+            });
+      command(this.view.state, this.view.dispatch);
+    }
+
+    this.cancelDrag();
+  }
+
+  private cancelDrag(): void {
+    if (this.dragState?.handle) {
+      this.dragState.handle.classList.remove('is-dragging');
+    }
+
+    this.dragState = null;
+    this.root.classList.remove('html-table-overlay--dragging');
+    this.root.ownerDocument.body.style.removeProperty('user-select');
+    this.dropIndicator.hidden = true;
+    this.dropIndicator.className = 'html-table-overlay__drop-indicator';
+  }
+
+  private syncDragIndicator(): void {
+    const dragState = this.dragState;
+    const renderState = this.lastRenderState;
+    if (!dragState?.hasDragged || !renderState || dragState.targetIndex === null) {
+      this.dropIndicator.hidden = true;
+      this.dropIndicator.className = 'html-table-overlay__drop-indicator';
+      return;
+    }
+
+    const { geometry, positionState } = renderState;
+    if (dragState.axis === 'row') {
+      const row = geometry.rows[dragState.targetIndex];
+      if (!row) {
+        this.dropIndicator.hidden = true;
+        return;
+      }
+
+      this.dropIndicator.hidden = false;
+      this.dropIndicator.className = `html-table-overlay__drop-indicator html-table-overlay__drop-indicator--row${dragState.isValidTarget ? '' : ' html-table-overlay__drop-indicator--invalid'}`;
+      this.dropIndicator.style.left = `${positionState.visibleTableLeft}px`;
+      this.dropIndicator.style.top = `${positionState.tableTop + row.top + row.height / 2}px`;
+      this.dropIndicator.style.width = `${positionState.visibleTableWidth}px`;
+      this.dropIndicator.style.height = '';
+      return;
+    }
+
+    const column = geometry.columns[dragState.targetIndex];
+    if (!column) {
+      this.dropIndicator.hidden = true;
+      return;
+    }
+
+    this.dropIndicator.hidden = false;
+    this.dropIndicator.className = `html-table-overlay__drop-indicator html-table-overlay__drop-indicator--column${dragState.isValidTarget ? '' : ' html-table-overlay__drop-indicator--invalid'}`;
+    this.dropIndicator.style.left = `${positionState.tableLeft + column.left + column.width / 2}px`;
+    this.dropIndicator.style.top = `${positionState.visibleTableTop}px`;
+    this.dropIndicator.style.width = '';
+    this.dropIndicator.style.height = `${positionState.visibleTableHeight}px`;
   }
 
   private activateAxisHandle(

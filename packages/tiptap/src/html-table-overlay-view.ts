@@ -96,7 +96,9 @@ export class HtmlTableOverlayView {
 
     this.handleController = new HtmlTableHandleController({
       allowTableNodeSelection: options.allowTableNodeSelection,
+      allowCrossSectionRowDrag: options.allowCrossSectionRowDrag,
       contextMenuId: this.contextMenuId,
+      enableRowColumnDrag: options.enableRowColumnDrag,
       getView: () => this.view,
       handleCrossAxisSize: HANDLE_CROSS_AXIS_SIZE,
       handleMainAxisInset: HANDLE_MAIN_AXIS_INSET,
@@ -155,6 +157,7 @@ export class HtmlTableOverlayView {
   destroy(): void {
     this.resizeController.destroy();
     this.menuController.destroy();
+    this.handleController.destroy();
     this.root.ownerDocument.removeEventListener('mousedown', this.onDocumentMouseDown);
     this.root.ownerDocument.removeEventListener('mouseup', this.onDocumentMouseUpCapture, true);
     this.root.ownerDocument.removeEventListener('click', this.onDocumentClickCapture, true);

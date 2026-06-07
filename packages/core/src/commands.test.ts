@@ -31,7 +31,9 @@ import {
   mergeCells,
   mergeOrSplit,
   moveRowDown,
+  moveRowToIndex,
   moveColumnLeft,
+  moveColumnToIndex,
   moveColumnRight,
   moveRowToBody,
   moveRowToFoot,
@@ -1475,5 +1477,127 @@ describe('html table commands', () => {
     const nextState = applyCommand(state, fixTables());
 
     expect(getBody(getTable(nextState.doc)).childCount).toBe(1);
+  });
+
+  it('moves a row to an earlier index within the same section in one command', () => {
+    const table = schema.nodes.htmlTable!.create(null, [
+      schema.nodes.htmlTableBody!.create(null, [
+        schema.nodes.htmlTableRow!.create(null, [schema.nodes.htmlTableCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('A'))])]),
+        schema.nodes.htmlTableRow!.create(null, [schema.nodes.htmlTableCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('B'))])]),
+        schema.nodes.htmlTableRow!.create(null, [schema.nodes.htmlTableCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('C'))])]),
+      ]),
+    ]);
+    const doc = schema.nodes.doc!.create(null, [table]);
+    const cellPositions = findNodePositions(doc, 'htmlTableCell');
+    const state = EditorState.create({
+      schema,
+      doc,
+      selection: CellSelection.create(doc, cellPositions[2]!),
+    });
+
+    const nextState = applyCommand(state, moveRowToIndex({ fromRowIndex: 2, toRowIndex: 0 }));
+    const body = getBody(getTable(nextState.doc));
+
+    expect(body.child(0).textContent).toBe('C');
+    expect(body.child(1).textContent).toBe('A');
+    expect(body.child(2).textContent).toBe('B');
+    expect(getSelectedCellNode(nextState)?.textContent).toBe('C');
+  });
+
+  it('moves a row across sections when allowCrossSectionMove is enabled', () => {
+    const table = schema.nodes.htmlTable!.create(null, [
+      schema.nodes.htmlTableHead!.create(null, [
+        schema.nodes.htmlTableRow!.create(null, [schema.nodes.htmlTableHeaderCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('H'))])]),
+      ]),
+      schema.nodes.htmlTableBody!.create(null, [
+        schema.nodes.htmlTableRow!.create(null, [schema.nodes.htmlTableCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('A'))])]),
+        schema.nodes.htmlTableRow!.create(null, [schema.nodes.htmlTableCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('B'))])]),
+      ]),
+    ]);
+    const doc = schema.nodes.doc!.create(null, [table]);
+    const bodyCellPositions = findNodePositions(doc, 'htmlTableCell');
+    const state = EditorState.create({
+      schema,
+      doc,
+      selection: CellSelection.create(doc, bodyCellPositions[1]!),
+    });
+
+    const nextState = applyCommand(
+      state,
+      moveRowToIndex({ fromRowIndex: 2, toRowIndex: 0, allowCrossSectionMove: true }),
+    );
+    const nextTable = getTable(nextState.doc);
+
+    expect(getSection(nextTable, 'htmlTableHead')?.child(0).textContent).toBe('B');
+    expect(getSection(nextTable, 'htmlTableHead')?.child(0).child(0).type.name).toBe('htmlTableHeaderCell');
+    expect(getSection(nextTable, 'htmlTableHead')?.child(1).textContent).toBe('H');
+    expect(getBody(nextTable).child(0).textContent).toBe('A');
+  });
+
+  it('does not move a row across sections by default', () => {
+    const table = schema.nodes.htmlTable!.create(null, [
+      schema.nodes.htmlTableHead!.create(null, [
+        schema.nodes.htmlTableRow!.create(null, [schema.nodes.htmlTableHeaderCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('H'))])]),
+      ]),
+      schema.nodes.htmlTableBody!.create(null, [
+        schema.nodes.htmlTableRow!.create(null, [schema.nodes.htmlTableCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('A'))])]),
+      ]),
+    ]);
+    const state = createStateForTable(table);
+
+    expect(moveRowToIndex({ fromRowIndex: 1, toRowIndex: 0 })(state)).toBe(false);
+  });
+
+  it('moves a column to a later index and keeps colgroup widths aligned', () => {
+    const table = schema.nodes.htmlTable!.create(null, [
+      schema.nodes.htmlTableColgroup!.create(null, [
+        schema.nodes.htmlTableCol!.create({ span: null, width: 120 }),
+        schema.nodes.htmlTableCol!.create({ span: null, width: 240 }),
+        schema.nodes.htmlTableCol!.create({ span: null, width: 360 }),
+      ]),
+      schema.nodes.htmlTableBody!.create(null, [
+        schema.nodes.htmlTableRow!.create(null, [
+          schema.nodes.htmlTableCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('A'))]),
+          schema.nodes.htmlTableCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('B'))]),
+          schema.nodes.htmlTableCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('C'))]),
+        ]),
+      ]),
+    ]);
+    const doc = schema.nodes.doc!.create(null, [table]);
+    const cellPositions = findNodePositions(doc, 'htmlTableCell');
+    const state = EditorState.create({
+      schema,
+      doc,
+      selection: CellSelection.create(doc, cellPositions[0]!),
+    });
+
+    const nextState = applyCommand(state, moveColumnToIndex({ fromColumnIndex: 0, toColumnIndex: 2 }));
+    const nextTable = getTable(nextState.doc);
+    const body = getBody(nextTable);
+    const colgroup = getSection(nextTable, 'htmlTableColgroup');
+
+    expect(body.child(0).textContent).toBe('BCA');
+    expect(colgroup?.child(0).attrs.width).toBe(240);
+    expect(colgroup?.child(1).attrs.width).toBe(360);
+    expect(colgroup?.child(2).attrs.width).toBe(120);
+  });
+
+  it('does not move a column to an arbitrary index when merged cells are involved', () => {
+    const table = schema.nodes.htmlTable!.create(null, [
+      schema.nodes.htmlTableBody!.create(null, [
+        schema.nodes.htmlTableRow!.create(null, [
+          schema.nodes.htmlTableCell!.create({ colspan: 2 }, [schema.nodes.paragraph!.create(null, schema.text('A'))]),
+          schema.nodes.htmlTableCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('B'))]),
+        ]),
+        schema.nodes.htmlTableRow!.create(null, [
+          schema.nodes.htmlTableCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('C'))]),
+          schema.nodes.htmlTableCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('D'))]),
+          schema.nodes.htmlTableCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('E'))]),
+        ]),
+      ]),
+    ]);
+    const state = createStateForTable(table);
+
+    expect(moveColumnToIndex({ fromColumnIndex: 0, toColumnIndex: 2 })(state)).toBe(false);
   });
 });

@@ -152,6 +152,8 @@ Tiptap 包目前包含：
   cellMinWidth: 120,
   lastColumnResizable: true,
   allowTableNodeSelection: true,
+  enableRowColumnDrag: true,
+  allowCrossSectionRowDrag: false,
   enableTabNavigation: true,
   addRowOnTabAtEnd: true,
   enableShiftArrowSelection: true,
@@ -163,6 +165,8 @@ Tiptap 包目前包含：
   selectedTableClassName: 'html-table-node--selected',
 }
 ```
+
+默认支持通过行/列 handle 拖拽重排；只有在开启 `allowCrossSectionRowDrag` 时，行才允许跨 `thead` / `tbody` / `tfoot` 拖动。
 
 快捷键：
 

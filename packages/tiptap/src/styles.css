@@ -24,6 +24,8 @@
   --html-table-overlay-guide: var(--html-table-column-resize-handle-bg);
   --html-table-overlay-danger: #b91c1c;
   --html-table-overlay-danger-bg: rgba(220, 38, 38, 0.08);
+  --html-table-dnd-indicator-color: #2563eb;
+  --html-table-dnd-indicator-invalid-color: #dc2626;
   --html-table-selection-gutter: 1rem;
 }
 
@@ -247,8 +249,18 @@
   color: #ffffff;
 }
 
+.html-table-overlay .html-table-overlay__handle.is-dragging {
+  background: var(--html-table-overlay-handle-selected);
+  box-shadow: inset 0 0 0 1px rgba(29, 78, 216, 0.92);
+}
+
+.html-table-overlay .html-table-overlay__handle.is-dragging::after {
+  color: #ffffff;
+}
+
 .html-table-overlay .html-table-overlay__handle--row {
   min-height: 0.95rem;
+  cursor: grab;
 }
 
 .html-table-overlay .html-table-overlay__handle--row::after {
@@ -259,6 +271,34 @@
 
 .html-table-overlay .html-table-overlay__handle--column {
   min-width: 0;
+  cursor: grab;
+}
+
+.html-table-overlay.html-table-overlay--dragging .html-table-overlay__handle--row,
+.html-table-overlay.html-table-overlay--dragging .html-table-overlay__handle--column {
+  cursor: grabbing;
+}
+
+.html-table-overlay .html-table-overlay__drop-indicator {
+  position: absolute;
+  z-index: 3;
+  pointer-events: none;
+  background: var(--html-table-dnd-indicator-color);
+  box-shadow: 0 0 0 1px rgb(255 255 255 / 0.92);
+}
+
+.html-table-overlay .html-table-overlay__drop-indicator--row {
+  min-height: 2px;
+  transform: translateY(-50%);
+}
+
+.html-table-overlay .html-table-overlay__drop-indicator--column {
+  min-width: 2px;
+  transform: translateX(-50%);
+}
+
+.html-table-overlay .html-table-overlay__drop-indicator--invalid {
+  background: var(--html-table-dnd-indicator-invalid-color);
 }
 
 .html-table-overlay .html-table-overlay__resize-handle {

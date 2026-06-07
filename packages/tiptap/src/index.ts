@@ -45,6 +45,8 @@ export type {
   HtmlTableCellNavigationOptions,
   HtmlTableCommandOptions,
   InsertHtmlTableCommandOptions,
+  MoveHtmlTableColumnToIndexOptions,
+  MoveHtmlTableRowToIndexOptions,
 } from './commands.js';
 export type {
   HtmlTableContextAction,

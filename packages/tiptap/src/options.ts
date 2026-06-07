@@ -8,6 +8,8 @@ export interface HtmlTableTiptapOptions {
   cellMinWidth: number;
   lastColumnResizable: boolean;
   allowTableNodeSelection: boolean;
+  enableRowColumnDrag: boolean;
+  allowCrossSectionRowDrag: boolean;
   enableTabNavigation: boolean;
   addRowOnTabAtEnd: boolean;
   enableShiftArrowSelection: boolean;
@@ -27,6 +29,8 @@ export const defaultHtmlTableTiptapOptions: HtmlTableTiptapOptions = {
   cellMinWidth: 120,
   lastColumnResizable: true,
   allowTableNodeSelection: true,
+  enableRowColumnDrag: true,
+  allowCrossSectionRowDrag: false,
   enableTabNavigation: true,
   addRowOnTabAtEnd: true,
   enableShiftArrowSelection: true,
