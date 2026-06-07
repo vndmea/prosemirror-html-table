@@ -290,8 +290,12 @@ export function getTableSelectionInfo(
 export function findAdjacentCell(
   selectionInfo: TableSelectionInfo,
   direction: 'left' | 'right' | 'up' | 'down',
+  options: {
+    constrainToSection?: boolean;
+  } = {},
 ): HtmlTableCellRef | undefined {
   const headCell = selectionInfo.headCell;
+  const constrainToSection = options.constrainToSection ?? true;
   const targetRowIndex =
     direction === 'up'
       ? headCell.rowIndex - 1
@@ -310,7 +314,12 @@ export function findAdjacentCell(
 
   const targetCell = selectionInfo.grid.slots[targetRowIndex]?.[targetColumnIndex]?.cell;
   if (!targetCell) return undefined;
-  if (targetCell.section !== headCell.section || targetCell.sectionIndex !== headCell.sectionIndex) return undefined;
+  if (
+    constrainToSection
+    && (targetCell.section !== headCell.section || targetCell.sectionIndex !== headCell.sectionIndex)
+  ) {
+    return undefined;
+  }
 
   return targetCell;
 }

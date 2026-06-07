@@ -138,6 +138,7 @@ Tiptap 包目前包含：
 - 单元格内的原生文字选择
 - Tab / Shift-Tab 导航
 - Shift-Arrow 单元格范围扩展
+- 选中整张表全部单元格时支持 Backspace / Delete 删除整表
 ```
 
 可用选项：
@@ -151,12 +152,29 @@ Tiptap 包目前包含：
   cellMinWidth: 120,
   lastColumnResizable: true,
   allowTableNodeSelection: true,
+  enableTabNavigation: true,
+  addRowOnTabAtEnd: true,
+  enableShiftArrowSelection: true,
+  constrainShiftArrowToSection: true,
+  deleteTableOnAllCellsSelected: true,
   View: null,
   wrapperClassName: 'html-table-node__wrapper',
   selectedCellClassName: 'html-table-cell--selected',
   selectedTableClassName: 'html-table-node--selected',
 }
 ```
+
+快捷键：
+
+| 快捷键 | 行为 |
+| --- | --- |
+| `Tab` | 移动到下一个单元格；在最后一个单元格时可按配置自动补一行并继续移动。 |
+| `Shift-Tab` | 移动到上一个单元格。 |
+| `Shift-ArrowLeft/Right/Up/Down` | 将当前 `CellSelection` 扩展到相邻单元格。 |
+| `Backspace` / `Delete` | 当所有逻辑单元格都被选中时删除整张表。 |
+| `Mod-Backspace` / `Mod-Delete` | 在 macOS / 平台修饰键场景下执行同样的整表删除行为。 |
+
+默认情况下，`Shift-Arrow` 会把 `thead`、`tbody`、`tfoot` 的边界当作硬边界。如果需要跨 section 扩展选区，可将 `constrainShiftArrowToSection` 设为 `false`。
 
 ### Tiptap 使用方式
 

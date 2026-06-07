@@ -8,6 +8,11 @@ export interface HtmlTableTiptapOptions {
   cellMinWidth: number;
   lastColumnResizable: boolean;
   allowTableNodeSelection: boolean;
+  enableTabNavigation: boolean;
+  addRowOnTabAtEnd: boolean;
+  enableShiftArrowSelection: boolean;
+  constrainShiftArrowToSection: boolean;
+  deleteTableOnAllCellsSelected: boolean;
   View: typeof HtmlTableNodeView | null;
   wrapperClassName: string;
   selectedCellClassName: string;
@@ -22,6 +27,11 @@ export const defaultHtmlTableTiptapOptions: HtmlTableTiptapOptions = {
   cellMinWidth: 120,
   lastColumnResizable: true,
   allowTableNodeSelection: true,
+  enableTabNavigation: true,
+  addRowOnTabAtEnd: true,
+  enableShiftArrowSelection: true,
+  constrainShiftArrowToSection: true,
+  deleteTableOnAllCellsSelected: true,
   View: null,
   wrapperClassName: 'html-table-node__wrapper',
   selectedCellClassName: 'html-table-cell--selected',

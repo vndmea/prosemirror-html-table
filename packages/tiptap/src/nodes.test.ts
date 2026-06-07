@@ -2,7 +2,7 @@ import { Schema } from 'prosemirror-model';
 import { EditorState, TextSelection } from '@tiptap/pm/state';
 import { describe, expect, it } from 'vitest';
 
-import { createHtmlTableNode, createHtmlTableNodeSpecs } from 'prosemirror-html-table';
+import { CellSelection, createHtmlTableNode, createHtmlTableNodeSpecs } from 'prosemirror-html-table';
 
 import {
   HtmlTable,
@@ -18,6 +18,21 @@ import {
   HtmlTableHeaderCell,
   HtmlTableRow,
 } from './index.js';
+import { defaultHtmlTableTiptapOptions } from './options.js';
+
+const schema = new Schema({
+  nodes: {
+    doc: { content: 'block+' },
+    text: { group: 'inline' },
+    paragraph: {
+      group: 'block',
+      content: 'inline*',
+      toDOM: () => ['p', 0],
+      parseDOM: [{ tag: 'p' }],
+    },
+    ...createHtmlTableNodeSpecs(),
+  },
+});
 
 describe('HtmlTableExtensions', () => {
   it('exports all full HTML table node extensions in schema order', () => {
@@ -204,4 +219,156 @@ describe('HtmlTableExtensions', () => {
       HTMLAttributes: {},
     })).toEqual(['caption', { 'data-placeholder': 'Type table caption' }, 0]);
   });
+
+  it('deletes the table when all cells are selected and delete shortcuts are used', () => {
+    const table = createHtmlTableNode(schema, { rows: 2, cols: 2 });
+    const doc = schema.nodes.doc!.create(null, [table]);
+    const cellPositions = findNodePositions(doc, 'htmlTableCell');
+    const state = EditorState.create({
+      schema,
+      doc,
+      selection: CellSelection.create(doc, cellPositions[0]!, cellPositions[cellPositions.length - 1]!),
+    });
+    let deleteCalls = 0;
+    const shortcuts = getHtmlTableShortcuts(state, {}, {
+      deleteHtmlTable: () => {
+        deleteCalls += 1;
+        return true;
+      },
+    });
+
+    for (const key of ['Backspace', 'Delete', 'Mod-Backspace', 'Mod-Delete'] as const) {
+      expect(shortcuts[key]).toBeTypeOf('function');
+      expect(shortcuts[key]?.()).toBe(true);
+    }
+
+    expect(deleteCalls).toBe(4);
+  });
+
+  it('does not delete the table for partial cell selections or when the option is disabled', () => {
+    const table = createHtmlTableNode(schema, { rows: 2, cols: 2 });
+    const doc = schema.nodes.doc!.create(null, [table]);
+    const cellPositions = findNodePositions(doc, 'htmlTableCell');
+    const partialState = EditorState.create({
+      schema,
+      doc,
+      selection: CellSelection.create(doc, cellPositions[0]!, cellPositions[1]!),
+    });
+    const disabledState = EditorState.create({
+      schema,
+      doc,
+      selection: CellSelection.create(doc, cellPositions[0]!, cellPositions[cellPositions.length - 1]!),
+    });
+    let deleteCalls = 0;
+
+    const partialShortcuts = getHtmlTableShortcuts(partialState, {}, {
+      deleteHtmlTable: () => {
+        deleteCalls += 1;
+        return true;
+      },
+    });
+    const disabledShortcuts = getHtmlTableShortcuts(
+      disabledState,
+      { deleteTableOnAllCellsSelected: false },
+      {
+        deleteHtmlTable: () => {
+          deleteCalls += 1;
+          return true;
+        },
+      },
+    );
+
+    expect(partialShortcuts.Backspace?.()).toBe(false);
+    expect(disabledShortcuts.Delete?.()).toBe(false);
+    expect(deleteCalls).toBe(0);
+  });
+
+  it('allows Shift-Arrow expansion across sections when configured', () => {
+    const sectionedTable = schema.nodes.htmlTable!.create(null, [
+      schema.nodes.htmlTableHead!.create(null, [
+        schema.nodes.htmlTableRow!.create(null, [
+          schema.nodes.htmlTableHeaderCell!.create(null, [schema.nodes.paragraph!.create()]),
+        ]),
+      ]),
+      schema.nodes.htmlTableBody!.create(null, [
+        schema.nodes.htmlTableRow!.create(null, [
+          schema.nodes.htmlTableCell!.create(null, [schema.nodes.paragraph!.create()]),
+        ]),
+      ]),
+    ]);
+    const doc = schema.nodes.doc!.create(null, [sectionedTable]);
+    const headPositions = findNodePositions(doc, 'htmlTableHeaderCell');
+    const bodyPositions = findNodePositions(doc, 'htmlTableCell');
+    const state = EditorState.create({
+      schema,
+      doc,
+      selection: CellSelection.create(doc, headPositions[0]!),
+    });
+
+    const constrained = getHtmlTableShortcuts(state);
+    expect(constrained['Shift-ArrowDown']?.()).toBe(false);
+
+    const dispatched: unknown[] = [];
+    const unconstrained = getHtmlTableShortcuts(
+      state,
+      { constrainShiftArrowToSection: false },
+      {},
+      (transaction) => {
+        dispatched.push(transaction);
+      },
+    );
+
+    expect(unconstrained['Shift-ArrowDown']?.()).toBe(true);
+    expect(dispatched).toHaveLength(1);
+    expect((dispatched[0] as { selection: unknown }).selection).toBeInstanceOf(CellSelection);
+    expect(((dispatched[0] as { selection: CellSelection }).selection).headCellPos).toBe(bodyPositions[0]);
+  });
 });
+
+function getHtmlTableShortcuts(
+  state: EditorState,
+  optionOverrides: Partial<typeof defaultHtmlTableTiptapOptions> = {},
+  commandOverrides: Partial<{
+    goToNextHtmlTableCell: () => boolean;
+    goToPreviousHtmlTableCell: () => boolean;
+    addHtmlTableRowAfter: () => boolean;
+    deleteHtmlTable: () => boolean;
+  }> = {},
+  dispatch: (transaction: unknown) => void = () => {},
+) {
+  const extension = HtmlTable as unknown as {
+    config: {
+      addKeyboardShortcuts?: () => Record<string, () => boolean>;
+    };
+  };
+
+  return extension.config.addKeyboardShortcuts?.call({
+    editor: {
+      state,
+      commands: {
+        goToNextHtmlTableCell: () => false,
+        goToPreviousHtmlTableCell: () => false,
+        addHtmlTableRowAfter: () => false,
+        deleteHtmlTable: () => false,
+        ...commandOverrides,
+      },
+      view: { dispatch },
+    },
+    options: {
+      ...defaultHtmlTableTiptapOptions,
+      ...optionOverrides,
+    },
+  }) ?? {};
+}
+
+function findNodePositions(doc: import('prosemirror-model').Node, typeName: string): number[] {
+  const positions: number[] = [];
+
+  doc.descendants((node, pos) => {
+    if (node.type.name === typeName) {
+      positions.push(pos);
+    }
+  });
+
+  return positions;
+}

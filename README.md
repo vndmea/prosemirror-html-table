@@ -138,6 +138,7 @@ The Tiptap package now includes:
 - native text selection inside cells
 - Tab / Shift-Tab navigation
 - Shift-Arrow cell-range expansion
+- Backspace / Delete whole-table removal when every cell is selected
 ```
 
 Available options:
@@ -151,12 +152,29 @@ Available options:
   cellMinWidth: 120,
   lastColumnResizable: true,
   allowTableNodeSelection: true,
+  enableTabNavigation: true,
+  addRowOnTabAtEnd: true,
+  enableShiftArrowSelection: true,
+  constrainShiftArrowToSection: true,
+  deleteTableOnAllCellsSelected: true,
   View: null,
   wrapperClassName: 'html-table-node__wrapper',
   selectedCellClassName: 'html-table-cell--selected',
   selectedTableClassName: 'html-table-node--selected',
 }
 ```
+
+Keyboard shortcuts:
+
+| Shortcut | Behavior |
+| --- | --- |
+| `Tab` | Move to the next cell. At the last cell, optionally add a row and continue. |
+| `Shift-Tab` | Move to the previous cell. |
+| `Shift-ArrowLeft/Right/Up/Down` | Expand the current `CellSelection` to an adjacent cell. |
+| `Backspace` / `Delete` | Delete the whole table when every logical cell is selected. |
+| `Mod-Backspace` / `Mod-Delete` | Same whole-table delete behavior on macOS / platform modifier setups. |
+
+By default, `Shift-Arrow` expansion treats `thead`, `tbody`, and `tfoot` boundaries as hard stops. Set `constrainShiftArrowToSection: false` to allow cross-section expansion.
 
 ### Tiptap usage
 
