@@ -120,7 +120,7 @@ function createSchema(names?: Partial<HtmlTableNodeNames>): Schema {
   return new Schema({
     nodes: {
       ...baseNodes,
-      ...createHtmlTableNodeSpecs({ names }),
+      ...createHtmlTableNodeSpecs(names ? { names } : {}),
     },
   });
 }
