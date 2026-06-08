@@ -55,15 +55,13 @@ export function toggleHeader(
   type: ToggleHeaderType,
   options: ToggleHeaderOptions = {},
 ): Command {
-  const { useDeprecatedLogic: _useDeprecatedLogic, ...commandOptions } = options;
-
   switch (type) {
     case 'row':
-      return toggleHeaderRow(commandOptions);
+      return toggleHeaderRow(options);
     case 'column':
-      return toggleHeaderColumn(commandOptions);
+      return toggleHeaderColumn(options);
     case 'cell':
-      return toggleHeaderCell(commandOptions);
+      return toggleHeaderCell(options);
     default:
       return () => false;
   }
