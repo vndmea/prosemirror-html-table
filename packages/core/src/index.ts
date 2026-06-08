@@ -76,6 +76,12 @@ export {
   serializeCellSelectionToHtmlTable,
   serializeCellSelectionToText,
 } from './clipboard.js';
+export {
+  findCellPos,
+  findTable,
+  setCellAttr,
+  toggleHeader,
+} from './compat.js';
 export { htmlTableNodeNames } from './names.js';
 export { createHtmlTableGrid, getCellAt, isCellAnchor } from './grid.js';
 export { HtmlTableMap } from './table-map.js';
@@ -97,6 +103,7 @@ export type {
   HtmlTableSortRowsOptions,
 } from './commands.js';
 export type { ApplyTableClipboardOptions, ParsedClipboardCell, ParsedTableClipboard } from './clipboard.js';
+export type { FindNodeResult, ToggleHeaderOptions, ToggleHeaderType } from './compat.js';
 export type { NormalizeHtmlTableOptions } from './normalize.js';
 export type { HtmlTableNodeNameKey } from './names.js';
 
