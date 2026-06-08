@@ -139,4 +139,26 @@ describe('createHtmlTableNodeSpecs', () => {
     });
     expect(rendered).toEqual(['td', { style: 'vertical-align: middle;' }, 0]);
   });
+
+  it('sanitizes invalid span and colwidth values while parsing cells', () => {
+    const specs = createHtmlTableNodeSpecs();
+    const parseRule = specs.htmlTableCell?.parseDOM?.[0];
+    const parsed = parseRule && 'getAttrs' in parseRule
+      ? parseRule.getAttrs?.({
+          getAttribute: (name: string) => {
+            if (name === 'colspan') return 'abc';
+            if (name === 'rowspan') return '0';
+            if (name === 'data-colwidth') return '120,abc,-5,0,240';
+            return null;
+          },
+          style: {},
+        } as HTMLElement)
+      : null;
+
+    expect(parsed).toMatchObject({
+      colspan: 1,
+      rowspan: 1,
+      colwidth: [120, 240],
+    });
+  });
 });

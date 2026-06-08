@@ -3,19 +3,19 @@ import type { HtmlTableCellAttributeSpec, HtmlTableCellAttributes, HtmlTableRend
 export const defaultHtmlTableCellAttributes: HtmlTableCellAttributes = {
   colspan: {
     default: 1,
-    parseHTML: (element) => Number(element.getAttribute('colspan') || 1),
+    parseHTML: (element) => parsePositiveIntegerAttribute(element.getAttribute('colspan'), 1),
     renderHTML: (attrs) => (attrs.colspan !== 1 ? { colspan: String(attrs.colspan) } : {}),
   },
   rowspan: {
     default: 1,
-    parseHTML: (element) => Number(element.getAttribute('rowspan') || 1),
+    parseHTML: (element) => parsePositiveIntegerAttribute(element.getAttribute('rowspan'), 1),
     renderHTML: (attrs) => (attrs.rowspan !== 1 ? { rowspan: String(attrs.rowspan) } : {}),
   },
   colwidth: {
     default: null,
     parseHTML: (element) => {
       const value = element.getAttribute('data-colwidth');
-      return value ? value.split(',').map((item) => Number(item)) : null;
+      return parsePositiveNumberList(value);
     },
     renderHTML: (attrs) =>
       Array.isArray(attrs.colwidth) ? { 'data-colwidth': attrs.colwidth.join(',') } : {},
@@ -117,6 +117,25 @@ function normalizeStyleValue(value: string | null | undefined): string | null {
   if (typeof value !== 'string') return null;
   const normalized = value.trim();
   return normalized.length > 0 ? normalized : null;
+}
+
+function parsePositiveIntegerAttribute(value: string | null, fallback: number): number {
+  if (typeof value !== 'string') return fallback;
+
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 1) return fallback;
+  return parsed;
+}
+
+function parsePositiveNumberList(value: string | null): number[] | null {
+  if (typeof value !== 'string' || value.trim().length === 0) return null;
+
+  const parsed = value
+    .split(',')
+    .map((item) => Number(item.trim()))
+    .filter((item) => Number.isFinite(item) && item > 0);
+
+  return parsed.length > 0 ? parsed : null;
 }
 
 function mergeStyleAttribute(
