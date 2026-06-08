@@ -354,6 +354,18 @@ describe('html table commands', () => {
     expect(firstCell.attrs.colspan).toBe(2);
   });
 
+  it('returns false when the selected cell already has the target attribute value', () => {
+    const state = createStateWithTable(2, 2);
+    let dispatched = false;
+
+    const result = setCellAttribute('colspan', 1)(state, () => {
+      dispatched = true;
+    });
+
+    expect(result).toBe(false);
+    expect(dispatched).toBe(false);
+  });
+
   it('sets text alignment for the current cell selection', () => {
     const state = createStateWithTable(2, 2);
     const cellPositions = findNodePositions(state.doc, 'htmlTableHeaderCell');

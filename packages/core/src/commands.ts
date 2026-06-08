@@ -858,6 +858,7 @@ export function setCellAttribute(
   return (state, dispatch) => {
     const context = findCellContext(state, options);
     if (!context) return false;
+    if (context.cell.node.attrs[name] === value) return false;
 
     const table = updateCellAt(context, context.cell, (cell) => copyCellWithAttrs(cell, { [name]: value }));
     return replaceTable(state, dispatch, context, table);
