@@ -131,6 +131,50 @@ describe('tableEditing', () => {
     }
   });
 
+  it('extends an existing CellSelection with Shift-ArrowRight', () => {
+    const plugin = tableEditing();
+    const state = createStateWithCellSelection(['A', 'B', 'C', 'D'], [0, 0]);
+    const view = createView(state);
+    const cellPositions = findNodePositions(state.doc, 'htmlTableCell');
+    const event = createKeyboardEvent('ArrowRight', { shiftKey: true });
+
+    const handled = plugin.props.handleKeyDown?.call(plugin, view, event as unknown as KeyboardEvent);
+
+    expect(handled).toBe(true);
+    expect(event.prevented).toBe(true);
+    expect(view.state.selection).toBeInstanceOf(CellSelection);
+    if (view.state.selection instanceof CellSelection) {
+      expect([view.state.selection.anchorCellPos, view.state.selection.headCellPos]).toEqual([
+        cellPositions[0],
+        cellPositions[1],
+      ]);
+    }
+  });
+
+  it('starts a CellSelection from a text cursor at the end of a cell with Shift-ArrowRight', () => {
+    const plugin = tableEditing();
+    const state = createStateWithTextCursor(['A', 'B', 'C', 'D'], 0, 'end');
+    const view = createView(state, {
+      endOfTextblock() {
+        return true;
+      },
+    });
+    const cellPositions = findNodePositions(state.doc, 'htmlTableCell');
+    const event = createKeyboardEvent('ArrowRight', { shiftKey: true });
+
+    const handled = plugin.props.handleKeyDown?.call(plugin, view, event as unknown as KeyboardEvent);
+
+    expect(handled).toBe(true);
+    expect(event.prevented).toBe(true);
+    expect(view.state.selection).toBeInstanceOf(CellSelection);
+    if (view.state.selection instanceof CellSelection) {
+      expect([view.state.selection.anchorCellPos, view.state.selection.headCellPos]).toEqual([
+        cellPositions[0],
+        cellPositions[1],
+      ]);
+    }
+  });
+
   it('keeps table node selections when allowTableNodeSelection is true', () => {
     const plugin = tableEditing({ allowTableNodeSelection: true });
     const state = createStateWithTableSelection();
@@ -184,15 +228,22 @@ function createStateWithTableSelection(): EditorState {
   });
 }
 
-function createStateWithTextCursor(texts: string[], cellIndex: number): EditorState {
+function createStateWithTextCursor(
+  texts: string[],
+  cellIndex: number,
+  placement: 'start' | 'end' = 'start',
+): EditorState {
   const table = withCellTexts(createHtmlTableNode(schema, { rows: 2, cols: 2, withHeaderRow: false }), texts);
   const doc = schema.nodes.doc!.create(null, [table]);
   const cellPositions = findNodePositions(doc, 'htmlTableCell');
+  const cellPos = cellPositions[cellIndex]!;
+  const cellNode = doc.nodeAt(cellPos)!;
+  const targetPos = placement === 'end' ? cellPos + cellNode.nodeSize - 2 : cellPos + 1;
 
   return EditorState.create({
     schema,
     doc,
-    selection: TextSelection.near(doc.resolve(cellPositions[cellIndex]! + 1)),
+    selection: TextSelection.near(doc.resolve(targetPos)),
   });
 }
 
@@ -202,6 +253,7 @@ function createView(
     dom?: unknown;
     root?: ReturnType<typeof createRootEventTarget>;
     posAtCoords?: (coords: { left: number; top: number }) => { pos: number; inside: number } | null;
+    endOfTextblock?: (direction: string) => boolean;
   } = {},
 ): EditorView & { state: EditorState } {
   const view = {} as EditorView & { state: EditorState };
@@ -212,6 +264,7 @@ function createView(
     view.state = view.state.apply(tr);
   };
   view.posAtCoords = ((coords) => options.posAtCoords?.(coords) ?? null) as EditorView['posAtCoords'];
+  view.endOfTextblock = ((direction) => options.endOfTextblock?.(direction) ?? false) as EditorView['endOfTextblock'];
   return view;
 }
 
@@ -240,9 +293,24 @@ function createClipboardEvent(
   };
 }
 
-function createKeyboardEvent(key: string): { key: string; prevented: boolean; preventDefault: () => void } {
+function createKeyboardEvent(
+  key: string,
+  modifiers: { shiftKey?: boolean; ctrlKey?: boolean; metaKey?: boolean; altKey?: boolean } = {},
+): {
+  key: string;
+  shiftKey: boolean;
+  ctrlKey: boolean;
+  metaKey: boolean;
+  altKey: boolean;
+  prevented: boolean;
+  preventDefault: () => void;
+} {
   return {
     key,
+    shiftKey: modifiers.shiftKey ?? false,
+    ctrlKey: modifiers.ctrlKey ?? false,
+    metaKey: modifiers.metaKey ?? false,
+    altKey: modifiers.altKey ?? false,
     prevented: false,
     preventDefault() {
       this.prevented = true;

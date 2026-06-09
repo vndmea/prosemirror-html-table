@@ -6,6 +6,7 @@ import { clearSelectedCells, isWholeTableSelection, parseHtmlTableClipboard, par
 import { deleteTable } from './commands.js';
 import { createFixTablesTransaction } from './fix-tables.js';
 import { CellSelection, isCellSelection } from './selection.js';
+import { HtmlTableMap } from './table-map.js';
 
 export interface TableEditingOptions {
   allowTableNodeSelection?: boolean;
@@ -46,7 +47,7 @@ export function tableEditing({ allowTableNodeSelection = false }: TableEditingOp
         },
       },
       handleKeyDown(view, event) {
-        return handleDeleteKey(view, event);
+        return handleKeyDown(view, event);
       },
       handleTripleClick(view, pos) {
         return handleTripleClick(view, pos);
@@ -121,12 +122,46 @@ function handleDeleteKey(view: EditorView, event: KeyboardEvent): boolean {
   return cleared;
 }
 
+function handleKeyDown(view: EditorView, event: KeyboardEvent): boolean {
+  if (handleShiftArrow(view, event)) return true;
+  return handleDeleteKey(view, event);
+}
+
+function handleShiftArrow(view: EditorView, event: KeyboardEvent): boolean {
+  const direction = getShiftArrowDirection(event);
+  if (!direction) return false;
+
+  const selection = createShiftArrowSelection(view, direction.axis, direction.dir);
+  if (!selection || selection.eq(view.state.selection)) return false;
+
+  event.preventDefault();
+  view.dispatch(view.state.tr.setSelection(selection).scrollIntoView());
+  return true;
+}
+
 function handleTripleClick(view: EditorView, pos: number): boolean {
   const $cell = cellAround(view.state.doc.resolve(pos));
   if (!$cell) return false;
 
   view.dispatch(view.state.tr.setSelection(CellSelection.create(view.state.doc, $cell.pos - 1)));
   return true;
+}
+
+function createShiftArrowSelection(
+  view: EditorView,
+  axis: 'horiz' | 'vert',
+  dir: -1 | 1,
+): CellSelection | null {
+  const selection = view.state.selection;
+  const cellSelection = selection instanceof CellSelection
+    ? selection
+    : createCellSelectionFromTextCursor(view, axis, dir);
+  if (!cellSelection) return null;
+
+  const nextHeadCellPos = nextCellPos(view.state.doc, cellSelection.headCellPos, axis, dir);
+  if (nextHeadCellPos == null) return null;
+
+  return CellSelection.create(view.state.doc, cellSelection.anchorCellPos, nextHeadCellPos);
 }
 
 function handleMouseDown(view: EditorView, startEvent: MouseEvent): boolean | void {
@@ -348,6 +383,34 @@ function setCellSelection(
   }
 }
 
+function createCellSelectionFromTextCursor(
+  view: EditorView,
+  axis: 'horiz' | 'vert',
+  dir: -1 | 1,
+): CellSelection | null {
+  const cellPos = atEndOfCell(view, axis, dir);
+  return cellPos == null ? null : CellSelection.create(view.state.doc, cellPos);
+}
+
+function atEndOfCell(view: EditorView, axis: 'horiz' | 'vert', dir: -1 | 1): number | null {
+  if (!(view.state.selection instanceof TextSelection)) return null;
+
+  const { $head } = view.state.selection;
+  for (let depth = $head.depth - 1; depth >= 0; depth -= 1) {
+    const parent = $head.node(depth);
+    const index = dir < 0 ? $head.index(depth) : $head.indexAfter(depth);
+    const expectedIndex = dir < 0 ? 0 : parent.childCount;
+    if (index !== expectedIndex) return null;
+
+    if (parent.type.spec.tableRole === 'cell' || parent.type.spec.tableRole === 'header_cell') {
+      const direction = axis === 'vert' ? (dir > 0 ? 'down' : 'up') : (dir > 0 ? 'right' : 'left');
+      return view.endOfTextblock(direction) ? $head.before(depth) : null;
+    }
+  }
+
+  return null;
+}
+
 function domInCell(view: EditorView, target: EventTarget | null): unknown {
   for (let current = target as { nodeName?: string; parentNode?: unknown } | null; current && current !== view.dom; current = current.parentNode as { nodeName?: string; parentNode?: unknown } | null) {
     if (current.nodeName === 'TD' || current.nodeName === 'TH') {
@@ -370,6 +433,21 @@ function cellUnderMouse(view: EditorView, event: MouseEvent): ReturnType<typeof 
   );
 }
 
+function nextCellPos(
+  doc: ProseMirrorNode,
+  cellPos: number,
+  axis: 'horiz' | 'vert',
+  dir: -1 | 1,
+): number | null {
+  const $cell = doc.resolve(cellPos + 1);
+  const table = tableAround($cell);
+  if (!table) return null;
+
+  const map = HtmlTableMap.get(table.node);
+  const nextPos = map.nextCell(cellPos - table.pos, axis, dir);
+  return nextPos == null ? null : table.pos + nextPos;
+}
+
 function inSameTable(
   $anchorCell: ReturnType<typeof cellAround>,
   $headCell: ReturnType<typeof cellAround>,
@@ -381,14 +459,33 @@ function inSameTable(
   return !!anchorTable && !!headTable && anchorTable.pos === headTable.pos && anchorTable.depth === headTable.depth;
 }
 
-function tableAround($pos: ReturnType<ProseMirrorNode['resolve']>): { pos: number; depth: number } | null {
+function tableAround($pos: ReturnType<ProseMirrorNode['resolve']>): { node: ProseMirrorNode; pos: number; depth: number } | null {
   for (let depth = $pos.depth; depth >= 0; depth -= 1) {
-    if ($pos.node(depth).type.spec.tableRole !== 'table') continue;
+    const node = $pos.node(depth);
+    if (node.type.spec.tableRole !== 'table') continue;
     return {
+      node,
       pos: depth === 0 ? 0 : $pos.before(depth),
       depth,
     };
   }
 
   return null;
+}
+
+function getShiftArrowDirection(event: KeyboardEvent): { axis: 'horiz' | 'vert'; dir: -1 | 1 } | null {
+  if (!event.shiftKey || event.ctrlKey || event.metaKey || event.altKey) return null;
+
+  switch (event.key) {
+    case 'ArrowLeft':
+      return { axis: 'horiz', dir: -1 };
+    case 'ArrowRight':
+      return { axis: 'horiz', dir: 1 };
+    case 'ArrowUp':
+      return { axis: 'vert', dir: -1 };
+    case 'ArrowDown':
+      return { axis: 'vert', dir: 1 };
+    default:
+      return null;
+  }
 }
