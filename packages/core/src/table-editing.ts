@@ -1,5 +1,5 @@
 import type { Node as ProseMirrorNode } from 'prosemirror-model';
-import { NodeSelection, Plugin, PluginKey, TextSelection, type EditorState, type Selection, type Transaction } from 'prosemirror-state';
+import { NodeSelection, Plugin, PluginKey, Selection, TextSelection, type EditorState, type Transaction } from 'prosemirror-state';
 import { Decoration, DecorationSet, type EditorView } from 'prosemirror-view';
 
 import { clearSelectedCells, isWholeTableSelection, parseHtmlTableClipboard, parsePlainTextTableClipboard, serializeCellSelectionToHtmlTable, serializeCellSelectionToText, applyTableClipboardToSelection } from './clipboard.js';
@@ -124,7 +124,20 @@ function handleDeleteKey(view: EditorView, event: KeyboardEvent): boolean {
 
 function handleKeyDown(view: EditorView, event: KeyboardEvent): boolean {
   if (handleShiftArrow(view, event)) return true;
+  if (handleArrow(view, event)) return true;
   return handleDeleteKey(view, event);
+}
+
+function handleArrow(view: EditorView, event: KeyboardEvent): boolean {
+  const direction = getArrowDirection(event);
+  if (!direction) return false;
+
+  const selection = createArrowSelection(view, direction.axis, direction.dir);
+  if (!selection || selection.eq(view.state.selection)) return false;
+
+  event.preventDefault();
+  view.dispatch(view.state.tr.setSelection(selection).scrollIntoView());
+  return true;
 }
 
 function handleShiftArrow(view: EditorView, event: KeyboardEvent): boolean {
@@ -137,6 +150,39 @@ function handleShiftArrow(view: EditorView, event: KeyboardEvent): boolean {
   event.preventDefault();
   view.dispatch(view.state.tr.setSelection(selection).scrollIntoView());
   return true;
+}
+
+function createArrowSelection(
+  view: EditorView,
+  axis: 'horiz' | 'vert',
+  dir: -1 | 1,
+): Selection | null {
+  const selection = view.state.selection;
+
+  if (selection instanceof CellSelection) {
+    return Selection.near(selection.$head, dir);
+  }
+
+  if (axis !== 'horiz' && !selection.empty) return null;
+
+  const cellPos = atEndOfCell(view, axis, dir);
+  if (cellPos == null) return null;
+
+  if (axis === 'horiz') {
+    return Selection.near(view.state.doc.resolve(selection.head + dir), dir);
+  }
+
+  const nextPos = nextCellPos(view.state.doc, cellPos, axis, dir);
+  if (nextPos != null) {
+    return Selection.near(view.state.doc.resolve(nextPos + 1), 1);
+  }
+
+  const table = tableAround(view.state.doc.resolve(cellPos + 1));
+  if (!table) return null;
+
+  return dir < 0
+    ? Selection.near(view.state.doc.resolve(table.pos), -1)
+    : Selection.near(view.state.doc.resolve(table.pos + table.node.nodeSize), 1);
 }
 
 function handleTripleClick(view: EditorView, pos: number): boolean {
@@ -475,6 +521,11 @@ function tableAround($pos: ReturnType<ProseMirrorNode['resolve']>): { node: Pros
 
 function getShiftArrowDirection(event: KeyboardEvent): { axis: 'horiz' | 'vert'; dir: -1 | 1 } | null {
   if (!event.shiftKey || event.ctrlKey || event.metaKey || event.altKey) return null;
+  return getArrowDirection(event);
+}
+
+function getArrowDirection(event: KeyboardEvent): { axis: 'horiz' | 'vert'; dir: -1 | 1 } | null {
+  if (event.ctrlKey || event.metaKey || event.altKey) return null;
 
   switch (event.key) {
     case 'ArrowLeft':

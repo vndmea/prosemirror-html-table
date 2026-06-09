@@ -175,6 +175,57 @@ describe('tableEditing', () => {
     }
   });
 
+  it('collapses a CellSelection back to text on ArrowRight', () => {
+    const plugin = tableEditing();
+    const state = createStateWithCellSelection(['A', 'B', 'C', 'D'], [0, 1]);
+    const view = createView(state);
+    const event = createKeyboardEvent('ArrowRight');
+
+    const handled = plugin.props.handleKeyDown?.call(plugin, view, event as unknown as KeyboardEvent);
+
+    expect(handled).toBe(true);
+    expect(event.prevented).toBe(true);
+    expect(view.state.selection).not.toBeInstanceOf(CellSelection);
+  });
+
+  it('moves horizontally to the next cell on ArrowRight at the end of a cell', () => {
+    const plugin = tableEditing();
+    const state = createStateWithTextCursor(['A', 'B', 'C', 'D'], 0, 'end');
+    const view = createView(state, {
+      endOfTextblock() {
+        return true;
+      },
+    });
+    const cellPositions = findNodePositions(state.doc, 'htmlTableCell');
+    const event = createKeyboardEvent('ArrowRight');
+
+    const handled = plugin.props.handleKeyDown?.call(plugin, view, event as unknown as KeyboardEvent);
+
+    expect(handled).toBe(true);
+    expect(event.prevented).toBe(true);
+    expect(view.state.selection).not.toBeInstanceOf(CellSelection);
+    expect(isPositionInsideCell(view.state.doc, view.state.selection.from, cellPositions[1]!)).toBe(true);
+  });
+
+  it('moves vertically to the cell below on ArrowDown at the end of a cell', () => {
+    const plugin = tableEditing();
+    const state = createStateWithTextCursor(['A', 'B', 'C', 'D'], 0, 'end');
+    const view = createView(state, {
+      endOfTextblock() {
+        return true;
+      },
+    });
+    const cellPositions = findNodePositions(state.doc, 'htmlTableCell');
+    const event = createKeyboardEvent('ArrowDown');
+
+    const handled = plugin.props.handleKeyDown?.call(plugin, view, event as unknown as KeyboardEvent);
+
+    expect(handled).toBe(true);
+    expect(event.prevented).toBe(true);
+    expect(view.state.selection).not.toBeInstanceOf(CellSelection);
+    expect(isPositionInsideCell(view.state.doc, view.state.selection.from, cellPositions[2]!)).toBe(true);
+  });
+
   it('keeps table node selections when allowTableNodeSelection is true', () => {
     const plugin = tableEditing({ allowTableNodeSelection: true });
     const state = createStateWithTableSelection();
@@ -428,4 +479,10 @@ function findNodePositions(doc: ProseMirrorNode, typeName: string): number[] {
     return true;
   });
   return positions;
+}
+
+function isPositionInsideCell(doc: ProseMirrorNode, pos: number, cellPos: number): boolean {
+  const cell = doc.nodeAt(cellPos);
+  if (!cell) return false;
+  return pos >= cellPos + 1 && pos <= cellPos + cell.nodeSize - 1;
 }
