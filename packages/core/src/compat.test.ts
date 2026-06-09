@@ -1,5 +1,5 @@
 import { Schema, type Node as ProseMirrorNode } from 'prosemirror-model';
-import { EditorState } from 'prosemirror-state';
+import { EditorState, TextSelection, type Command } from 'prosemirror-state';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -7,8 +7,12 @@ import {
   createHtmlTableNode,
   createHtmlTableNodeSpecs,
   findCellPos,
+  findCellRange,
   findTable,
+  mergeCells,
+  officialCompat,
   setCellAttr,
+  splitCellWithType,
   toggleHeader,
 } from './index.js';
 
@@ -38,7 +42,7 @@ function createStateWithTable(rows = 2, cols = 2): EditorState {
   });
 }
 
-function applyCommand(state: EditorState, command: ReturnType<typeof setCellAttr>): EditorState {
+function applyCommand(state: EditorState, command: Command): EditorState {
   let nextState = state;
   const result = command(state, (tr) => {
     nextState = state.apply(tr);
@@ -85,6 +89,21 @@ describe('official compat helpers', () => {
     expect(result?.pos).toBe((state.selection as CellSelection).anchorCellPos);
   });
 
+  it('finds a cell range from a text selection and hit points', () => {
+    const state = createStateWithTable();
+    const cellPositions = findNodePositions(state.doc, 'htmlTableHeaderCell');
+    const textSelectionState = EditorState.create({
+      schema,
+      doc: state.doc,
+      selection: TextSelection.create(state.doc, cellPositions[0]! + 2),
+    });
+
+    const result = findCellRange(textSelectionState.selection, cellPositions[0], cellPositions[1]);
+
+    expect(result?.[0].pos).toBe(cellPositions[0]);
+    expect(result?.[1].pos).toBe(cellPositions[1]);
+  });
+
   it('aliases setCellAttr to setCellAttribute semantics', () => {
     const nextState = applyCommand(createStateWithTable(), setCellAttr('colspan', 2));
     const body = getBody(nextState.doc.firstChild!);
@@ -99,5 +118,37 @@ describe('official compat helpers', () => {
     const firstHeaderCell = body?.firstChild?.firstChild;
 
     expect(firstHeaderCell?.type.name).toBe('htmlTableCell');
+  });
+
+  it('splits a merged cell with callback-selected cell types', () => {
+    const state = createStateWithTable(1, 2);
+    const cellPositions = findNodePositions(state.doc, 'htmlTableHeaderCell');
+    const selectedState = EditorState.create({
+      schema,
+      doc: state.doc,
+      selection: CellSelection.create(state.doc, cellPositions[0]!, cellPositions[1]!),
+    });
+    const mergedState = applyCommand(selectedState, mergeCells());
+    const mergedCellPos = findNodePositions(mergedState.doc, 'htmlTableHeaderCell')[0]!;
+    const mergedSelectionState = EditorState.create({
+      schema,
+      doc: mergedState.doc,
+      selection: CellSelection.create(mergedState.doc, mergedCellPos),
+    });
+
+    const nextState = applyCommand(
+      mergedSelectionState,
+      splitCellWithType(({ col }) => (col === 0 ? schema.nodes.htmlTableHeaderCell! : schema.nodes.htmlTableCell!)),
+    );
+    const firstRow = getBody(nextState.doc.firstChild!).firstChild!;
+
+    expect(firstRow.child(0).type.name).toBe('htmlTableHeaderCell');
+    expect(firstRow.child(1).type.name).toBe('htmlTableCell');
+  });
+
+  it('exposes the compat layer through the officialCompat namespace', () => {
+    expect(officialCompat.findTable).toBe(findTable);
+    expect(officialCompat.findCellRange).toBe(findCellRange);
+    expect(officialCompat.splitCellWithType).toBe(splitCellWithType);
   });
 });
