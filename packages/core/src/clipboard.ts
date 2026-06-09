@@ -111,19 +111,38 @@ export function clipTableClipboard(
     return { ...clipboard, rows: [] };
   }
 
-  const clippedRows = Array.from({ length: height }, (_rowValue, rowIndex) => {
-    const sourceRow = rows[rowIndex % rows.length] ?? [];
+  const carriedColumnsByRow: number[] = [];
+  const widthClippedRows = rows.map((sourceRow, rowIndex) => {
     if (sourceRow.length === 0) return [];
 
-    return Array.from({ length: width }, (_columnValue, columnIndex) => {
-      const cell = sourceRow[columnIndex % sourceRow.length] ?? sourceRow[0]!;
-      const cloned: ParsedClipboardCell = {
-        ...cell,
-      };
-      if (cell.attrs) cloned.attrs = { ...cell.attrs };
-      if (cell.content) cloned.content = cloneCellContent(schema, cell.content);
-      return cloned;
-    });
+    const clippedRow: ParsedClipboardCell[] = [];
+    let sourceCellIndex = 0;
+    let logicalColumn = carriedColumnsByRow[rowIndex] ?? 0;
+
+    while (logicalColumn < width) {
+      const sourceCell = sourceRow[sourceCellIndex % sourceRow.length] ?? sourceRow[0]!;
+      let clippedCell = cloneParsedClipboardCell(schema, sourceCell);
+      const remainingWidth = width - logicalColumn;
+      if (getClipboardCellColSpan(clippedCell) > remainingWidth) {
+        clippedCell = setClipboardCellColSpan(schema, clippedCell, remainingWidth);
+      }
+
+      clippedRow.push(clippedCell);
+      logicalColumn += getClipboardCellColSpan(clippedCell);
+
+      for (let rowOffset = 1; rowOffset < getClipboardCellRowSpan(clippedCell); rowOffset += 1) {
+        carriedColumnsByRow[rowIndex + rowOffset] = (carriedColumnsByRow[rowIndex + rowOffset] ?? 0) + getClipboardCellColSpan(clippedCell);
+      }
+
+      sourceCellIndex += 1;
+    }
+
+    return clippedRow;
+  });
+
+  const clippedRows = Array.from({ length: height }, (_rowValue, rowIndex) => {
+    const sourceRow = widthClippedRows[rowIndex % widthClippedRows.length] ?? [];
+    return sourceRow.map((cell) => cloneParsedClipboardCell(schema, cell));
   });
 
   return {
@@ -511,6 +530,39 @@ function createParsedClipboardCell(
     rowspan: Math.max(1, Number(cell.attrs.rowspan ?? 1)),
     isHeader: cell.type.name === names.headerCell,
   };
+}
+
+function cloneParsedClipboardCell(schema: Schema, cell: ParsedClipboardCell): ParsedClipboardCell {
+  const cloned: ParsedClipboardCell = {
+    ...cell,
+  };
+  if (cell.attrs) cloned.attrs = { ...cell.attrs };
+  if (cell.content) cloned.content = cloneCellContent(schema, cell.content);
+  return cloned;
+}
+
+function getClipboardCellColSpan(cell: ParsedClipboardCell): number {
+  return Math.max(1, Number(cell.colspan ?? cell.attrs?.colspan ?? 1));
+}
+
+function getClipboardCellRowSpan(cell: ParsedClipboardCell): number {
+  return Math.max(1, Number(cell.rowspan ?? cell.attrs?.rowspan ?? 1));
+}
+
+function setClipboardCellColSpan(schema: Schema, cell: ParsedClipboardCell, colspan: number): ParsedClipboardCell {
+  const next = cloneParsedClipboardCell(schema, cell);
+  const normalizedColSpan = Math.max(1, colspan);
+  next.colspan = normalizedColSpan;
+  next.attrs = {
+    ...next.attrs,
+    colspan: normalizedColSpan,
+  };
+
+  if (Array.isArray(next.attrs.colwidth)) {
+    next.attrs.colwidth = next.attrs.colwidth.slice(0, normalizedColSpan);
+  }
+
+  return next;
 }
 
 function findTableNodeInSlice(slice: Slice): ProseMirrorNode | null {

@@ -14,6 +14,7 @@ import {
   serializeCellSelectionToHtmlTable,
   serializeCellSelectionToText,
 } from './index.js';
+import { clipTableClipboard } from './clipboard.js';
 
 const schema = new Schema({
   nodes: {
@@ -218,6 +219,33 @@ describe('html table clipboard helpers', () => {
       ['A', 'B'],
       ['C', 'D'],
     ]);
+  });
+
+  it('clips colspan clipboard cells to the target width', () => {
+    const content = Fragment.from(schema.nodes.paragraph!.create(null, schema.text('Merged')));
+    const clipboard = {
+      rows: [[{
+        attrs: {
+          colspan: 2,
+          colwidth: [120, 180],
+        },
+        colspan: 2,
+        content,
+        isHeader: false,
+        rowspan: 1,
+        text: 'Merged',
+      }]],
+    };
+
+    const clipped = clipTableClipboard(schema, clipboard, 1, 1);
+
+    expect(clipped.rows).toHaveLength(1);
+    expect(clipped.rows[0]).toHaveLength(1);
+    expect(clipped.rows[0]?.[0]?.colspan).toBe(1);
+    expect(clipped.rows[0]?.[0]?.attrs).toMatchObject({
+      colspan: 1,
+      colwidth: [120],
+    });
   });
 });
 
