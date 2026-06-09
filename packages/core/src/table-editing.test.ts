@@ -128,6 +128,77 @@ describe('tableEditing', () => {
     expect(view.state.selection).toBeInstanceOf(CellSelection);
   });
 
+  it('pastes a cross-section CellSelection slice through handlePaste', () => {
+    const plugin = tableEditing();
+    const sourceTable = createSectionedTable([
+      ['H1', 'H2'],
+      ['B1', 'B2'],
+    ]);
+    const sourceDoc = schema.nodes.doc!.create(null, [sourceTable]);
+    const sourcePositions = {
+      header: findNodePositions(sourceDoc, 'htmlTableHeaderCell'),
+      cell: findNodePositions(sourceDoc, 'htmlTableCell'),
+    };
+    const sourceState = EditorState.create({
+      schema,
+      doc: sourceDoc,
+      selection: CellSelection.create(sourceDoc, sourcePositions.header[0]!, sourcePositions.cell[0]!),
+    });
+    const targetTable = createSectionedTable([
+      ['h1', 'h2'],
+      ['b1', 'b2'],
+    ]);
+    const targetDoc = schema.nodes.doc!.create(null, [targetTable]);
+    const targetPositions = {
+      header: findNodePositions(targetDoc, 'htmlTableHeaderCell'),
+      cell: findNodePositions(targetDoc, 'htmlTableCell'),
+    };
+    const targetState = EditorState.create({
+      schema,
+      doc: targetDoc,
+      selection: CellSelection.create(targetDoc, targetPositions.header[0]!, targetPositions.cell[0]!),
+    });
+    const view = createView(targetState);
+    const slice = (sourceState.selection as CellSelection).content();
+
+    const handled = plugin.props.handlePaste?.call(plugin, view, {} as ClipboardEvent, slice);
+
+    expect(handled).toBe(true);
+    expect(getAllTableCellDescriptors(view.state.doc)).toEqual([
+      'htmlTableHeaderCell:H1',
+      'htmlTableHeaderCell:h2',
+      'htmlTableCell:B1',
+      'htmlTableCell:b2',
+    ]);
+  });
+
+  it('replaces a selected table node with a pasted table slice', () => {
+    const plugin = tableEditing();
+    const targetState = createStateWithTableSelection(undefined, [plugin]);
+    const view = createView(targetState);
+    const replacementTable = withCellTexts(createHtmlTableNode(schema, { rows: 1, cols: 1, withHeaderRow: false }), ['Z']);
+    const slice = new Slice(Fragment.from(replacementTable), 0, 0);
+
+    const handled = plugin.props.handlePaste?.call(plugin, view, {} as ClipboardEvent, slice);
+
+    expect(handled).toBe(true);
+    expect(getCellTexts(view.state.doc)).toEqual(['Z']);
+  });
+
+  it('normalizes malformed pasted tables after handlePaste', () => {
+    const plugin = tableEditing();
+    const state = createStateWithTableSelection(undefined, [plugin]);
+    const view = createView(state);
+    const malformedTable = schema.nodes.htmlTable!.create(null, []);
+    const slice = new Slice(Fragment.from(malformedTable), 0, 0);
+
+    const handled = plugin.props.handlePaste?.call(plugin, view, {} as ClipboardEvent, slice);
+
+    expect(handled).toBe(true);
+    expect(view.state.doc.child(0).firstChild?.type.name).toBe('htmlTableBody');
+    expect(getAllTableCellDescriptors(view.state.doc)).toEqual(['htmlTableCell:']);
+  });
+
   it('normalizes table node selections into whole-table CellSelections by default', () => {
     const plugin = tableEditing();
     const state = createStateWithTableSelection();
@@ -336,13 +407,23 @@ function createStateWithCellSelection(
   });
 }
 
-function createStateWithTableSelection(): EditorState {
-  const table = createHtmlTableNode(schema, { rows: 2, cols: 2, withHeaderRow: false });
+function createStateWithTableSelection(
+  table: ProseMirrorNode = createHtmlTableNode(schema, { rows: 2, cols: 2, withHeaderRow: false }),
+  plugins: Parameters<typeof EditorState.create>[0]['plugins'] = [],
+): EditorState {
+  return createStateWithTableSelectionFromTable(table, plugins);
+}
+
+function createStateWithTableSelectionFromTable(
+  table: ProseMirrorNode,
+  plugins: Parameters<typeof EditorState.create>[0]['plugins'] = [],
+): EditorState {
   const doc = schema.nodes.doc!.create(null, [table]);
 
   return EditorState.create({
     schema,
     doc,
+    plugins,
     selection: NodeSelection.create(doc, 0),
   });
 }
@@ -380,7 +461,7 @@ function createView(
   (view as { dom: unknown }).dom = options.dom ?? {};
   (view as { root: unknown }).root = options.root ?? createRootEventTarget();
   view.dispatch = (tr) => {
-    view.state = view.state.apply(tr);
+    view.state = view.state.applyTransaction(tr).state;
   };
   view.posAtCoords = ((coords) => options.posAtCoords?.(coords) ?? null) as EditorView['posAtCoords'];
   view.endOfTextblock = ((direction) => options.endOfTextblock?.(direction) ?? false) as EditorView['endOfTextblock'];
@@ -538,6 +619,30 @@ function getCellTexts(doc: ProseMirrorNode): string[] {
     return true;
   });
   return texts;
+}
+
+function getAllTableCellDescriptors(doc: ProseMirrorNode): string[] {
+  const descriptors: string[] = [];
+  doc.descendants((node) => {
+    if (node.type.name === 'htmlTableCell' || node.type.name === 'htmlTableHeaderCell') {
+      descriptors.push(`${node.type.name}:${node.textContent}`);
+    }
+    return true;
+  });
+  return descriptors;
+}
+
+function createSectionedTable(rows: [string[], string[]]): ProseMirrorNode {
+  return schema.nodes.htmlTable!.create(null, [
+    schema.nodes.htmlTableHead!.create(null, [
+      schema.nodes.htmlTableRow!.create(null, rows[0].map((text) =>
+        schema.nodes.htmlTableHeaderCell!.create(null, [schema.nodes.paragraph!.create(null, text ? schema.text(text) : undefined)]))),
+    ]),
+    schema.nodes.htmlTableBody!.create(null, [
+      schema.nodes.htmlTableRow!.create(null, rows[1].map((text) =>
+        schema.nodes.htmlTableCell!.create(null, [schema.nodes.paragraph!.create(null, text ? schema.text(text) : undefined)]))),
+    ]),
+  ]);
 }
 
 function findNodePositions(doc: ProseMirrorNode, typeName: string): number[] {
