@@ -56,6 +56,10 @@ interface ClipboardGrid {
   slots: ParsedClipboardCell[][];
 }
 
+type StructuralSlotAssignment =
+  | { kind: 'table'; cell: HtmlTableCellRef }
+  | { kind: 'clipboard'; cell: ParsedClipboardCell };
+
 export interface ParsedClipboardCell {
   attrs?: Record<string, unknown>;
   content?: Fragment;
@@ -251,35 +255,23 @@ export function applyTableClipboardToSelection(
   if (options.expandTableOnPaste) return false;
 
   const grid = selectionInfo?.grid ?? createHtmlTableGrid(context.table, { names: context.names });
-  const clipboardGrid = createClipboardGrid(clipboard);
+  const effectiveClipboard = isCellSelection(state.selection) && selectionInfo
+    ? clipTableClipboard(
+      state.schema,
+      clipboard,
+      selectionInfo.right - selectionInfo.left + 1,
+      selectionInfo.bottom - selectionInfo.top + 1,
+    )
+    : clipboard;
+  const clipboardGrid = createClipboardGrid(effectiveClipboard);
   const startRow = selectionInfo?.top ?? cellContext?.cell.rowIndex ?? 0;
   const startColumn = selectionInfo?.left ?? cellContext?.cell.columnIndex ?? 0;
-
-  const updates = new Map<HtmlTableCellRef, ParsedClipboardCell>();
-  let updatedBottomRow = startRow;
-  let updatedRightColumn = startColumn;
-
-  for (let rowOffset = 0; rowOffset < clipboardGrid.height; rowOffset += 1) {
-    const row = clipboardGrid.slots[rowOffset] ?? [];
-    for (let columnOffset = 0; columnOffset < clipboardGrid.width; columnOffset += 1) {
-      const clipboardCell = row[columnOffset];
-      if (!clipboardCell) continue;
-
-      const targetRowIndex = startRow + rowOffset;
-      const targetColumnIndex = startColumn + columnOffset;
-      const targetCell = grid.slots[targetRowIndex]?.[targetColumnIndex]?.cell;
-      if (!targetCell) continue;
-
-      updates.set(targetCell, clipboardCell);
-      updatedBottomRow = Math.max(updatedBottomRow, targetCell.rowIndex + targetCell.rowSpan - 1);
-      updatedRightColumn = Math.max(updatedRightColumn, targetCell.columnIndex + targetCell.colSpan - 1);
-    }
-  }
-
-  if (updates.size === 0) return false;
-
-  const nextTable = updateCellsMatching(context, grid, (cell) => updates.has(cell), (cell) =>
-    applyClipboardCell(state.schema, context.names, cell, updates.get(cell)!));
+  const assignments = createStructuralSlotAssignments(grid);
+  const applied = overlayClipboardGrid(assignments, clipboardGrid, startRow, startColumn);
+  if (!applied) return false;
+  const nextTable = rebuildTableFromAssignments(state.schema, context, grid, assignments);
+  const updatedBottomRow = Math.min(grid.height - 1, startRow + Math.max(clipboardGrid.height, 1) - 1);
+  const updatedRightColumn = Math.min(grid.width - 1, startColumn + Math.max(clipboardGrid.width, 1) - 1);
 
   if (!dispatch) return true;
 
@@ -582,6 +574,227 @@ function createClipboardGrid(clipboard: ParsedTableClipboard): ClipboardGrid {
   };
 }
 
+function createStructuralSlotAssignments(grid: HtmlTableGrid): Array<Array<StructuralSlotAssignment | null>> {
+  return grid.slots.map((row) =>
+    row.map((slot) => (slot ? { kind: 'table', cell: slot.cell } : null)));
+}
+
+function overlayClipboardGrid(
+  assignments: Array<Array<StructuralSlotAssignment | null>>,
+  clipboardGrid: ClipboardGrid,
+  startRow: number,
+  startColumn: number,
+): boolean {
+  let applied = false;
+
+  for (let rowOffset = 0; rowOffset < clipboardGrid.height; rowOffset += 1) {
+    const row = clipboardGrid.slots[rowOffset] ?? [];
+    for (let columnOffset = 0; columnOffset < clipboardGrid.width; columnOffset += 1) {
+      const clipboardCell = row[columnOffset];
+      if (!clipboardCell) continue;
+
+      const targetRowIndex = startRow + rowOffset;
+      const targetColumnIndex = startColumn + columnOffset;
+      const targetRow = assignments[targetRowIndex];
+      if (!targetRow || targetColumnIndex < 0 || targetColumnIndex >= targetRow.length) continue;
+
+      targetRow[targetColumnIndex] = {
+        kind: 'clipboard',
+        cell: clipboardCell,
+      };
+      applied = true;
+    }
+  }
+
+  return applied;
+}
+
+function rebuildTableFromAssignments(
+  schema: Schema,
+  context: TableContext,
+  grid: HtmlTableGrid,
+  assignments: Array<Array<StructuralSlotAssignment | null>>,
+): ProseMirrorNode {
+  const tableChildren = getChildren(context.table);
+  const sectionCounters: Record<HtmlTableSectionName, number> = { head: 0, body: 0, foot: 0 };
+
+  context.table.forEach((sectionNode, _offset, childIndex) => {
+    const sectionName = getSectionName(sectionNode, context.names);
+    if (!sectionName) return;
+
+    const sectionIndex = sectionCounters[sectionName];
+    sectionCounters[sectionName] += 1;
+    const sectionRows = grid.rows.filter((row) => row.section === sectionName && row.sectionIndex === sectionIndex);
+    const rowRange = {
+      start: sectionRows[0]?.rowIndex ?? 0,
+      end: sectionRows[sectionRows.length - 1]?.rowIndex ?? -1,
+    };
+
+    const rows = sectionRows.map((rowRef) => {
+      const sourceRow = sectionNode.child(rowRef.rowIndexInSection);
+      const rowChildren = buildRowFromAssignments(
+        schema,
+        context.names,
+        assignments,
+        rowRef.rowIndex,
+        rowRange.start,
+        rowRange.end,
+        grid.width,
+        sectionName,
+      );
+      return sourceRow.type.create(sourceRow.attrs, rowChildren, sourceRow.marks);
+    });
+
+    tableChildren[childIndex] = sectionNode.type.create(sectionNode.attrs, rows, sectionNode.marks);
+  });
+
+  return context.table.type.create(context.table.attrs, tableChildren, context.table.marks);
+}
+
+function buildRowFromAssignments(
+  schema: Schema,
+  names: HtmlTableNodeNames,
+  assignments: Array<Array<StructuralSlotAssignment | null>>,
+  rowIndex: number,
+  sectionStartRow: number,
+  sectionEndRow: number,
+  width: number,
+  sectionName: HtmlTableSectionName,
+): ProseMirrorNode[] {
+  const rowChildren: ProseMirrorNode[] = [];
+  const row = assignments[rowIndex] ?? [];
+
+  for (let columnIndex = 0; columnIndex < width;) {
+    const assignment = row[columnIndex] ?? null;
+
+    if (!assignment) {
+      rowChildren.push(createEmptyTableCell(schema, names, sectionName === 'head' ? 'header' : 'body'));
+      columnIndex += 1;
+      continue;
+    }
+
+    if (
+      isSameAssignment(assignments[rowIndex]?.[columnIndex - 1] ?? null, assignment)
+      || isSameAssignment(assignments[rowIndex - 1]?.[columnIndex] ?? null, assignment)
+    ) {
+      columnIndex += 1;
+      continue;
+    }
+
+    const rect = measureAssignmentRect(assignments, rowIndex, columnIndex, assignment, sectionEndRow, width);
+    rowChildren.push(createNodeFromAssignment(schema, names, assignment, rect.width, rect.height));
+    columnIndex += rect.width;
+  }
+
+  if (rowChildren.length === 0 && sectionStartRow <= sectionEndRow) {
+    return rowChildren;
+  }
+
+  return rowChildren;
+}
+
+function measureAssignmentRect(
+  assignments: Array<Array<StructuralSlotAssignment | null>>,
+  rowIndex: number,
+  columnIndex: number,
+  assignment: StructuralSlotAssignment,
+  sectionEndRow: number,
+  width: number,
+): { width: number; height: number } {
+  let rectWidth = 1;
+  while (
+    columnIndex + rectWidth < width
+    && isSameAssignment(assignments[rowIndex]?.[columnIndex + rectWidth] ?? null, assignment)
+  ) {
+    rectWidth += 1;
+  }
+
+  let rectHeight = 1;
+  while (rowIndex + rectHeight <= sectionEndRow) {
+    let matches = true;
+    for (let currentColumn = columnIndex; currentColumn < columnIndex + rectWidth; currentColumn += 1) {
+      if (!isSameAssignment(assignments[rowIndex + rectHeight]?.[currentColumn] ?? null, assignment)) {
+        matches = false;
+        break;
+      }
+    }
+    if (!matches) break;
+    rectHeight += 1;
+  }
+
+  return {
+    width: rectWidth,
+    height: rectHeight,
+  };
+}
+
+function isSameAssignment(
+  left: StructuralSlotAssignment | null,
+  right: StructuralSlotAssignment | null,
+): boolean {
+  if (!left || !right || left.kind !== right.kind) return false;
+  return left.cell === right.cell;
+}
+
+function createNodeFromAssignment(
+  schema: Schema,
+  names: HtmlTableNodeNames,
+  assignment: StructuralSlotAssignment,
+  colspan: number,
+  rowspan: number,
+): ProseMirrorNode {
+  return assignment.kind === 'table'
+    ? copyExistingCellWithSpan(assignment.cell.node, colspan, rowspan)
+    : createClipboardCellNode(schema, names, assignment.cell, colspan, rowspan);
+}
+
+function copyExistingCellWithSpan(
+  cell: ProseMirrorNode,
+  colspan: number,
+  rowspan: number,
+): ProseMirrorNode {
+  return cell.type.create(
+    {
+      ...cell.attrs,
+      colspan,
+      rowspan,
+      colwidth: normalizeCellColwidth(cell.attrs.colwidth, colspan),
+    },
+    cell.content,
+    cell.marks,
+  );
+}
+
+function createClipboardCellNode(
+  schema: Schema,
+  names: HtmlTableNodeNames,
+  cell: ParsedClipboardCell,
+  colspan: number,
+  rowspan: number,
+): ProseMirrorNode {
+  const type = cell.isHeader ? schema.nodes[names.headerCell] : schema.nodes[names.cell];
+  const attrs: Record<string, unknown> = {
+    ...(cell.attrs ?? {}),
+    colspan,
+    rowspan,
+  };
+  if ('colwidth' in attrs) {
+    attrs.colwidth = normalizeCellColwidth(attrs.colwidth, colspan);
+  }
+
+  const content = cell.content ? cloneCellContent(schema, cell.content) : createTextCellContent(schema, cell.text ?? '');
+  return (type ?? schema.nodes[names.cell]!).create(attrs, content);
+}
+
+function createEmptyTableCell(
+  schema: Schema,
+  names: HtmlTableNodeNames,
+  kind: 'header' | 'body',
+): ProseMirrorNode {
+  const type = kind === 'header' ? schema.nodes[names.headerCell] : schema.nodes[names.cell];
+  return (type ?? schema.nodes[names.cell]!).createAndFill() ?? schema.nodes[names.cell]!.create();
+}
+
 function cloneParsedClipboardCell(schema: Schema, cell: ParsedClipboardCell): ParsedClipboardCell {
   const cloned: ParsedClipboardCell = {
     ...cell,
@@ -839,23 +1052,6 @@ function extractStandaloneRows(html: string): string[] {
     rows.push(rowMatch[1] ?? '');
   }
   return rows;
-}
-
-function applyClipboardCell(
-  schema: Schema,
-  names: HtmlTableNodeNames,
-  targetCell: HtmlTableCellRef,
-  clipboardCell: ParsedClipboardCell,
-): ProseMirrorNode {
-  const baseAttrs = { ...targetCell.node.attrs };
-  for (const key of ['textAlign', 'backgroundColor', 'verticalAlign', 'colwidth'] as const) {
-    if (clipboardCell.attrs?.[key] !== undefined) {
-      baseAttrs[key] = clipboardCell.attrs[key];
-    }
-  }
-  const type = clipboardCell.isHeader ? schema.nodes[names.headerCell] : schema.nodes[names.cell];
-  const content = clipboardCell.content ?? createTextCellContent(schema, clipboardCell.text ?? '');
-  return (type ?? targetCell.node.type).create(baseAttrs, content);
 }
 
 function createTextCellContent(schema: Schema, text: string): Fragment {
@@ -1189,6 +1385,17 @@ function normalizeNumericAttribute(value: unknown): number | number[] | null {
   }
   const numeric = Number(text.replace(/px$/i, ''));
   return Number.isFinite(numeric) && numeric > 0 ? numeric : null;
+}
+
+function normalizeCellColwidth(value: unknown, colspan: number): number[] | null {
+  if (!Array.isArray(value)) return null;
+
+  const widths = value
+    .map((entry) => Number(entry))
+    .filter((entry) => Number.isFinite(entry) && entry > 0)
+    .slice(0, Math.max(1, colspan));
+
+  return widths.length > 0 ? widths : null;
 }
 
 function stripHtml(html: string): string {

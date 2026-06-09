@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 import {
   CellSelection,
   applyTableClipboardToSelection,
+  createHtmlTableGrid,
   createHtmlTableNode,
   createHtmlTableNodeSpecs,
   getSelectionMatrix,
@@ -233,8 +234,52 @@ describe('html table clipboard helpers', () => {
     }, clipboard);
 
     expect(result).toBe(true);
-    expect(getAllTableCellTexts(nextState.doc)).toEqual(['Merged', 'Merged', 'Merged', 'Merged']);
+    const nextTable = nextState.doc.child(0);
+    const nextGrid = createHtmlTableGrid(nextTable);
+    const mergedCell = nextGrid.slots[0]?.[0]?.cell;
+
+    expect(mergedCell?.rowSpan).toBe(2);
+    expect(mergedCell?.colSpan).toBe(2);
+    expect(nextGrid.slots[1]?.[1]?.cell).toBe(mergedCell);
+    expect(getAllTableCellTexts(nextState.doc)).toEqual(['Merged']);
     expect(nextState.selection).toBeInstanceOf(CellSelection);
+  });
+
+  it('clips merged clipboard cells structurally when the target selection is smaller', () => {
+    const table = createHtmlTableNode(schema, { rows: 1, cols: 2, withHeaderRow: false });
+    const state = createStateForTable(withCellTexts(table, ['a', 'b']));
+    const cellPositions = findNodePositions(state.doc, 'htmlTableCell');
+    const selectedState = EditorState.create({
+      schema,
+      doc: state.doc,
+      selection: CellSelection.create(state.doc, cellPositions[0]!, cellPositions[1]!),
+    });
+    const clipboard = {
+      rows: [[{
+        attrs: {
+          colspan: 2,
+          rowspan: 2,
+        },
+        colspan: 2,
+        content: Fragment.from(schema.nodes.paragraph!.create(null, schema.text('Merged'))),
+        isHeader: false,
+        rowspan: 2,
+        text: 'Merged',
+      }]],
+    };
+    let nextState = selectedState;
+
+    const result = applyTableClipboardToSelection(selectedState, (tr) => {
+      nextState = selectedState.apply(tr);
+    }, clipboard);
+
+    expect(result).toBe(true);
+    const nextGrid = createHtmlTableGrid(nextState.doc.child(0));
+    const mergedCell = nextGrid.slots[0]?.[0]?.cell;
+    expect(mergedCell?.rowSpan).toBe(1);
+    expect(mergedCell?.colSpan).toBe(2);
+    expect(nextGrid.slots[0]?.[1]?.cell).toBe(mergedCell);
+    expect(getAllTableCellTexts(nextState.doc)).toEqual(['Merged']);
   });
 
   it('pastes mixed header and body clipboard cells with their source types', () => {
