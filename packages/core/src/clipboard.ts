@@ -50,6 +50,12 @@ interface SerializedClipboardPayload {
   table?: unknown;
 }
 
+interface ClipboardGrid {
+  width: number;
+  height: number;
+  slots: ParsedClipboardCell[][];
+}
+
 export interface ParsedClipboardCell {
   attrs?: Record<string, unknown>;
   content?: Fragment;
@@ -245,6 +251,7 @@ export function applyTableClipboardToSelection(
   if (options.expandTableOnPaste) return false;
 
   const grid = selectionInfo?.grid ?? createHtmlTableGrid(context.table, { names: context.names });
+  const clipboardGrid = createClipboardGrid(clipboard);
   const startRow = selectionInfo?.top ?? cellContext?.cell.rowIndex ?? 0;
   const startColumn = selectionInfo?.left ?? cellContext?.cell.columnIndex ?? 0;
 
@@ -252,15 +259,18 @@ export function applyTableClipboardToSelection(
   let updatedBottomRow = startRow;
   let updatedRightColumn = startColumn;
 
-  for (let rowOffset = 0; rowOffset < clipboard.rows.length; rowOffset += 1) {
-    const row = clipboard.rows[rowOffset] ?? [];
-    for (let columnOffset = 0; columnOffset < row.length; columnOffset += 1) {
+  for (let rowOffset = 0; rowOffset < clipboardGrid.height; rowOffset += 1) {
+    const row = clipboardGrid.slots[rowOffset] ?? [];
+    for (let columnOffset = 0; columnOffset < clipboardGrid.width; columnOffset += 1) {
+      const clipboardCell = row[columnOffset];
+      if (!clipboardCell) continue;
+
       const targetRowIndex = startRow + rowOffset;
       const targetColumnIndex = startColumn + columnOffset;
       const targetCell = grid.slots[targetRowIndex]?.[targetColumnIndex]?.cell;
       if (!targetCell) continue;
 
-      updates.set(targetCell, row[columnOffset]!);
+      updates.set(targetCell, clipboardCell);
       updatedBottomRow = Math.max(updatedBottomRow, targetCell.rowIndex + targetCell.rowSpan - 1);
       updatedRightColumn = Math.max(updatedRightColumn, targetCell.columnIndex + targetCell.colSpan - 1);
     }
@@ -284,7 +294,7 @@ export function applyTableClipboardToSelection(
     const anchorCellPos = nextPositions.get(nextStartCell);
     const headCellPos = nextEndCell ? nextPositions.get(nextEndCell) : anchorCellPos;
     if (typeof anchorCellPos === 'number') {
-      if (clipboard.rows.length > 1 || (clipboard.rows[0]?.length ?? 0) > 1) {
+      if (clipboardGrid.height > 1 || clipboardGrid.width > 1) {
         transaction.setSelection(CellSelection.create(transaction.doc, anchorCellPos, headCellPos ?? anchorCellPos));
       } else {
         transaction.setSelection(TextSelection.near(transaction.doc.resolve(anchorCellPos + 1)));
@@ -536,6 +546,39 @@ function createParsedClipboardCell(
     colspan: Math.max(1, Number(cell.attrs.colspan ?? 1)),
     rowspan: Math.max(1, Number(cell.attrs.rowspan ?? 1)),
     isHeader: cell.type.name === names.headerCell,
+  };
+}
+
+function createClipboardGrid(clipboard: ParsedTableClipboard): ClipboardGrid {
+  const slots: ParsedClipboardCell[][] = [];
+  let width = 0;
+
+  for (let rowIndex = 0; rowIndex < clipboard.rows.length; rowIndex += 1) {
+    const row = clipboard.rows[rowIndex] ?? [];
+    const slotRow = slots[rowIndex] ?? (slots[rowIndex] = []);
+    let columnIndex = 0;
+
+    for (const cell of row) {
+      while (slotRow[columnIndex]) columnIndex += 1;
+
+      const colSpan = getClipboardCellColSpan(cell);
+      const rowSpan = getClipboardCellRowSpan(cell);
+      for (let rowOffset = 0; rowOffset < rowSpan; rowOffset += 1) {
+        const targetRow = slots[rowIndex + rowOffset] ?? (slots[rowIndex + rowOffset] = []);
+        for (let columnOffset = 0; columnOffset < colSpan; columnOffset += 1) {
+          targetRow[columnIndex + columnOffset] = cell;
+        }
+      }
+
+      width = Math.max(width, columnIndex + colSpan);
+      columnIndex += colSpan;
+    }
+  }
+
+  return {
+    width,
+    height: slots.length,
+    slots,
   };
 }
 

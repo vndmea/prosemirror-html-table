@@ -204,6 +204,77 @@ describe('html table clipboard helpers', () => {
     }
   });
 
+  it('applies merged clipboard cells across the covered logical target cells', () => {
+    const table = createHtmlTableNode(schema, { rows: 2, cols: 2, withHeaderRow: false });
+    const state = createStateForTable(withCellTexts(table, ['a', 'b', 'c', 'd']));
+    const cellPositions = findNodePositions(state.doc, 'htmlTableCell');
+    const selectedState = EditorState.create({
+      schema,
+      doc: state.doc,
+      selection: CellSelection.create(state.doc, cellPositions[0]!, cellPositions[3]!),
+    });
+    const clipboard = {
+      rows: [[{
+        attrs: {
+          colspan: 2,
+          rowspan: 2,
+        },
+        colspan: 2,
+        content: Fragment.from(schema.nodes.paragraph!.create(null, schema.text('Merged'))),
+        isHeader: false,
+        rowspan: 2,
+        text: 'Merged',
+      }]],
+    };
+    let nextState = selectedState;
+
+    const result = applyTableClipboardToSelection(selectedState, (tr) => {
+      nextState = selectedState.apply(tr);
+    }, clipboard);
+
+    expect(result).toBe(true);
+    expect(getAllTableCellTexts(nextState.doc)).toEqual(['Merged', 'Merged', 'Merged', 'Merged']);
+    expect(nextState.selection).toBeInstanceOf(CellSelection);
+  });
+
+  it('pastes mixed header and body clipboard cells with their source types', () => {
+    const table = createHtmlTableNode(schema, { rows: 2, cols: 2, withHeaderRow: false });
+    const state = createStateForTable(withCellTexts(table, ['a', 'b', 'c', 'd']));
+    const cellPositions = findNodePositions(state.doc, 'htmlTableCell');
+    const selectedState = EditorState.create({
+      schema,
+      doc: state.doc,
+      selection: CellSelection.create(state.doc, cellPositions[0]!, cellPositions[2]!),
+    });
+    const clipboard = {
+      rows: [
+        [{
+          content: Fragment.from(schema.nodes.paragraph!.create(null, schema.text('H'))),
+          isHeader: true,
+          text: 'H',
+        }],
+        [{
+          content: Fragment.from(schema.nodes.paragraph!.create(null, schema.text('B'))),
+          isHeader: false,
+          text: 'B',
+        }],
+      ],
+    };
+    let nextState = selectedState;
+
+    const result = applyTableClipboardToSelection(selectedState, (tr) => {
+      nextState = selectedState.apply(tr);
+    }, clipboard);
+
+    expect(result).toBe(true);
+    expect(getAllTableCellDescriptors(nextState.doc)).toEqual([
+      'htmlTableHeaderCell:H',
+      'htmlTableCell:b',
+      'htmlTableCell:B',
+      'htmlTableCell:d',
+    ]);
+  });
+
   it('reports whole-table cell selections and exposes a selection matrix', () => {
     const table = createHtmlTableNode(schema, { rows: 2, cols: 2, withHeaderRow: false });
     const state = createStateForTable(withCellTexts(table, ['A', 'B', 'C', 'D']));
@@ -309,6 +380,21 @@ function withCellTexts(table: ProseMirrorNode, texts: string[]): ProseMirrorNode
 
 function getCellTexts(doc: ProseMirrorNode): string[] {
   return findNodes(doc, 'htmlTableCell').map((cell) => cell.textContent);
+}
+
+function getAllTableCellTexts(doc: ProseMirrorNode): string[] {
+  return getAllTableCellDescriptors(doc).map((descriptor) => descriptor.split(':').slice(1).join(':'));
+}
+
+function getAllTableCellDescriptors(doc: ProseMirrorNode): string[] {
+  const descriptors: string[] = [];
+  doc.descendants((node) => {
+    if (node.type.name === 'htmlTableCell' || node.type.name === 'htmlTableHeaderCell') {
+      descriptors.push(`${node.type.name}:${node.textContent}`);
+    }
+    return true;
+  });
+  return descriptors;
 }
 
 function findNodes(doc: ProseMirrorNode, typeName: string): ProseMirrorNode[] {
