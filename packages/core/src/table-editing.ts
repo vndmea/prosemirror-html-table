@@ -1,8 +1,8 @@
-import type { Node as ProseMirrorNode } from 'prosemirror-model';
+import { type Node as ProseMirrorNode, type Slice } from 'prosemirror-model';
 import { NodeSelection, Plugin, PluginKey, Selection, TextSelection, type EditorState, type Transaction } from 'prosemirror-state';
 import { Decoration, DecorationSet, type EditorView } from 'prosemirror-view';
 
-import { clearSelectedCells, isWholeTableSelection, parseHtmlTableClipboard, parsePlainTextTableClipboard, serializeCellSelectionToHtmlTable, serializeCellSelectionToText, applyTableClipboardToSelection } from './clipboard.js';
+import { applyTableClipboardToSelection, clearSelectedCells, clipTableClipboard, createSingleCellSliceClipboard, getSelectionMatrix, isWholeTableSelection, parseHtmlTableClipboard, parsePlainTextTableClipboard, parseTableSliceClipboard, serializeCellSelectionToHtmlTable, serializeCellSelectionToText } from './clipboard.js';
 import { deleteTable } from './commands.js';
 import { createFixTablesTransaction } from './fix-tables.js';
 import { CellSelection, isCellSelection } from './selection.js';
@@ -45,6 +45,9 @@ export function tableEditing({ allowTableNodeSelection = false }: TableEditingOp
         mousedown(view, event) {
           return handleMouseDown(view, event as MouseEvent);
         },
+      },
+      handlePaste(view, event, slice) {
+        return handlePaste(view, event as ClipboardEvent | null, slice);
       },
       handleKeyDown(view, event) {
         return handleKeyDown(view, event);
@@ -109,6 +112,26 @@ function handleClipboardPaste(view: EditorView, event: ClipboardEvent): boolean 
   if (!applied) return false;
 
   event.preventDefault();
+  return true;
+}
+
+function handlePaste(view: EditorView, event: ClipboardEvent | null, slice: Slice): boolean {
+  if (!isTablePasteTarget(view.state)) return false;
+
+  const clipboard =
+    parseTableSliceClipboard(slice, view.state.schema)
+    ?? (isCellSelection(view.state.selection)
+      ? createSingleCellSliceClipboard(view.state.schema, slice, {
+        isHeader: view.state.selection.$anchor.parent.type.spec.tableRole === 'header_cell',
+      })
+      : null);
+  if (!clipboard) return false;
+
+  const nextClipboard = normalizeClipboardForSelection(view.state, clipboard);
+  const applied = applyTableClipboardToSelection(view.state, view.dispatch, nextClipboard);
+  if (!applied) return false;
+
+  event?.preventDefault?.();
   return true;
 }
 
@@ -183,6 +206,18 @@ function createArrowSelection(
   return dir < 0
     ? Selection.near(view.state.doc.resolve(table.pos), -1)
     : Selection.near(view.state.doc.resolve(table.pos + table.node.nodeSize), 1);
+}
+
+function normalizeClipboardForSelection(
+  state: EditorState,
+  clipboard: ReturnType<typeof parseTableSliceClipboard> extends infer T ? Exclude<T, null> : never,
+) {
+  if (!isCellSelection(state.selection)) return clipboard;
+
+  const matrix = getSelectionMatrix(state);
+  const height = matrix.length;
+  const width = matrix[0]?.length ?? 0;
+  return width > 0 && height > 0 ? clipTableClipboard(state.schema, clipboard, width, height) : clipboard;
 }
 
 function handleTripleClick(view: EditorView, pos: number): boolean {

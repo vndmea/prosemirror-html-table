@@ -1,5 +1,6 @@
-import { Fragment, type Node as ProseMirrorNode, type Schema } from 'prosemirror-model';
+import { Fragment, Slice, type Node as ProseMirrorNode, type Schema } from 'prosemirror-model';
 import { NodeSelection, TextSelection, type EditorState, type Selection, type Transaction } from 'prosemirror-state';
+import { Transform } from 'prosemirror-transform';
 
 import { createHtmlTableCellAttributes } from './cell-attributes.js';
 import { createHtmlTableGrid, type HtmlTableCellRef, type HtmlTableGrid, type HtmlTableSectionName } from './grid.js';
@@ -66,6 +67,69 @@ export interface ParsedTableClipboard {
 export interface ApplyTableClipboardOptions {
   tablePos?: number;
   expandTableOnPaste?: boolean;
+}
+
+export function parseTableSliceClipboard(slice: Slice, schema: Schema): ParsedTableClipboard | null {
+  const tableNode = findTableNodeInSlice(slice);
+  if (tableNode) {
+    const result: ParsedTableClipboard = {
+      rows: extractClipboardRows(schema, tableNode, htmlTableNodeNames),
+    };
+    if (tableNode.type.name === htmlTableNodeNames.table) {
+      result.table = tableNode;
+    }
+    return result;
+  }
+
+  const rows = extractRowsFromSlice(slice, schema);
+  return rows.length > 0 ? { rows } : null;
+}
+
+export function createSingleCellSliceClipboard(
+  schema: Schema,
+  slice: Slice,
+  options: { isHeader?: boolean } = {},
+): ParsedTableClipboard {
+  const content = fitSliceToCellContent(schema, slice, options.isHeader ?? false);
+  return {
+    rows: [[{
+      content,
+      text: fragmentText(content),
+      isHeader: options.isHeader ?? false,
+    }]],
+  };
+}
+
+export function clipTableClipboard(
+  schema: Schema,
+  clipboard: ParsedTableClipboard,
+  width: number,
+  height: number,
+): ParsedTableClipboard {
+  const rows = clipboard.rows;
+  if (rows.length === 0 || width <= 0 || height <= 0) {
+    return { ...clipboard, rows: [] };
+  }
+
+  const clippedRows = Array.from({ length: height }, (_rowValue, rowIndex) => {
+    const sourceRow = rows[rowIndex % rows.length] ?? [];
+    if (sourceRow.length === 0) return [];
+
+    return Array.from({ length: width }, (_columnValue, columnIndex) => {
+      const cell = sourceRow[columnIndex % sourceRow.length] ?? sourceRow[0]!;
+      const cloned: ParsedClipboardCell = {
+        ...cell,
+      };
+      if (cell.attrs) cloned.attrs = { ...cell.attrs };
+      if (cell.content) cloned.content = cloneCellContent(schema, cell.content);
+      return cloned;
+    });
+  });
+
+  return {
+    ...clipboard,
+    rows: clippedRows,
+  };
 }
 
 export function serializeCellSelectionToHtmlTable(
@@ -375,6 +439,48 @@ function getClipboardRowsFromSelection(schema: Schema, selectionInfo: CellSelect
   return rows;
 }
 
+function extractRowsFromSlice(slice: Slice, schema: Schema): ParsedClipboardCell[][] {
+  const rowNodes: ProseMirrorNode[] = [];
+  const standaloneCells: ProseMirrorNode[] = [];
+
+  slice.content.forEach((node) => {
+    if (node.type.name === htmlTableNodeNames.table) {
+      rowNodes.push(...getTableRowNodes(node));
+      return;
+    }
+
+    if (node.type.name === htmlTableNodeNames.head || node.type.name === htmlTableNodeNames.body || node.type.name === htmlTableNodeNames.foot) {
+      node.forEach((row) => rowNodes.push(row));
+      return;
+    }
+
+    if (node.type.name === htmlTableNodeNames.row) {
+      rowNodes.push(node);
+      return;
+    }
+
+    if (node.type.name === htmlTableNodeNames.cell || node.type.name === htmlTableNodeNames.headerCell) {
+      standaloneCells.push(node);
+    }
+  });
+
+  if (rowNodes.length > 0) {
+    return rowNodes.map((row) => {
+      const cells: ParsedClipboardCell[] = [];
+      row.forEach((cell) => {
+        cells.push(createParsedClipboardCell(schema, htmlTableNodeNames, cell));
+      });
+      return cells;
+    });
+  }
+
+  if (standaloneCells.length > 0) {
+    return [standaloneCells.map((cell) => createParsedClipboardCell(schema, htmlTableNodeNames, cell))];
+  }
+
+  return [];
+}
+
 function extractClipboardRows(schema: Schema, table: ProseMirrorNode, names: HtmlTableNodeNames): ParsedClipboardCell[][] {
   const grid = createHtmlTableGrid(table, { names });
   const rows: ParsedClipboardCell[][] = [];
@@ -405,6 +511,29 @@ function createParsedClipboardCell(
     rowspan: Math.max(1, Number(cell.attrs.rowspan ?? 1)),
     isHeader: cell.type.name === names.headerCell,
   };
+}
+
+function findTableNodeInSlice(slice: Slice): ProseMirrorNode | null {
+  let tableNode: ProseMirrorNode | null = null;
+
+  slice.content.descendants((node) => {
+    if (tableNode || node.type.name !== htmlTableNodeNames.table) return !tableNode;
+    tableNode = node;
+    return false;
+  });
+
+  return tableNode;
+}
+
+function getTableRowNodes(table: ProseMirrorNode): ProseMirrorNode[] {
+  const rows: ProseMirrorNode[] = [];
+  table.forEach((child) => {
+    if (child.type.name !== htmlTableNodeNames.head && child.type.name !== htmlTableNodeNames.body && child.type.name !== htmlTableNodeNames.foot) {
+      return;
+    }
+    child.forEach((row) => rows.push(row));
+  });
+  return rows;
 }
 
 function serializeClipboardRowsToText(rows: ParsedClipboardCell[][]): string {
@@ -625,6 +754,20 @@ function createTextCellContent(schema: Schema, text: string): Fragment {
     ? lines.map((line) => paragraph.create(null, line.length > 0 ? schema.text(line) : undefined))
     : [paragraph.create()];
   return Fragment.fromArray(nodes);
+}
+
+function fitSliceToCellContent(schema: Schema, slice: Slice, isHeader: boolean): Fragment {
+  const cellType = isHeader ? schema.nodes[htmlTableNodeNames.headerCell] : schema.nodes[htmlTableNodeNames.cell];
+  if (!cellType) return slice.content;
+
+  const emptyCell = cellType.createAndFill();
+  if (!emptyCell) return slice.content;
+
+  try {
+    return new Transform(emptyCell).replace(0, emptyCell.content.size, slice).doc.content;
+  } catch {
+    return slice.content;
+  }
 }
 
 function cloneCellContent(schema: Schema, fragment: Fragment): Fragment {

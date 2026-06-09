@@ -1,4 +1,4 @@
-import { Fragment, Schema, type Node as ProseMirrorNode } from 'prosemirror-model';
+import { Fragment, Slice, Schema, type Node as ProseMirrorNode } from 'prosemirror-model';
 import { EditorState, NodeSelection, TextSelection } from 'prosemirror-state';
 import type { EditorView } from 'prosemirror-view';
 import { describe, expect, it } from 'vitest';
@@ -58,6 +58,33 @@ describe('tableEditing', () => {
     expect(handled).toBe(true);
     expect(event.prevented).toBe(true);
     expect(getCellTexts(view.state.doc)).toEqual(['X', 'Y', 'Z', 'W']);
+  });
+
+  it('repeats a single slice across a CellSelection via handlePaste', () => {
+    const plugin = tableEditing();
+    const state = createStateWithCellSelection(['a', 'b', 'c', 'd'], [0, 3]);
+    const view = createView(state);
+    const slice = createParagraphSlice('Z');
+
+    const handled = plugin.props.handlePaste?.call(plugin, view, {} as ClipboardEvent, slice);
+
+    expect(handled).toBe(true);
+    expect(getCellTexts(view.state.doc)).toEqual(['Z', 'Z', 'Z', 'Z']);
+  });
+
+  it('pastes a CellSelection slice into a text cursor inside a table via handlePaste', () => {
+    const plugin = tableEditing();
+    const sourceState = createStateWithCellSelection(['A', 'B', 'C', 'D'], [0, 1]);
+    const sourceSelection = sourceState.selection as CellSelection;
+    const targetState = createStateWithTextCursor(['a', 'b', 'c', 'd'], 2);
+    const view = createView(targetState);
+    const slice = sourceSelection.content();
+
+    const handled = plugin.props.handlePaste?.call(plugin, view, {} as ClipboardEvent, slice);
+
+    expect(handled).toBe(true);
+    expect(getCellTexts(view.state.doc)).toEqual(['a', 'b', 'A', 'B']);
+    expect(view.state.selection).toBeInstanceOf(CellSelection);
   });
 
   it('normalizes table node selections into whole-table CellSelections by default', () => {
@@ -485,4 +512,12 @@ function isPositionInsideCell(doc: ProseMirrorNode, pos: number, cellPos: number
   const cell = doc.nodeAt(cellPos);
   if (!cell) return false;
   return pos >= cellPos + 1 && pos <= cellPos + cell.nodeSize - 1;
+}
+
+function createParagraphSlice(text: string): Slice {
+  return new Slice(
+    Fragment.from(schema.nodes.paragraph!.create(null, text ? schema.text(text) : undefined)),
+    0,
+    0,
+  );
 }
