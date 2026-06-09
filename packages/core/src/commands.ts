@@ -810,6 +810,7 @@ function setCellsAttribute(
     if (!context) return false;
 
     if (!selectionInfo && cellContext) {
+      if (cellContext.cell.node.attrs[name] === value) return false;
       const table = updateCellAt(cellContext, cellContext.cell, (cell) => copyCellWithAttrs(cell, { [name]: value }));
       return replaceTable(state, dispatch, cellContext, table);
     }
@@ -817,6 +818,7 @@ function setCellsAttribute(
     const grid = selectionInfo?.grid ?? createHtmlTableGrid(context.table, { names: context.names });
     const targetCells = new Set(selectionInfo?.cells ?? []);
     if (targetCells.size === 0) return false;
+    if (![...targetCells].some((cell) => cell.node.attrs[name] !== value)) return false;
 
     const table = updateCellsMatching(
       context,

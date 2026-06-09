@@ -381,6 +381,25 @@ describe('html table commands', () => {
     expect(firstRow.child(1).attrs.textAlign).toBe('center');
   });
 
+  it('returns false when all selected cells already have the target text alignment', () => {
+    const state = createStateWithTable(2, 2);
+    const cellPositions = findNodePositions(state.doc, 'htmlTableHeaderCell');
+    const selectedState = EditorState.create({
+      schema,
+      doc: state.doc,
+      selection: CellSelection.create(state.doc, cellPositions[0]!, cellPositions[1]!),
+    });
+    const alignedState = applyCommand(selectedState, setCellTextAlign('center'));
+    let dispatched = false;
+
+    const result = setCellTextAlign('center')(alignedState, () => {
+      dispatched = true;
+    });
+
+    expect(result).toBe(false);
+    expect(dispatched).toBe(false);
+  });
+
   it('sets background color for the current cell', () => {
     const nextState = applyCommand(createStateWithTable(2, 2), setCellBackgroundColor('#ffeeaa'));
     const firstCell = getBody(getTable(nextState.doc)).child(0).child(0);
@@ -401,6 +420,18 @@ describe('html table commands', () => {
 
     expect(firstRow.child(0).attrs.verticalAlign).toBe('middle');
     expect(firstRow.child(1).attrs.verticalAlign).toBe('middle');
+  });
+
+  it('returns false when the current cell already has the target background color', () => {
+    const state = applyCommand(createStateWithTable(2, 2), setCellBackgroundColor('#ffeeaa'));
+    let dispatched = false;
+
+    const result = setCellBackgroundColor('#ffeeaa')(state, () => {
+      dispatched = true;
+    });
+
+    expect(result).toBe(false);
+    expect(dispatched).toBe(false);
   });
 
   it('adds or updates a caption on the current table', () => {

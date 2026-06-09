@@ -161,4 +161,26 @@ describe('createHtmlTableNodeSpecs', () => {
       colwidth: [120, 240],
     });
   });
+
+  it('normalizes whitespace, decimal, and infinite cell sizing inputs while parsing', () => {
+    const specs = createHtmlTableNodeSpecs();
+    const parseRule = specs.htmlTableCell?.parseDOM?.[0];
+    const parsed = parseRule && 'getAttrs' in parseRule
+      ? parseRule.getAttrs?.({
+          getAttribute: (name: string) => {
+            if (name === 'colspan') return ' 2 ';
+            if (name === 'rowspan') return '1.5';
+            if (name === 'data-colwidth') return ' 80.5 , Infinity , 160 ';
+            return null;
+          },
+          style: {},
+        } as HTMLElement)
+      : null;
+
+    expect(parsed).toMatchObject({
+      colspan: 2,
+      rowspan: 1,
+      colwidth: [80.5, 160],
+    });
+  });
 });
