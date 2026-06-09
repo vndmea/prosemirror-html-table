@@ -1,5 +1,5 @@
 import { Fragment, Schema, type Node as ProseMirrorNode } from 'prosemirror-model';
-import { EditorState, NodeSelection } from 'prosemirror-state';
+import { EditorState, NodeSelection, TextSelection } from 'prosemirror-state';
 import type { EditorView } from 'prosemirror-view';
 import { describe, expect, it } from 'vitest';
 
@@ -77,6 +77,24 @@ describe('tableEditing', () => {
     }
   });
 
+  it('selects the clicked cell on triple click', () => {
+    const plugin = tableEditing();
+    const state = createStateWithTextCursor(['A', 'B', 'C', 'D'], 2);
+    const view = createView(state);
+    const cellPositions = findNodePositions(state.doc, 'htmlTableCell');
+
+    const handled = plugin.props.handleTripleClick?.call(plugin, view, cellPositions[2]! + 2, {} as MouseEvent);
+
+    expect(handled).toBe(true);
+    expect(view.state.selection).toBeInstanceOf(CellSelection);
+    if (view.state.selection instanceof CellSelection) {
+      expect([view.state.selection.anchorCellPos, view.state.selection.headCellPos]).toEqual([
+        cellPositions[2],
+        cellPositions[2],
+      ]);
+    }
+  });
+
   it('keeps table node selections when allowTableNodeSelection is true', () => {
     const plugin = tableEditing({ allowTableNodeSelection: true });
     const state = createStateWithTableSelection();
@@ -122,6 +140,18 @@ function createStateWithTableSelection(): EditorState {
     schema,
     doc,
     selection: NodeSelection.create(doc, 0),
+  });
+}
+
+function createStateWithTextCursor(texts: string[], cellIndex: number): EditorState {
+  const table = withCellTexts(createHtmlTableNode(schema, { rows: 2, cols: 2, withHeaderRow: false }), texts);
+  const doc = schema.nodes.doc!.create(null, [table]);
+  const cellPositions = findNodePositions(doc, 'htmlTableCell');
+
+  return EditorState.create({
+    schema,
+    doc,
+    selection: TextSelection.near(doc.resolve(cellPositions[cellIndex]! + 1)),
   });
 }
 

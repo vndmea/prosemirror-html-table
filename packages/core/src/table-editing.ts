@@ -45,6 +45,9 @@ export function tableEditing({ allowTableNodeSelection = false }: TableEditingOp
       handleKeyDown(view, event) {
         return handleDeleteKey(view, event);
       },
+      handleTripleClick(view, pos) {
+        return handleTripleClick(view, pos);
+      },
       createSelectionBetween(view) {
         return tableEditingKey.getState(view.state) != null ? view.state.selection : null;
       },
@@ -113,6 +116,14 @@ function handleDeleteKey(view: EditorView, event: KeyboardEvent): boolean {
   const cleared = clearSelectedCells(view.state, view.dispatch);
   if (cleared) event.preventDefault();
   return cleared;
+}
+
+function handleTripleClick(view: EditorView, pos: number): boolean {
+  const $cell = cellAround(view.state.doc.resolve(pos));
+  if (!$cell) return false;
+
+  view.dispatch(view.state.tr.setSelection(CellSelection.create(view.state.doc, $cell.pos - 1)));
+  return true;
 }
 
 function normalizeSelection(
@@ -234,4 +245,15 @@ function getTableCellPositions(table: ProseMirrorNode, tablePos: number): number
   });
 
   return positions;
+}
+
+function cellAround($pos: ReturnType<ProseMirrorNode['resolve']>): ReturnType<ProseMirrorNode['resolve']> | null {
+  for (let depth = $pos.depth - 1; depth > 0; depth -= 1) {
+    const role = $pos.node(depth).type.spec.tableRole;
+    if (role === 'cell' || role === 'header_cell') {
+      return $pos.node(0).resolve($pos.before(depth + 1));
+    }
+  }
+
+  return null;
 }
