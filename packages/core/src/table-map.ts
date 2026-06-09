@@ -86,6 +86,20 @@ export class HtmlTableMap {
     throw new RangeError(`No cell with offset ${pos} found`);
   }
 
+  colCount(pos: number): number {
+    if (pos < 0) {
+      throw new RangeError(`No cell with offset ${pos} found`);
+    }
+
+    for (let index = 0; index < this.map.length; index += 1) {
+      if (this.map[index] === pos) {
+        return index % this.width;
+      }
+    }
+
+    throw new RangeError(`No cell with offset ${pos} found`);
+  }
+
   nextCell(pos: number, axis: 'horiz' | 'vert', dir: number): number | null {
     const { left, right, top, bottom } = this.findCell(pos);
 

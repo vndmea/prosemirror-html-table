@@ -92,6 +92,7 @@ describe('HtmlTableMap', () => {
     expect(headRightPos).toBeTypeOf('number');
     expect(bodyRightPos).toBeTypeOf('number');
     expect(footRightPos).toBeTypeOf('number');
+    expect(map.colCount(headRightPos!)).toBe(1);
     expect(map.nextCell(headRightPos!, 'vert', 1)).toBe(bodyRightPos);
     expect(map.nextCell(bodyRightPos!, 'vert', 1)).toBe(footRightPos);
     expect(map.positionAt(2, 1, table)).toBe(footRightPos);
@@ -141,6 +142,7 @@ describe('HtmlTableMap', () => {
       const htmlPos = translatePosition(officialPos);
 
       expect(htmlMap.findCell(htmlPos)).toEqual(officialMap.findCell(officialPos));
+      expect(htmlMap.colCount(htmlPos)).toBe(officialMap.colCount(officialPos));
 
       for (const axis of ['horiz', 'vert'] as const) {
         for (const dir of [-1, 1] as const) {
