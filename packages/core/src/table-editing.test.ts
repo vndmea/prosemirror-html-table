@@ -3,7 +3,7 @@ import { EditorState, NodeSelection, TextSelection } from 'prosemirror-state';
 import type { EditorView } from 'prosemirror-view';
 import { describe, expect, it } from 'vitest';
 
-import { CellSelection, createHtmlTableNode, createHtmlTableNodeSpecs, tableEditing } from './index.js';
+import { CellSelection, createHtmlTableNode, createHtmlTableNodeSpecs, serializeCellSelectionToHtmlTable, tableEditing } from './index.js';
 
 const schema = new Schema({
   nodes: {
@@ -172,6 +172,34 @@ describe('tableEditing', () => {
     ]);
   });
 
+  it('pastes across a non-rectangular logical selection by rebuilding merged target cells', () => {
+    const plugin = tableEditing();
+    const sourceState = createStateWithCellSelection(['1', '2', '3', '4'], [0, 3]);
+    const sourceSelection = sourceState.selection as CellSelection;
+    const targetTable = createMergedBodyTable();
+    const targetDoc = schema.nodes.doc!.create(null, [targetTable]);
+    const targetPositions = findNodePositions(targetDoc, 'htmlTableCell');
+    const targetState = EditorState.create({
+      schema,
+      doc: targetDoc,
+      selection: CellSelection.create(targetDoc, targetPositions[0]!, targetPositions[2]!),
+    });
+    const view = createView(targetState);
+    const slice = sourceSelection.content();
+
+    const handled = plugin.props.handlePaste?.call(plugin, view, {} as ClipboardEvent, slice);
+
+    expect(handled).toBe(true);
+    expect(getAllTableCellDescriptors(view.state.doc)).toEqual([
+      'htmlTableCell:1',
+      'htmlTableCell:2',
+      'htmlTableCell:1',
+      'htmlTableCell:3',
+      'htmlTableCell:4',
+      'htmlTableCell:3',
+    ]);
+  });
+
   it('replaces a selected table node with a pasted table slice', () => {
     const plugin = tableEditing();
     const targetState = createStateWithTableSelection(undefined, [plugin]);
@@ -183,6 +211,28 @@ describe('tableEditing', () => {
 
     expect(handled).toBe(true);
     expect(getCellTexts(view.state.doc)).toEqual(['Z']);
+  });
+
+  it('replaces a selected table node from DOM paste html data', () => {
+    const plugin = tableEditing();
+    const targetState = createStateWithTableSelection(undefined, [plugin]);
+    const view = createView(targetState);
+    const replacementTable = withCellTexts(createHtmlTableNode(schema, { rows: 1, cols: 2, withHeaderRow: false }), ['X', 'Y']);
+    const sourceDoc = schema.nodes.doc!.create(null, [replacementTable]);
+    const sourceState = EditorState.create({
+      schema,
+      doc: sourceDoc,
+      selection: NodeSelection.create(sourceDoc, 0),
+    });
+    const event = createClipboardEvent({
+      html: serializeCellSelectionToHtmlTable(sourceState)!,
+    });
+
+    const handled = plugin.props.handleDOMEvents?.paste?.call(plugin, view, event as unknown as ClipboardEvent);
+
+    expect(handled).toBe(true);
+    expect(event.prevented).toBe(true);
+    expect(getCellTexts(view.state.doc)).toEqual(['X', 'Y']);
   });
 
   it('normalizes malformed pasted tables after handlePaste', () => {
@@ -644,6 +694,21 @@ function createSectionedTable(rows: [string[], string[]]): ProseMirrorNode {
     ]),
   ]);
 }
+
+function createMergedBodyTable(): ProseMirrorNode {
+  return schema.nodes.htmlTable!.create(null, [
+    schema.nodes.htmlTableBody!.create(null, [
+      schema.nodes.htmlTableRow!.create(null, [
+        schema.nodes.htmlTableCell!.create({ colspan: 2, rowspan: 2 }, [schema.nodes.paragraph!.create(null, schema.text('A'))]),
+        schema.nodes.htmlTableCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('B'))]),
+      ]),
+      schema.nodes.htmlTableRow!.create(null, [
+        schema.nodes.htmlTableCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('C'))]),
+      ]),
+    ]),
+  ]);
+}
+
 
 function findNodePositions(doc: ProseMirrorNode, typeName: string): number[] {
   const positions: number[] = [];
