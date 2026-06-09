@@ -47,6 +47,47 @@ describe('tableEditing', () => {
     expect(getCellTexts(view.state.doc)).toEqual(['', '', 'C', 'D']);
   });
 
+  it('clears whole-table CellSelections on Delete', () => {
+    const plugin = tableEditing();
+    const state = createStateWithCellSelection(['A', 'B', 'C', 'D'], [0, 3]);
+    const view = createView(state);
+    const event = createKeyboardEvent('Delete');
+
+    const handled = plugin.props.handleKeyDown?.call(plugin, view, event as unknown as KeyboardEvent);
+
+    expect(handled).toBe(true);
+    expect(event.prevented).toBe(true);
+    expect(getCellTexts(view.state.doc)).toEqual(['', '', '', '']);
+  });
+
+  it('clears partial cell selections on Mod-Backspace and Mod-Delete', () => {
+    const plugin = tableEditing();
+
+    const backspaceView = createView(createStateWithCellSelection(['A', 'B', 'C', 'D'], [0, 1]));
+    const backspaceEvent = createKeyboardEvent('Backspace', { metaKey: true });
+    const backspaceHandled = plugin.props.handleKeyDown?.call(
+      plugin,
+      backspaceView,
+      backspaceEvent as unknown as KeyboardEvent,
+    );
+
+    expect(backspaceHandled).toBe(true);
+    expect(backspaceEvent.prevented).toBe(true);
+    expect(getCellTexts(backspaceView.state.doc)).toEqual(['', '', 'C', 'D']);
+
+    const deleteView = createView(createStateWithCellSelection(['A', 'B', 'C', 'D'], [0, 1]));
+    const deleteEvent = createKeyboardEvent('Delete', { ctrlKey: true });
+    const deleteHandled = plugin.props.handleKeyDown?.call(
+      plugin,
+      deleteView,
+      deleteEvent as unknown as KeyboardEvent,
+    );
+
+    expect(deleteHandled).toBe(true);
+    expect(deleteEvent.prevented).toBe(true);
+    expect(getCellTexts(deleteView.state.doc)).toEqual(['', '', 'C', 'D']);
+  });
+
   it('pastes tabular plain text into the current table selection', () => {
     const plugin = tableEditing();
     const state = createStateWithCellSelection(['a', 'b', 'c', 'd'], [0, 3]);

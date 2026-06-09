@@ -2,7 +2,7 @@ import { type Node as ProseMirrorNode, type Slice } from 'prosemirror-model';
 import { NodeSelection, Plugin, PluginKey, Selection, TextSelection, type EditorState, type Transaction } from 'prosemirror-state';
 import { Decoration, DecorationSet, type EditorView } from 'prosemirror-view';
 
-import { applyTableClipboardToSelection, clearSelectedCells, clipTableClipboard, createSingleCellSliceClipboard, getSelectionMatrix, isWholeTableSelection, parseHtmlTableClipboard, parsePlainTextTableClipboard, parseTableSliceClipboard, serializeCellSelectionToHtmlTable, serializeCellSelectionToText } from './clipboard.js';
+import { applyTableClipboardToSelection, clearSelectedCells, clipTableClipboard, createSingleCellSliceClipboard, getSelectionMatrix, parseHtmlTableClipboard, parsePlainTextTableClipboard, parseTableSliceClipboard, serializeCellSelectionToHtmlTable, serializeCellSelectionToText } from './clipboard.js';
 import { deleteTable } from './commands.js';
 import { createFixTablesTransaction } from './fix-tables.js';
 import { CellSelection, isCellSelection } from './selection.js';
@@ -138,7 +138,6 @@ function handlePaste(view: EditorView, event: ClipboardEvent | null, slice: Slic
 function handleDeleteKey(view: EditorView, event: KeyboardEvent): boolean {
   if (event.key !== 'Backspace' && event.key !== 'Delete') return false;
   if (!isCellSelection(view.state.selection)) return false;
-  if (isWholeTableSelection(view.state)) return false;
 
   const cleared = clearSelectedCells(view.state, view.dispatch);
   if (cleared) event.preventDefault();
