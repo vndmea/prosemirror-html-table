@@ -95,6 +95,42 @@ describe('tableEditing', () => {
     }
   });
 
+  it('creates a dragged CellSelection across cells on mouse move', () => {
+    const plugin = tableEditing();
+    const state = createStateWithCellSelection(['A', 'B', 'C', 'D'], [0, 0], [plugin]);
+    const cellPositions = findNodePositions(state.doc, 'htmlTableCell');
+    const root = createRootEventTarget();
+    const dom = { nodeName: 'DIV' };
+    const startTarget = { nodeName: 'TD', parentNode: dom };
+    const endTarget = { nodeName: 'TD', parentNode: dom };
+    const view = createView(state, {
+      dom,
+      root,
+      posAtCoords(coords) {
+        if (coords.left === 0 && coords.top === 0) return { pos: cellPositions[0]! + 2, inside: cellPositions[0]! + 2 };
+        if (coords.left === 30 && coords.top === 30) return { pos: cellPositions[3]! + 2, inside: cellPositions[3]! + 2 };
+        return null;
+      },
+    });
+
+    plugin.props.handleDOMEvents?.mousedown?.call(
+      plugin,
+      view,
+      createMouseEvent({ target: startTarget, clientX: 0, clientY: 0 }) as unknown as MouseEvent,
+    );
+
+    root.dispatch('mousemove', createMouseEvent({ target: endTarget, clientX: 30, clientY: 30 }) as unknown as Event);
+    root.dispatch('mouseup', createMouseEvent({ target: endTarget, clientX: 30, clientY: 30 }) as unknown as Event);
+
+    expect(view.state.selection).toBeInstanceOf(CellSelection);
+    if (view.state.selection instanceof CellSelection) {
+      expect([view.state.selection.anchorCellPos, view.state.selection.headCellPos]).toEqual([
+        cellPositions[0],
+        cellPositions[3],
+      ]);
+    }
+  });
+
   it('keeps table node selections when allowTableNodeSelection is true', () => {
     const plugin = tableEditing({ allowTableNodeSelection: true });
     const state = createStateWithTableSelection();
@@ -120,7 +156,11 @@ describe('tableEditing', () => {
   });
 });
 
-function createStateWithCellSelection(texts: string[], selection: [number, number]): EditorState {
+function createStateWithCellSelection(
+  texts: string[],
+  selection: [number, number],
+  plugins: Parameters<typeof EditorState.create>[0]['plugins'] = [],
+): EditorState {
   const table = withCellTexts(createHtmlTableNode(schema, { rows: 2, cols: 2, withHeaderRow: false }), texts);
   const doc = schema.nodes.doc!.create(null, [table]);
   const cellPositions = findNodePositions(doc, 'htmlTableCell');
@@ -128,6 +168,7 @@ function createStateWithCellSelection(texts: string[], selection: [number, numbe
   return EditorState.create({
     schema,
     doc,
+    plugins,
     selection: CellSelection.create(doc, cellPositions[selection[0]]!, cellPositions[selection[1]]!),
   });
 }
@@ -155,12 +196,22 @@ function createStateWithTextCursor(texts: string[], cellIndex: number): EditorSt
   });
 }
 
-function createView(initialState: EditorState): EditorView & { state: EditorState } {
+function createView(
+  initialState: EditorState,
+  options: {
+    dom?: unknown;
+    root?: ReturnType<typeof createRootEventTarget>;
+    posAtCoords?: (coords: { left: number; top: number }) => { pos: number; inside: number } | null;
+  } = {},
+): EditorView & { state: EditorState } {
   const view = {} as EditorView & { state: EditorState };
   view.state = initialState;
+  (view as { dom: unknown }).dom = options.dom ?? {};
+  (view as { root: unknown }).root = options.root ?? createRootEventTarget();
   view.dispatch = (tr) => {
     view.state = view.state.apply(tr);
   };
+  view.posAtCoords = ((coords) => options.posAtCoords?.(coords) ?? null) as EditorView['posAtCoords'];
   return view;
 }
 
@@ -195,6 +246,74 @@ function createKeyboardEvent(key: string): { key: string; prevented: boolean; pr
     prevented: false,
     preventDefault() {
       this.prevented = true;
+    },
+  };
+}
+
+function createMouseEvent(
+  values: {
+    target: unknown;
+    clientX: number;
+    clientY: number;
+    button?: number;
+    ctrlKey?: boolean;
+    metaKey?: boolean;
+    shiftKey?: boolean;
+  },
+): {
+  target: unknown;
+  clientX: number;
+  clientY: number;
+  button: number;
+  ctrlKey: boolean;
+  metaKey: boolean;
+  shiftKey: boolean;
+  prevented: boolean;
+  preventDefault: () => void;
+} {
+  return {
+    target: values.target,
+    clientX: values.clientX,
+    clientY: values.clientY,
+    button: values.button ?? 0,
+    ctrlKey: values.ctrlKey ?? false,
+    metaKey: values.metaKey ?? false,
+    shiftKey: values.shiftKey ?? false,
+    prevented: false,
+    preventDefault() {
+      this.prevented = true;
+    },
+  };
+}
+
+function createRootEventTarget() {
+  const listeners = new Map<string, Set<(event: Event) => void>>();
+
+  return {
+    addEventListener(type: string, listener: EventListenerOrEventListenerObject) {
+      const set = listeners.get(type) ?? new Set<(event: Event) => void>();
+      const callback =
+        typeof listener === 'function'
+          ? listener
+          : ((event: Event) => listener.handleEvent(event));
+      set.add(callback);
+      listeners.set(type, set);
+    },
+    removeEventListener(type: string, listener: EventListenerOrEventListenerObject) {
+      const set = listeners.get(type);
+      if (!set) return;
+      const callback =
+        typeof listener === 'function'
+          ? listener
+          : ((event: Event) => listener.handleEvent(event));
+      set.delete(callback);
+    },
+    dispatch(type: string, event: Event) {
+      const set = listeners.get(type);
+      if (!set) return;
+      for (const listener of [...set]) {
+        listener(event);
+      }
     },
   };
 }

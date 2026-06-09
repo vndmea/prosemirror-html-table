@@ -41,6 +41,9 @@ export function tableEditing({ allowTableNodeSelection = false }: TableEditingOp
         paste(view, event) {
           return handleClipboardPaste(view, event as ClipboardEvent);
         },
+        mousedown(view, event) {
+          return handleMouseDown(view, event as MouseEvent);
+        },
       },
       handleKeyDown(view, event) {
         return handleDeleteKey(view, event);
@@ -124,6 +127,65 @@ function handleTripleClick(view: EditorView, pos: number): boolean {
 
   view.dispatch(view.state.tr.setSelection(CellSelection.create(view.state.doc, $cell.pos - 1)));
   return true;
+}
+
+function handleMouseDown(view: EditorView, startEvent: MouseEvent): boolean | void {
+  if (startEvent.button !== 0) return;
+  if (startEvent.ctrlKey || startEvent.metaKey) return;
+
+  const startCell = domInCell(view, startEvent.target);
+  let $anchor: ReturnType<typeof cellAround> | undefined;
+
+  if (startEvent.shiftKey && isCellSelection(view.state.selection)) {
+    setCellSelection(view, view.state.selection.$anchor, startEvent);
+    startEvent.preventDefault();
+  } else if (
+    startEvent.shiftKey
+    && startCell
+    && ($anchor = cellAround(view.state.selection.$anchor)) != null
+    && cellUnderMouse(view, startEvent)?.pos !== $anchor.pos
+  ) {
+    setCellSelection(view, $anchor, startEvent);
+    startEvent.preventDefault();
+  } else if (!startCell) {
+    return;
+  }
+
+  const root = view.root as EventTarget & {
+    addEventListener: (type: string, listener: EventListenerOrEventListenerObject) => void;
+    removeEventListener: (type: string, listener: EventListenerOrEventListenerObject) => void;
+  };
+
+  const stop = () => {
+    root.removeEventListener('mouseup', stop);
+    root.removeEventListener('dragstart', stop);
+    root.removeEventListener('mousemove', move as EventListener);
+    if (tableEditingKey.getState(view.state) != null) {
+      view.dispatch(view.state.tr.setMeta(tableEditingKey, -1));
+    }
+  };
+
+  const move = (event: Event) => {
+    const mouseEvent = event as MouseEvent;
+    const anchorPos = tableEditingKey.getState(view.state);
+    let nextAnchor: ReturnType<typeof cellAround> | undefined | null;
+
+    if (anchorPos != null) {
+      nextAnchor = cellAround(view.state.doc.resolve(anchorPos));
+    } else if (domInCell(view, mouseEvent.target) !== startCell) {
+      nextAnchor = cellUnderMouse(view, startEvent);
+      if (!nextAnchor) return stop();
+    }
+
+    if (nextAnchor) {
+      setCellSelection(view, nextAnchor, mouseEvent);
+    }
+  };
+
+  root.addEventListener('mouseup', stop);
+  root.addEventListener('dragstart', stop);
+  root.addEventListener('mousemove', move as EventListener);
+  return false;
 }
 
 function normalizeSelection(
@@ -253,6 +315,79 @@ function cellAround($pos: ReturnType<ProseMirrorNode['resolve']>): ReturnType<Pr
     if (role === 'cell' || role === 'header_cell') {
       return $pos.node(0).resolve($pos.before(depth + 1));
     }
+  }
+
+  return null;
+}
+
+function setCellSelection(
+  view: EditorView,
+  $anchor: ReturnType<typeof cellAround>,
+  event: MouseEvent,
+): void {
+  if (!$anchor) return;
+
+  let $head = cellUnderMouse(view, event);
+  const starting = tableEditingKey.getState(view.state) == null;
+
+  if (!$head || !inSameTable($anchor, $head)) {
+    if (starting) {
+      $head = $anchor;
+    } else {
+      return;
+    }
+  }
+
+  const selection = CellSelection.create(view.state.doc, $anchor.pos - 1, $head.pos - 1);
+  if (starting || !view.state.selection.eq(selection)) {
+    let tr = view.state.tr.setSelection(selection);
+    if (starting) {
+      tr = tr.setMeta(tableEditingKey, $anchor.pos);
+    }
+    view.dispatch(tr);
+  }
+}
+
+function domInCell(view: EditorView, target: EventTarget | null): unknown {
+  for (let current = target as { nodeName?: string; parentNode?: unknown } | null; current && current !== view.dom; current = current.parentNode as { nodeName?: string; parentNode?: unknown } | null) {
+    if (current.nodeName === 'TD' || current.nodeName === 'TH') {
+      return current;
+    }
+  }
+  return null;
+}
+
+function cellUnderMouse(view: EditorView, event: MouseEvent): ReturnType<typeof cellAround> | null {
+  const mousePos = view.posAtCoords({
+    left: event.clientX,
+    top: event.clientY,
+  });
+  if (!mousePos) return null;
+
+  return (
+    (mousePos.inside >= 0 ? cellAround(view.state.doc.resolve(mousePos.inside)) : null)
+    ?? cellAround(view.state.doc.resolve(mousePos.pos))
+  );
+}
+
+function inSameTable(
+  $anchorCell: ReturnType<typeof cellAround>,
+  $headCell: ReturnType<typeof cellAround>,
+): boolean {
+  if (!$anchorCell || !$headCell) return false;
+
+  const anchorTable = tableAround($anchorCell);
+  const headTable = tableAround($headCell);
+  return !!anchorTable && !!headTable && anchorTable.pos === headTable.pos && anchorTable.depth === headTable.depth;
+}
+
+function tableAround($pos: ReturnType<ProseMirrorNode['resolve']>): { pos: number; depth: number } | null {
+  for (let depth = $pos.depth; depth >= 0; depth -= 1) {
+    if ($pos.node(depth).type.spec.tableRole !== 'table') continue;
+    return {
+      pos: depth === 0 ? 0 : $pos.before(depth),
+      depth,
+    };
   }
 
   return null;
