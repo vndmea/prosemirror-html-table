@@ -2,6 +2,7 @@ import { Fragment, type Node as ProseMirrorNode, type Schema } from 'prosemirror
 import { NodeSelection, TextSelection, type Command, type EditorState, type Selection } from 'prosemirror-state';
 
 import { createHtmlTableNode, type CreateHtmlTableOptions } from './builders.js';
+import { createFixTablesTransaction } from './fix-tables.js';
 import { createHtmlTableGrid, type HtmlTableCellRef, type HtmlTableGrid, type HtmlTableSectionName } from './grid.js';
 import { htmlTableNodeNames } from './names.js';
 import { normalizeHtmlTable } from './normalize.js';
@@ -1130,36 +1131,10 @@ export function mergeOrSplit(options: HtmlTableCommandOptions = {}): Command {
 
 export function fixTables(options: HtmlTableCommandOptions = {}): Command {
   return (state, dispatch) => {
-    const names: HtmlTableNodeNames = {
-      ...htmlTableNodeNames,
-      ...options.names,
-    };
-    const replacements: Array<{ pos: number; node: ProseMirrorNode; normalized: ProseMirrorNode }> = [];
-
-    state.doc.descendants((node, pos) => {
-      if (node.type.name !== names.table) return true;
-
-      const normalized = normalizeHtmlTable(node, getNormalizeOptions(options));
-      if (!node.eq(normalized)) {
-        replacements.push({ pos, node, normalized });
-      }
-
-      return false;
-    });
-
-    if (replacements.length === 0) return false;
+    const transaction = createFixTablesTransaction(state, undefined, getNormalizeOptions(options));
+    if (!transaction) return false;
 
     if (dispatch) {
-      let transaction = state.tr;
-
-      for (const replacement of [...replacements].sort((a, b) => b.pos - a.pos)) {
-        transaction = transaction.replaceWith(
-          replacement.pos,
-          replacement.pos + replacement.node.nodeSize,
-          replacement.normalized,
-        );
-      }
-
       dispatch(transaction.scrollIntoView());
     }
 

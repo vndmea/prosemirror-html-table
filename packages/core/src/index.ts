@@ -62,6 +62,7 @@ export {
   toggleHeaderColumn,
   toggleHeaderRow,
 } from './commands.js';
+export { createFixTablesTransaction } from './fix-tables.js';
 export {
   applyTableClipboardToSelection,
   clearSelectedCells as clearClipboardSelectedCells,
@@ -107,6 +108,7 @@ export type {
 } from './commands.js';
 export type { ApplyTableClipboardOptions, ParsedClipboardCell, ParsedTableClipboard } from './clipboard.js';
 export type { FindNodeResult, GetCellTypeOptions, ToggleHeaderOptions, ToggleHeaderType } from './compat.js';
+export type { FixTablesTransactionOptions } from './fix-tables.js';
 export type { NormalizeHtmlTableOptions } from './normalize.js';
 export type { HtmlTableNodeNameKey } from './names.js';
 
