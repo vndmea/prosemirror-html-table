@@ -56,6 +56,17 @@ interface ClipboardGrid {
   slots: ParsedClipboardCell[][];
 }
 
+interface ClipboardAnchorSlot {
+  row: number;
+  column: number;
+}
+
+interface TiledClipboardSlot {
+  cell: ParsedClipboardCell;
+  anchorRow: number;
+  anchorColumn: number;
+}
+
 type StructuralSlotAssignment =
   | { kind: 'table'; cell: HtmlTableCellRef }
   | { kind: 'clipboard'; cell: ParsedClipboardCell };
@@ -116,51 +127,18 @@ export function clipTableClipboard(
   width: number,
   height: number,
 ): ParsedTableClipboard {
-  const rows = clipboard.rows;
-  if (rows.length === 0 || width <= 0 || height <= 0) {
+  if (clipboard.rows.length === 0 || width <= 0 || height <= 0) {
     return { ...clipboard, rows: [] };
   }
 
-  const carriedColumnsByRow: number[] = [];
-  const widthClippedRows = rows.map((sourceRow, rowIndex) => {
-    if (sourceRow.length === 0) return [];
+  const sourceGrid = createClipboardGrid(clipboard);
+  if (sourceGrid.width === 0 || sourceGrid.height === 0) {
+    return { ...clipboard, rows: [] };
+  }
 
-    const clippedRow: ParsedClipboardCell[] = [];
-    let sourceCellIndex = 0;
-    let logicalColumn = carriedColumnsByRow[rowIndex] ?? 0;
-
-    while (logicalColumn < width) {
-      const sourceCell = sourceRow[sourceCellIndex % sourceRow.length] ?? sourceRow[0]!;
-      let clippedCell = cloneParsedClipboardCell(schema, sourceCell);
-      const remainingWidth = width - logicalColumn;
-      if (getClipboardCellColSpan(clippedCell) > remainingWidth) {
-        clippedCell = setClipboardCellColSpan(schema, clippedCell, remainingWidth);
-      }
-
-      clippedRow.push(clippedCell);
-      logicalColumn += getClipboardCellColSpan(clippedCell);
-
-      for (let rowOffset = 1; rowOffset < getClipboardCellRowSpan(clippedCell); rowOffset += 1) {
-        carriedColumnsByRow[rowIndex + rowOffset] = (carriedColumnsByRow[rowIndex + rowOffset] ?? 0) + getClipboardCellColSpan(clippedCell);
-      }
-
-      sourceCellIndex += 1;
-    }
-
-    return clippedRow;
-  });
-
-  const clippedRows = Array.from({ length: height }, (_rowValue, rowIndex) => {
-    const sourceRow = widthClippedRows[rowIndex % widthClippedRows.length] ?? [];
-    return sourceRow.map((cell) => {
-      let clippedCell = cloneParsedClipboardCell(schema, cell);
-      const remainingHeight = height - rowIndex;
-      if (getClipboardCellRowSpan(clippedCell) > remainingHeight) {
-        clippedCell = setClipboardCellRowSpan(schema, clippedCell, remainingHeight);
-      }
-      return clippedCell;
-    });
-  });
+  const sourceAnchors = createClipboardAnchorGrid(sourceGrid);
+  const tiledGrid = createRepeatedClipboardGrid(sourceGrid, sourceAnchors, width, height);
+  const clippedRows = createClipboardRowsFromGrid(schema, tiledGrid, width, height);
 
   return {
     ...clipboard,
@@ -572,6 +550,140 @@ function createClipboardGrid(clipboard: ParsedTableClipboard): ClipboardGrid {
     height: slots.length,
     slots,
   };
+}
+
+function createClipboardAnchorGrid(grid: ClipboardGrid): Array<Array<ClipboardAnchorSlot | null>> {
+  const anchors: Array<Array<ClipboardAnchorSlot | null>> = [];
+
+  for (let rowIndex = 0; rowIndex < grid.height; rowIndex += 1) {
+    const sourceRow = grid.slots[rowIndex] ?? [];
+    const anchorRow = anchors[rowIndex] ?? (anchors[rowIndex] = []);
+    for (let columnIndex = 0; columnIndex < grid.width; columnIndex += 1) {
+      const cell = sourceRow[columnIndex];
+      if (!cell) {
+        anchorRow[columnIndex] = null;
+        continue;
+      }
+
+      const aboveCell = rowIndex > 0 ? grid.slots[rowIndex - 1]?.[columnIndex] : undefined;
+      if (aboveCell === cell) {
+        anchorRow[columnIndex] = anchors[rowIndex - 1]?.[columnIndex] ?? null;
+        continue;
+      }
+
+      const leftCell = columnIndex > 0 ? sourceRow[columnIndex - 1] : undefined;
+      if (leftCell === cell) {
+        anchorRow[columnIndex] = anchorRow[columnIndex - 1] ?? null;
+        continue;
+      }
+
+      anchorRow[columnIndex] = { row: rowIndex, column: columnIndex };
+    }
+  }
+
+  return anchors;
+}
+
+function createRepeatedClipboardGrid(
+  sourceGrid: ClipboardGrid,
+  sourceAnchors: Array<Array<ClipboardAnchorSlot | null>>,
+  width: number,
+  height: number,
+): Array<Array<TiledClipboardSlot | null>> {
+  const repeated: Array<Array<TiledClipboardSlot | null>> = [];
+
+  for (let rowIndex = 0; rowIndex < height; rowIndex += 1) {
+    const row = repeated[rowIndex] ?? (repeated[rowIndex] = []);
+    const sourceRowIndex = rowIndex % sourceGrid.height;
+
+    for (let columnIndex = 0; columnIndex < width; columnIndex += 1) {
+      const sourceColumnIndex = columnIndex % sourceGrid.width;
+      const cell = sourceGrid.slots[sourceRowIndex]?.[sourceColumnIndex];
+      const anchor = sourceAnchors[sourceRowIndex]?.[sourceColumnIndex];
+
+      if (!cell || !anchor) {
+        row[columnIndex] = null;
+        continue;
+      }
+
+      row[columnIndex] = {
+        cell,
+        anchorRow: rowIndex - (sourceRowIndex - anchor.row),
+        anchorColumn: columnIndex - (sourceColumnIndex - anchor.column),
+      };
+    }
+  }
+
+  return repeated;
+}
+
+function createClipboardRowsFromGrid(
+  schema: Schema,
+  grid: Array<Array<TiledClipboardSlot | null>>,
+  width: number,
+  height: number,
+): ParsedClipboardCell[][] {
+  const rows: ParsedClipboardCell[][] = [];
+
+  for (let rowIndex = 0; rowIndex < height; rowIndex += 1) {
+    const row: ParsedClipboardCell[] = [];
+
+    for (let columnIndex = 0; columnIndex < width;) {
+      const slot = grid[rowIndex]?.[columnIndex] ?? null;
+      if (!slot) {
+        columnIndex += 1;
+        continue;
+      }
+
+      if (slot.anchorRow !== rowIndex || slot.anchorColumn !== columnIndex) {
+        columnIndex += 1;
+        continue;
+      }
+
+      let rectWidth = 1;
+      while (
+        columnIndex + rectWidth < width
+        && isSameTiledClipboardSlot(grid[rowIndex]?.[columnIndex + rectWidth] ?? null, slot)
+      ) {
+        rectWidth += 1;
+      }
+
+      let rectHeight = 1;
+      while (rowIndex + rectHeight < height) {
+        let matches = true;
+        for (let currentColumn = columnIndex; currentColumn < columnIndex + rectWidth; currentColumn += 1) {
+          if (!isSameTiledClipboardSlot(grid[rowIndex + rectHeight]?.[currentColumn] ?? null, slot)) {
+            matches = false;
+            break;
+          }
+        }
+        if (!matches) break;
+        rectHeight += 1;
+      }
+
+      let clippedCell = cloneParsedClipboardCell(schema, slot.cell);
+      clippedCell = setClipboardCellColSpan(schema, clippedCell, rectWidth);
+      clippedCell = setClipboardCellRowSpan(schema, clippedCell, rectHeight);
+      row.push(clippedCell);
+      columnIndex += rectWidth;
+    }
+
+    rows.push(row);
+  }
+
+  return rows;
+}
+
+function isSameTiledClipboardSlot(
+  left: TiledClipboardSlot | null,
+  right: TiledClipboardSlot | null,
+): boolean {
+  if (!left || !right) return false;
+  return (
+    left.cell === right.cell
+    && left.anchorRow === right.anchorRow
+    && left.anchorColumn === right.anchorColumn
+  );
 }
 
 function createStructuralSlotAssignments(grid: HtmlTableGrid): Array<Array<StructuralSlotAssignment | null>> {
