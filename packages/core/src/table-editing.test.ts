@@ -1,7 +1,7 @@
 import { Fragment, Slice, Schema, type Node as ProseMirrorNode } from 'prosemirror-model';
 import { EditorState, NodeSelection, TextSelection } from 'prosemirror-state';
 import type { EditorView } from 'prosemirror-view';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { CellSelection, createHtmlTableNode, createHtmlTableNodeSpecs, serializeCellSelectionToHtmlTable, tableEditing } from './index.js';
 
@@ -320,6 +320,133 @@ describe('tableEditing', () => {
     }
   });
 
+  it('keeps the current dragged CellSelection when the pointer leaves the table', () => {
+    const plugin = tableEditing();
+    const state = createStateWithCellSelection(['A', 'B', 'C', 'D'], [0, 0], [plugin]);
+    const cellPositions = findNodePositions(state.doc, 'htmlTableCell');
+    const root = createRootEventTarget();
+    const dom = { nodeName: 'DIV' };
+    const startTarget = { nodeName: 'TD', parentNode: dom };
+    const endTarget = { nodeName: 'TD', parentNode: dom };
+    const outsideTarget = { nodeName: 'DIV', parentNode: null };
+    const view = createView(state, {
+      dom,
+      root,
+      posAtCoords(coords) {
+        if (coords.left === 0 && coords.top === 0) return { pos: cellPositions[0]! + 2, inside: cellPositions[0]! + 2 };
+        if (coords.left === 30 && coords.top === 30) return { pos: cellPositions[3]! + 2, inside: cellPositions[3]! + 2 };
+        return null;
+      },
+    });
+
+    plugin.props.handleDOMEvents?.mousedown?.call(
+      plugin,
+      view,
+      createMouseEvent({ target: startTarget, clientX: 0, clientY: 0 }) as unknown as MouseEvent,
+    );
+    root.dispatch('mousemove', createMouseEvent({ target: endTarget, clientX: 30, clientY: 30 }) as unknown as Event);
+    root.dispatch('mousemove', createMouseEvent({ target: outsideTarget, clientX: 60, clientY: 60 }) as unknown as Event);
+    root.dispatch('mouseup', createMouseEvent({ target: outsideTarget, clientX: 60, clientY: 60 }) as unknown as Event);
+
+    expect(view.state.selection).toBeInstanceOf(CellSelection);
+    if (view.state.selection instanceof CellSelection) {
+      expect([view.state.selection.anchorCellPos, view.state.selection.headCellPos]).toEqual([
+        cellPositions[0],
+        cellPositions[3],
+      ]);
+    }
+  });
+
+  it('keeps the current dragged CellSelection when the pointer enters another table', () => {
+    const plugin = tableEditing();
+    const state = createStateWithCellSelection(['A', 'B', 'C', 'D'], [0, 0], [plugin]);
+    const otherTable = withCellTexts(createHtmlTableNode(schema, { rows: 1, cols: 1, withHeaderRow: false }), ['X']);
+    const nextDoc = schema.nodes.doc!.create(null, [state.doc.child(0), otherTable]);
+    const nextCellPositions = findNodePositions(nextDoc, 'htmlTableCell');
+    const root = createRootEventTarget();
+    const dom = { nodeName: 'DIV' };
+    const startTarget = { nodeName: 'TD', parentNode: dom };
+    const endTarget = { nodeName: 'TD', parentNode: dom };
+    const otherTarget = { nodeName: 'TD', parentNode: { nodeName: 'TABLE', parentNode: dom } };
+    const view = createView(EditorState.create({
+      schema,
+      doc: nextDoc,
+      plugins: [plugin],
+      selection: CellSelection.create(nextDoc, nextCellPositions[0]!, nextCellPositions[0]!),
+    }), {
+      dom,
+      root,
+      posAtCoords(coords) {
+        if (coords.left === 0 && coords.top === 0) return { pos: nextCellPositions[0]! + 2, inside: nextCellPositions[0]! + 2 };
+        if (coords.left === 30 && coords.top === 30) return { pos: nextCellPositions[3]! + 2, inside: nextCellPositions[3]! + 2 };
+        if (coords.left === 60 && coords.top === 60) return { pos: nextCellPositions[4]! + 2, inside: nextCellPositions[4]! + 2 };
+        return null;
+      },
+    });
+
+    plugin.props.handleDOMEvents?.mousedown?.call(
+      plugin,
+      view,
+      createMouseEvent({ target: startTarget, clientX: 0, clientY: 0 }) as unknown as MouseEvent,
+    );
+    root.dispatch('mousemove', createMouseEvent({ target: endTarget, clientX: 30, clientY: 30 }) as unknown as Event);
+    root.dispatch('mousemove', createMouseEvent({ target: otherTarget, clientX: 60, clientY: 60 }) as unknown as Event);
+    root.dispatch('mouseup', createMouseEvent({ target: otherTarget, clientX: 60, clientY: 60 }) as unknown as Event);
+
+    expect(view.state.selection).toBeInstanceOf(CellSelection);
+    if (view.state.selection instanceof CellSelection) {
+      expect([view.state.selection.anchorCellPos, view.state.selection.headCellPos]).toEqual([
+        nextCellPositions[0],
+        nextCellPositions[3],
+      ]);
+    }
+  });
+
+  it('returns the current CellSelection from createSelectionBetween while dragging', () => {
+    const plugin = tableEditing();
+    const state = createStateWithCellSelection(['A', 'B', 'C', 'D'], [0, 0], [plugin]);
+    const cellPositions = findNodePositions(state.doc, 'htmlTableCell');
+    const root = createRootEventTarget();
+    const dom = { nodeName: 'DIV' };
+    const startTarget = { nodeName: 'TD', parentNode: dom };
+    const endTarget = { nodeName: 'TD', parentNode: dom };
+    const view = createView(state, {
+      dom,
+      root,
+      posAtCoords(coords) {
+        if (coords.left === 0 && coords.top === 0) return { pos: cellPositions[0]! + 2, inside: cellPositions[0]! + 2 };
+        if (coords.left === 30 && coords.top === 30) return { pos: cellPositions[3]! + 2, inside: cellPositions[3]! + 2 };
+        return null;
+      },
+    });
+
+    plugin.props.handleDOMEvents?.mousedown?.call(
+      plugin,
+      view,
+      createMouseEvent({ target: startTarget, clientX: 0, clientY: 0 }) as unknown as MouseEvent,
+    );
+    root.dispatch('mousemove', createMouseEvent({ target: endTarget, clientX: 30, clientY: 30 }) as unknown as Event);
+
+    const recoveredSelection = plugin.props.createSelectionBetween?.call(
+      plugin,
+      view,
+      view.state.doc.resolve(cellPositions[0]! + 1),
+      view.state.doc.resolve(cellPositions[3]! + 1),
+    );
+
+    expect(recoveredSelection).toBe(view.state.selection);
+
+    root.dispatch('mouseup', createMouseEvent({ target: endTarget, clientX: 30, clientY: 30 }) as unknown as Event);
+    const afterMouseUpSelection = plugin.props.createSelectionBetween?.call(
+      plugin,
+      view,
+      view.state.doc.resolve(cellPositions[0]! + 1),
+      view.state.doc.resolve(cellPositions[3]! + 1),
+    );
+
+    expect(afterMouseUpSelection).toBeNull();
+  });
+
   it('extends an existing CellSelection with Shift-ArrowRight', () => {
     const plugin = tableEditing();
     const state = createStateWithCellSelection(['A', 'B', 'C', 'D'], [0, 0]);
@@ -437,6 +564,50 @@ describe('tableEditing', () => {
 
     expect(appended).toBeDefined();
     expect(appended!.doc.child(0).firstChild?.childCount).toBe(1);
+  });
+
+  it('normalizes a text selection that starts at a cell boundary back to a cursor', () => {
+    const plugin = tableEditing();
+    const table = withCellTexts(createHtmlTableNode(schema, { rows: 1, cols: 2, withHeaderRow: false }), ['A', 'B']);
+    const doc = schema.nodes.doc!.create(null, [table]);
+    const cellPositions = findNodePositions(doc, 'htmlTableCell');
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const state = EditorState.create({
+      schema,
+      doc,
+      selection: TextSelection.create(doc, cellPositions[0]! + 3, cellPositions[1]!),
+    });
+    warn.mockRestore();
+
+    const appended = plugin.spec.appendTransaction?.([], state, state);
+
+    expect(appended?.selection).toBeInstanceOf(TextSelection);
+    if (appended?.selection instanceof TextSelection) {
+      expect(appended.selection.from).toBe(appended.selection.to);
+      expect(appended.selection.from).toBe(cellPositions[0]! + 3);
+    }
+  });
+
+  it('normalizes a text selection that crosses cell content back into the anchor cell', () => {
+    const plugin = tableEditing();
+    const table = withCellTexts(createHtmlTableNode(schema, { rows: 1, cols: 2, withHeaderRow: false }), ['A', 'B']);
+    const doc = schema.nodes.doc!.create(null, [table]);
+    const cellPositions = findNodePositions(doc, 'htmlTableCell');
+    const state = EditorState.create({
+      schema,
+      doc,
+      selection: TextSelection.create(doc, cellPositions[0]! + 2, cellPositions[1]! + 1),
+    });
+
+    const appended = plugin.spec.appendTransaction?.([], state, state);
+
+    expect(appended?.selection).toBeInstanceOf(TextSelection);
+    if (appended?.selection instanceof TextSelection) {
+      expect([appended.selection.from, appended.selection.to]).toEqual([
+        state.selection.$from.start(),
+        state.selection.$from.end(),
+      ]);
+    }
   });
 });
 
