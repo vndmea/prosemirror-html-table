@@ -142,7 +142,14 @@ export function clipTableClipboard(
 
   const clippedRows = Array.from({ length: height }, (_rowValue, rowIndex) => {
     const sourceRow = widthClippedRows[rowIndex % widthClippedRows.length] ?? [];
-    return sourceRow.map((cell) => cloneParsedClipboardCell(schema, cell));
+    return sourceRow.map((cell) => {
+      let clippedCell = cloneParsedClipboardCell(schema, cell);
+      const remainingHeight = height - rowIndex;
+      if (getClipboardCellRowSpan(clippedCell) > remainingHeight) {
+        clippedCell = setClipboardCellRowSpan(schema, clippedCell, remainingHeight);
+      }
+      return clippedCell;
+    });
   });
 
   return {
@@ -562,6 +569,17 @@ function setClipboardCellColSpan(schema: Schema, cell: ParsedClipboardCell, cols
     next.attrs.colwidth = next.attrs.colwidth.slice(0, normalizedColSpan);
   }
 
+  return next;
+}
+
+function setClipboardCellRowSpan(schema: Schema, cell: ParsedClipboardCell, rowspan: number): ParsedClipboardCell {
+  const next = cloneParsedClipboardCell(schema, cell);
+  const normalizedRowSpan = Math.max(1, rowspan);
+  next.rowspan = normalizedRowSpan;
+  next.attrs = {
+    ...next.attrs,
+    rowspan: normalizedRowSpan,
+  };
   return next;
 }
 

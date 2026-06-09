@@ -247,6 +247,31 @@ describe('html table clipboard helpers', () => {
       colwidth: [120],
     });
   });
+
+  it('clips rowspan clipboard cells to the target height', () => {
+    const content = Fragment.from(schema.nodes.paragraph!.create(null, schema.text('Tall')));
+    const clipboard = {
+      rows: [[{
+        attrs: {
+          rowspan: 2,
+        },
+        colspan: 1,
+        content,
+        isHeader: false,
+        rowspan: 2,
+        text: 'Tall',
+      }]],
+    };
+
+    const clipped = clipTableClipboard(schema, clipboard, 1, 1);
+
+    expect(clipped.rows).toHaveLength(1);
+    expect(clipped.rows[0]).toHaveLength(1);
+    expect(clipped.rows[0]?.[0]?.rowspan).toBe(1);
+    expect(clipped.rows[0]?.[0]?.attrs).toMatchObject({
+      rowspan: 1,
+    });
+  });
 });
 
 function createStateForTable(table: ProseMirrorNode): EditorState {
