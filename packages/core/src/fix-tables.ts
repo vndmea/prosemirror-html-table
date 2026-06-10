@@ -5,7 +5,7 @@ import { htmlTableNodeNames } from './names.js';
 import { normalizeHtmlTable, type NormalizeHtmlTableOptions } from './normalize.js';
 import type { HtmlTableNodeNames } from './types.js';
 
-export interface FixTablesTransactionOptions extends NormalizeHtmlTableOptions {}
+export type FixTablesTransactionOptions = NormalizeHtmlTableOptions;
 
 export function createFixTablesTransaction(
   state: EditorState,
