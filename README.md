@@ -85,7 +85,7 @@ const grid = createHtmlTableGrid(tableNode);
 
 ### TableMap-style adapter
 
-`HtmlTableMap` adds a section-aware compatibility layer on top of `createHtmlTableGrid`. It keeps table-relative positions, exposes `width`, `height`, `map`, and `cellPositions`, and mirrors the official `TableMap` helpers for `findCell`, `rectBetween`, `cellsInRect`, `positionAt`, and `nextCell`.
+`HtmlTableMap` adds a section-aware compatibility layer on top of `createHtmlTableGrid`. It keeps table-relative positions, exposes `width`, `height`, `map`, and `cellPositions`, and mirrors the official `TableMap` helpers for `findCell`, `colCount`, `rectBetween`, `cellsInRect`, `positionAt`, and `nextCell`.
 
 ```ts
 import { HtmlTableMap } from 'prosemirror-html-table';
@@ -119,6 +119,12 @@ Data:        sortBodyRowsByColumn
 ```
 
 These commands use the section-aware grid internally. They cover dedicated cell selection, rectangular merge, merged-cell splitting, row/column move and duplication, section operations, and full-table normalization through `fixTables`.
+
+The core package also exports `tableEditing()` for pure ProseMirror usage and `officialCompat` helpers for migration-oriented code:
+
+```ts
+import { officialCompat, tableEditing } from 'prosemirror-html-table';
+```
 
 Header commands convert between `htmlTableHeaderCell` and `htmlTableCell` while preserving cell attributes, content, and marks.
 
@@ -251,10 +257,10 @@ editor.commands.goToNextHtmlTableCell({ cycle: true });
 This project is not a drop-in replacement for `prosemirror-tables`.
 
 - It preserves full HTML table sections and elements, while the default `prosemirror-tables` model uses a simpler table tree.
-- `HtmlTableMap` now provides a section-aware `TableMap`-style adapter, but full `prosemirror-tables` command and plugin compatibility is still incomplete.
-- The current `CellSelection` and Tiptap interaction plugins cover the project's editing UI, but do not yet provide every API and plugin behavior from the official `CellSelection` and `tableEditing()`.
-- Cell-range clipboard and partial-delete behavior are now built in, but incremental table repair and some official `tableEditing()` edge cases still remain.
-- `setCellAttribute` currently updates the current cell; use the dedicated text-align, background-color, and vertical-align commands for selection-aware bulk formatting.
+- `HtmlTableMap` now provides a section-aware `TableMap`-style adapter, including `colCount`, but it is not a drop-in replacement because positions are resolved against the richer HTML table structure.
+- `CellSelection` now includes the main official-style helpers such as `content()`, `forEachCell()`, `rowSelection()`, and `colSelection()`. Compatibility gaps may still exist around JSON shape, custom node names, and edge-case plugin behavior.
+- Core `tableEditing()` now handles cell selection visuals, mouse selection, keyboard navigation, cell-range clipboard, delete behavior, and append-transaction repair. The remaining work is to document and harden edge cases rather than to add the basic plugin entry point.
+- `setCellAttribute` updates the current cell and returns `false` when the target cell already has the requested value. Use the dedicated text-align, background-color, and vertical-align commands for selection-aware bulk formatting.
 - `Shift-Arrow` range expansion currently treats section boundaries as hard boundaries.
 
 ## Roadmap
@@ -262,10 +268,10 @@ This project is not a drop-in replacement for `prosemirror-tables`.
 The next major areas are:
 
 ```txt
-1. expand CellSelection APIs and support custom node names throughout selection mapping
-2. split table repair into an incremental transaction API plus command wrapper
-3. continue closing official `tableEditing()` parity gaps around edge-case paste and repair flows
-4. expand compatibility adapters beyond `HtmlTableMap`
+1. document the official compatibility layer and keep its API contract stable
+2. support custom node names throughout CellSelection, tableEditing, clipboard, and compat helpers
+3. harden cross-section selection, merge, paste, and row/column operation semantics
+4. continue closing official `tableEditing()` parity gaps around edge-case paste and repair flows
 5. harden malformed HTML / Excel / Word import and large-table performance
 ```
 
