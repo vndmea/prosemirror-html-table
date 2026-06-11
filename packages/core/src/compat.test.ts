@@ -42,6 +42,18 @@ function createStateWithTable(rows = 2, cols = 2): EditorState {
   });
 }
 
+function createStateWithoutTable(): EditorState {
+  const doc = schema.nodes.doc!.create(null, [
+    schema.nodes.paragraph!.create(null, schema.text('outside')),
+  ]);
+
+  return EditorState.create({
+    schema,
+    doc,
+    selection: TextSelection.create(doc, 2),
+  });
+}
+
 function applyCommand(state: EditorState, command: Command): EditorState {
   let nextState = state;
   const result = command(state, (tr) => {
@@ -82,11 +94,23 @@ describe('official compat helpers', () => {
     expect(result?.start).toBe(1);
   });
 
+  it('returns null when findTable is outside a table', () => {
+    const state = createStateWithoutTable();
+
+    expect(findTable(state.selection.$from)).toBeNull();
+  });
+
   it('finds the current cell position from a selection hit point', () => {
     const state = createStateWithTable();
     const result = findCellPos(state.doc, state.selection.from);
 
     expect(result?.pos).toBe((state.selection as CellSelection).anchorCellPos);
+  });
+
+  it('returns undefined when findCellPos has no nearby table cell', () => {
+    const state = createStateWithoutTable();
+
+    expect(findCellPos(state.doc, state.selection.from)).toBeUndefined();
   });
 
   it('finds a cell range from a text selection and hit points', () => {
@@ -104,6 +128,20 @@ describe('official compat helpers', () => {
     expect(result?.[1].pos).toBe(cellPositions[1]);
   });
 
+  it('returns null when findCellRange spans different tables', () => {
+    const firstTable = createHtmlTableNode(schema, { rows: 1, cols: 1, withHeaderRow: true });
+    const secondTable = createHtmlTableNode(schema, { rows: 1, cols: 1, withHeaderRow: true });
+    const doc = schema.nodes.doc!.create(null, [firstTable, secondTable]);
+    const cellPositions = findNodePositions(doc, 'htmlTableHeaderCell');
+    const state = EditorState.create({
+      schema,
+      doc,
+      selection: TextSelection.create(doc, cellPositions[0]! + 2),
+    });
+
+    expect(findCellRange(state.selection, cellPositions[0], cellPositions[1])).toBeNull();
+  });
+
   it('aliases setCellAttr to setCellAttribute semantics', () => {
     const nextState = applyCommand(createStateWithTable(), setCellAttr('colspan', 2));
     const body = getBody(nextState.doc.firstChild!);
@@ -112,12 +150,30 @@ describe('official compat helpers', () => {
     expect(firstHeaderCell?.attrs.colspan).toBe(2);
   });
 
+  it('returns false from setCellAttr when the value is unchanged', () => {
+    const state = createStateWithTable();
+    let dispatched = false;
+    const result = setCellAttr('colspan', 1)(state, () => {
+      dispatched = true;
+    });
+
+    expect(result).toBe(false);
+    expect(dispatched).toBe(false);
+  });
+
   it('routes toggleHeader(type) to the matching command', () => {
     const nextState = applyCommand(createStateWithTable(), toggleHeader('cell'));
     const body = getBody(nextState.doc.firstChild!);
     const firstHeaderCell = body?.firstChild?.firstChild;
 
     expect(firstHeaderCell?.type.name).toBe('htmlTableCell');
+  });
+
+  it('returns false from toggleHeader for unknown runtime types', () => {
+    const state = createStateWithTable();
+    const command = toggleHeader('section' as Parameters<typeof toggleHeader>[0]);
+
+    expect(command(state)).toBe(false);
   });
 
   it('splits a merged cell with callback-selected cell types', () => {
@@ -146,9 +202,26 @@ describe('official compat helpers', () => {
     expect(firstRow.child(1).type.name).toBe('htmlTableCell');
   });
 
+  it('returns false from splitCellWithType when the current cell is not merged', () => {
+    const state = createStateWithTable();
+    const result = splitCellWithType(() => schema.nodes.htmlTableCell!)(state);
+
+    expect(result).toBe(false);
+  });
+
+  it('returns false from splitCellWithType outside a table', () => {
+    const state = createStateWithoutTable();
+    const result = splitCellWithType(() => schema.nodes.htmlTableCell!)(state);
+
+    expect(result).toBe(false);
+  });
+
   it('exposes the compat layer through the officialCompat namespace', () => {
     expect(officialCompat.findTable).toBe(findTable);
+    expect(officialCompat.findCellPos).toBe(findCellPos);
     expect(officialCompat.findCellRange).toBe(findCellRange);
+    expect(officialCompat.setCellAttr).toBe(setCellAttr);
     expect(officialCompat.splitCellWithType).toBe(splitCellWithType);
+    expect(officialCompat.toggleHeader).toBe(toggleHeader);
   });
 });

@@ -130,6 +130,39 @@ Header commands convert between `htmlTableHeaderCell` and `htmlTableCell` while 
 
 Selection commands use a dedicated `CellSelection` for cell, row, and column ranges, while whole-table selection still uses `NodeSelection`.
 
+### Official compatibility layer
+
+`officialCompat` is a migration-oriented adapter for code that expects familiar `prosemirror-tables` helper names. It follows the project's full HTML table schema, so it is compatible at the API boundary but not a structural drop-in replacement for the official simple row model.
+
+| Official API | This package | Status | Notes |
+| --- | --- | --- | --- |
+| `tableEditing()` | `tableEditing()` | Supported | Core ProseMirror plugin for cell selection, clipboard, keyboard behavior, and table repair. |
+| `CellSelection` | `CellSelection` | Supported | Includes `content()`, `forEachCell()`, `rowSelection()`, and `colSelection()`; JSON uses `anchorCellPos` / `headCellPos`. |
+| `TableMap` | `HtmlTableMap` | Supported adapter | Section-aware map with `findCell`, `colCount`, `nextCell`, `rectBetween`, `cellsInRect`, `positionAt`, and `get`. |
+| `findTable()` | `officialCompat.findTable()` | Supported adapter | Returns the closest `htmlTable` node with table position metadata. |
+| `findCellPos()` | `officialCompat.findCellPos()` | Supported adapter | Resolves a document position to the nearest table cell position when possible. |
+| `findCellRange()` | `officialCompat.findCellRange()` | Supported adapter | Returns anchor/head cell positions only when both cells are in the same table. |
+| `setCellAttr()` | `officialCompat.setCellAttr()` | Supported alias | Uses `setCellAttribute`; returns `false` when the current cell already has the requested value. |
+| `splitCellWithType()` | `officialCompat.splitCellWithType()` | Supported adapter | Splits one merged cell and calls `getCellType` for each created cell. |
+| `toggleHeader()` | `officialCompat.toggleHeader()` | Supported alias | Routes `row`, `column`, or `cell` to the matching section-aware command. |
+| Official `tableNodes()` schema | `createHtmlTableNodeSpecs()` | Different by design | This project preserves `caption`, `colgroup`, `thead`, `tbody`, and `tfoot`. |
+
+Pure ProseMirror setup:
+
+```ts
+import {
+  createHtmlTableNodeSpecs,
+  officialCompat,
+  tableEditing,
+} from 'prosemirror-html-table';
+
+const tableNodes = createHtmlTableNodeSpecs();
+const plugins = [
+  tableEditing(),
+];
+const setVisited = officialCompat.setCellAttr('data-example', 'visited');
+```
+
 ### Tiptap interaction layer
 
 The Tiptap package now includes:
