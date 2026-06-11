@@ -50,8 +50,24 @@ describe('html table editing plugin', () => {
     expect(getCellTexts(view.state.doc)).toEqual(['', '', 'C', 'D']);
   });
 
-  it('does not intercept Delete when every cell in the table is selected', () => {
+  it('deletes the table on Delete when every cell in the table is selected', () => {
     const plugin = createHtmlTableEditingPlugin(defaultHtmlTableTiptapOptions);
+    const state = createStateWithSelection(['A', 'B', 'C', 'D'], [0, 3]);
+    const view = createView(state);
+    const event = createKeyboardEvent('Delete');
+
+    const handled = plugin.props.handleKeyDown?.call(plugin, view, event as unknown as KeyboardEvent);
+
+    expect(handled).toBe(true);
+    expect(event.prevented).toBe(true);
+    expect(view.state.doc.child(0).type.name).toBe('paragraph');
+  });
+
+  it('does not clear every cell when whole-table delete is disabled', () => {
+    const plugin = createHtmlTableEditingPlugin({
+      ...defaultHtmlTableTiptapOptions,
+      deleteTableOnAllCellsSelected: false,
+    });
     const state = createStateWithSelection(['A', 'B', 'C', 'D'], [0, 3]);
     const view = createView(state);
     const event = createKeyboardEvent('Delete');
@@ -60,6 +76,7 @@ describe('html table editing plugin', () => {
 
     expect(handled).toBe(false);
     expect(event.prevented).toBe(false);
+    expect(getCellTexts(view.state.doc)).toEqual(['A', 'B', 'C', 'D']);
   });
 
   it('pastes TSV data into the current table selection', () => {

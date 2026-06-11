@@ -126,6 +126,8 @@ The core package also exports `tableEditing()` for pure ProseMirror usage and `o
 import { officialCompat, tableEditing } from 'prosemirror-html-table';
 ```
 
+Pure ProseMirror users should install `tableEditing()` directly. Tiptap users should use `HtmlTableExtensions`; its editing plugin delegates the core selection, clipboard, keyboard, and repair behavior to `tableEditing()` while mapping Tiptap options such as `enableCellRangeClipboard`, `clearCellsOnDelete`, and `deleteTableOnAllCellsSelected`.
+
 Header commands convert between `htmlTableHeaderCell` and `htmlTableCell` while preserving cell attributes, content, and marks.
 
 Selection commands use a dedicated `CellSelection` for cell, row, and column ranges, while whole-table selection still uses `NodeSelection`.
@@ -169,6 +171,7 @@ The Tiptap package now includes:
 
 ```txt
 - custom table node view with optional wrapper
+- tableEditing() option bridge for core editing behavior
 - row and column handles with explicit selection state
 - nested context menus for cell, row, and column actions
 - row and column extend controls

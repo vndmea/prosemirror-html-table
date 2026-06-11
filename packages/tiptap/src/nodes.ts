@@ -93,18 +93,6 @@ export const HtmlTable = Node.create<HtmlTableTiptapOptions>({
       'Shift-ArrowRight': moveSelection('right'),
       'Shift-ArrowUp': moveSelection('up'),
       'Shift-ArrowDown': moveSelection('down'),
-      Backspace: () => (deleteTableWhenAllCellsSelected(this.editor.state, this.options)
-        ? this.editor.commands.deleteHtmlTable()
-        : false),
-      Delete: () => (deleteTableWhenAllCellsSelected(this.editor.state, this.options)
-        ? this.editor.commands.deleteHtmlTable()
-        : false),
-      'Mod-Backspace': () => (deleteTableWhenAllCellsSelected(this.editor.state, this.options)
-        ? this.editor.commands.deleteHtmlTable()
-        : false),
-      'Mod-Delete': () => (deleteTableWhenAllCellsSelected(this.editor.state, this.options)
-        ? this.editor.commands.deleteHtmlTable()
-        : false),
     };
   },
 
@@ -275,25 +263,6 @@ function shouldKeepEmptyCaption(state: EditorState): boolean {
     && $from.parent.type.name === 'htmlTableCaption'
     && $from.parent.textContent.length === 0
     && $from.parentOffset === 0;
-}
-
-function deleteTableWhenAllCellsSelected(state: EditorState, options: HtmlTableTiptapOptions): boolean {
-  if (!options.deleteTableOnAllCellsSelected || !(state.selection instanceof CellSelection)) {
-    return false;
-  }
-
-  const selectionInfo = getTableSelectionInfo(state.doc, state.selection);
-  if (!selectionInfo || selectionInfo.grid.cells.length === 0) {
-    return false;
-  }
-
-  return (
-    selectionInfo.top === 0
-    && selectionInfo.left === 0
-    && selectionInfo.bottom === selectionInfo.grid.height - 1
-    && selectionInfo.right === selectionInfo.grid.width - 1
-    && selectionInfo.cells.length === selectionInfo.grid.cells.length
-  );
 }
 
 export function createHtmlTableExtensions(options: CreateHtmlTableExtensionsOptions = {}) {

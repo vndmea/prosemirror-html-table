@@ -220,67 +220,17 @@ describe('HtmlTableExtensions', () => {
     })).toEqual(['caption', { 'data-placeholder': 'Type table caption' }, 0]);
   });
 
-  it('deletes the table when all cells are selected and delete shortcuts are used', () => {
-    const table = createHtmlTableNode(schema, { rows: 2, cols: 2 });
-    const doc = schema.nodes.doc!.create(null, [table]);
-    const cellPositions = findNodePositions(doc, 'htmlTableCell');
+  it('does not register table deletion shortcuts in the Tiptap node extension', () => {
     const state = EditorState.create({
       schema,
-      doc,
-      selection: CellSelection.create(doc, cellPositions[0]!, cellPositions[cellPositions.length - 1]!),
+      doc: schema.nodes.doc!.create(null, [createHtmlTableNode(schema, { rows: 2, cols: 2 })]),
     });
-    let deleteCalls = 0;
-    const shortcuts = getHtmlTableShortcuts(state, {}, {
-      deleteHtmlTable: () => {
-        deleteCalls += 1;
-        return true;
-      },
-    });
+    const shortcuts = getHtmlTableShortcuts(state);
 
-    for (const key of ['Backspace', 'Delete', 'Mod-Backspace', 'Mod-Delete'] as const) {
-      expect(shortcuts[key]).toBeTypeOf('function');
-      expect(shortcuts[key]?.()).toBe(true);
-    }
-
-    expect(deleteCalls).toBe(4);
-  });
-
-  it('does not delete the table for partial cell selections or when the option is disabled', () => {
-    const table = createHtmlTableNode(schema, { rows: 2, cols: 2 });
-    const doc = schema.nodes.doc!.create(null, [table]);
-    const cellPositions = findNodePositions(doc, 'htmlTableCell');
-    const partialState = EditorState.create({
-      schema,
-      doc,
-      selection: CellSelection.create(doc, cellPositions[0]!, cellPositions[1]!),
-    });
-    const disabledState = EditorState.create({
-      schema,
-      doc,
-      selection: CellSelection.create(doc, cellPositions[0]!, cellPositions[cellPositions.length - 1]!),
-    });
-    let deleteCalls = 0;
-
-    const partialShortcuts = getHtmlTableShortcuts(partialState, {}, {
-      deleteHtmlTable: () => {
-        deleteCalls += 1;
-        return true;
-      },
-    });
-    const disabledShortcuts = getHtmlTableShortcuts(
-      disabledState,
-      { deleteTableOnAllCellsSelected: false },
-      {
-        deleteHtmlTable: () => {
-          deleteCalls += 1;
-          return true;
-        },
-      },
-    );
-
-    expect(partialShortcuts.Backspace?.()).toBe(false);
-    expect(disabledShortcuts.Delete?.()).toBe(false);
-    expect(deleteCalls).toBe(0);
+    expect(shortcuts.Backspace).toBeUndefined();
+    expect(shortcuts.Delete).toBeUndefined();
+    expect(shortcuts['Mod-Backspace']).toBeUndefined();
+    expect(shortcuts['Mod-Delete']).toBeUndefined();
   });
 
   it('allows Shift-Arrow expansion across sections when configured', () => {
@@ -332,7 +282,6 @@ function getHtmlTableShortcuts(
     goToNextHtmlTableCell: () => boolean;
     goToPreviousHtmlTableCell: () => boolean;
     addHtmlTableRowAfter: () => boolean;
-    deleteHtmlTable: () => boolean;
   }> = {},
   dispatch: (transaction: unknown) => void = () => {},
 ) {
@@ -349,7 +298,6 @@ function getHtmlTableShortcuts(
         goToNextHtmlTableCell: () => false,
         goToPreviousHtmlTableCell: () => false,
         addHtmlTableRowAfter: () => false,
-        deleteHtmlTable: () => false,
         ...commandOverrides,
       },
       view: { dispatch },

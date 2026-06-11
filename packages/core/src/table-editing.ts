@@ -8,13 +8,33 @@ import { createFixTablesTransaction } from './fix-tables.js';
 import { CellSelection, isCellSelection } from './selection.js';
 import { HtmlTableMap } from './table-map.js';
 
+type TableClipboard = Exclude<ReturnType<typeof parseTableSliceClipboard>, null>;
+
 export interface TableEditingOptions {
   allowTableNodeSelection?: boolean;
+  clearCellsOnDelete?: boolean;
+  clearWholeTableCellSelectionOnDelete?: boolean;
+  constrainShiftArrowToSection?: boolean;
+  deleteTableOnAllCellsSelected?: boolean;
+  enableCellRangeClipboard?: boolean;
+  enableShiftArrowSelection?: boolean;
+  expandTableOnPaste?: boolean;
 }
 
 export const tableEditingKey = new PluginKey<number>('selectingCells');
 
-export function tableEditing({ allowTableNodeSelection = false }: TableEditingOptions = {}): Plugin {
+export function tableEditing(options: TableEditingOptions = {}): Plugin {
+  const {
+    allowTableNodeSelection = false,
+    clearCellsOnDelete = true,
+    clearWholeTableCellSelectionOnDelete = true,
+    constrainShiftArrowToSection = false,
+    deleteTableOnAllCellsSelected = false,
+    enableCellRangeClipboard = true,
+    enableShiftArrowSelection = true,
+    expandTableOnPaste = false,
+  } = options;
+
   return new Plugin({
     key: tableEditingKey,
     state: {
@@ -34,23 +54,29 @@ export function tableEditing({ allowTableNodeSelection = false }: TableEditingOp
       decorations: drawCellSelection,
       handleDOMEvents: {
         copy(view, event) {
-          return handleClipboardCopy(view, event as ClipboardEvent);
+          return handleClipboardCopy(view, event as ClipboardEvent, enableCellRangeClipboard);
         },
         cut(view, event) {
-          return handleClipboardCut(view, event as ClipboardEvent);
+          return handleClipboardCut(view, event as ClipboardEvent, enableCellRangeClipboard);
         },
         paste(view, event) {
-          return handleClipboardPaste(view, event as ClipboardEvent);
+          return handleClipboardPaste(view, event as ClipboardEvent, enableCellRangeClipboard, expandTableOnPaste);
         },
         mousedown(view, event) {
           return handleMouseDown(view, event as MouseEvent);
         },
       },
       handlePaste(view, event, slice) {
-        return handlePaste(view, event as ClipboardEvent | null, slice);
+        return handlePaste(view, event as ClipboardEvent | null, slice, enableCellRangeClipboard, expandTableOnPaste);
       },
       handleKeyDown(view, event) {
-        return handleKeyDown(view, event);
+        return handleKeyDown(view, event, {
+          clearCellsOnDelete,
+          clearWholeTableCellSelectionOnDelete,
+          constrainShiftArrowToSection,
+          deleteTableOnAllCellsSelected,
+          enableShiftArrowSelection,
+        });
       },
       handleTripleClick(view, pos) {
         return handleTripleClick(view, pos);
@@ -75,8 +101,8 @@ function drawCellSelection(state: EditorState): DecorationSet | null {
   return DecorationSet.create(state.doc, decorations);
 }
 
-function handleClipboardCopy(view: EditorView, event: ClipboardEvent): boolean {
-  if (!event.clipboardData || !isClipboardSelection(view.state)) return false;
+function handleClipboardCopy(view: EditorView, event: ClipboardEvent, enabled: boolean): boolean {
+  if (!enabled || !event.clipboardData || !isClipboardSelection(view.state)) return false;
 
   const html = serializeCellSelectionToHtmlTable(view.state);
   const text = serializeCellSelectionToText(view.state);
@@ -88,8 +114,8 @@ function handleClipboardCopy(view: EditorView, event: ClipboardEvent): boolean {
   return true;
 }
 
-function handleClipboardCut(view: EditorView, event: ClipboardEvent): boolean {
-  if (!handleClipboardCopy(view, event)) return false;
+function handleClipboardCut(view: EditorView, event: ClipboardEvent, enabled: boolean): boolean {
+  if (!handleClipboardCopy(view, event, enabled)) return false;
 
   if (view.state.selection instanceof NodeSelection && view.state.selection.node.type.spec.tableRole === 'table') {
     return deleteTable()(view.state, view.dispatch);
@@ -98,8 +124,13 @@ function handleClipboardCut(view: EditorView, event: ClipboardEvent): boolean {
   return clearSelectedCells(view.state, view.dispatch);
 }
 
-function handleClipboardPaste(view: EditorView, event: ClipboardEvent): boolean {
-  if (!event.clipboardData || !isTablePasteTarget(view.state)) return false;
+function handleClipboardPaste(
+  view: EditorView,
+  event: ClipboardEvent,
+  enabled: boolean,
+  expandTableOnPaste: boolean,
+): boolean {
+  if (!enabled || !event.clipboardData || !isTablePasteTarget(view.state)) return false;
 
   const html = event.clipboardData.getData('text/html');
   const text = event.clipboardData.getData('text/plain');
@@ -108,15 +139,23 @@ function handleClipboardPaste(view: EditorView, event: ClipboardEvent): boolean 
     ?? parsePlainTextTableClipboard(text, view.state.schema);
   if (!clipboard) return false;
 
-  const applied = applyTableClipboardToSelection(view.state, view.dispatch, clipboard);
+  const applied = applyTableClipboardToSelection(view.state, view.dispatch, clipboard, {
+    expandTableOnPaste,
+  });
   if (!applied) return false;
 
   event.preventDefault();
   return true;
 }
 
-function handlePaste(view: EditorView, event: ClipboardEvent | null, slice: Slice): boolean {
-  if (!isTablePasteTarget(view.state)) return false;
+function handlePaste(
+  view: EditorView,
+  event: ClipboardEvent | null,
+  slice: Slice,
+  enabled: boolean,
+  expandTableOnPaste: boolean,
+): boolean {
+  if (!enabled || !isTablePasteTarget(view.state)) return false;
 
   const clipboard =
     parseTableSliceClipboard(slice, view.state.schema)
@@ -127,27 +166,62 @@ function handlePaste(view: EditorView, event: ClipboardEvent | null, slice: Slic
       : null);
   if (!clipboard) return false;
 
-  const nextClipboard = normalizeClipboardForSelection(view.state, clipboard);
-  const applied = applyTableClipboardToSelection(view.state, view.dispatch, nextClipboard);
+  const nextClipboard = normalizeClipboardForSelection(view.state, clipboard, expandTableOnPaste);
+  const applied = applyTableClipboardToSelection(view.state, view.dispatch, nextClipboard, {
+    expandTableOnPaste,
+  });
   if (!applied) return false;
 
   event?.preventDefault?.();
   return true;
 }
 
-function handleDeleteKey(view: EditorView, event: KeyboardEvent): boolean {
+function handleDeleteKey(
+  view: EditorView,
+  event: KeyboardEvent,
+  options: {
+    clearCellsOnDelete: boolean;
+    clearWholeTableCellSelectionOnDelete: boolean;
+    deleteTableOnAllCellsSelected: boolean;
+  },
+): boolean {
   if (event.key !== 'Backspace' && event.key !== 'Delete') return false;
   if (!isCellSelection(view.state.selection)) return false;
+
+  if (isWholeTableCellSelection(view.state)) {
+    if (options.deleteTableOnAllCellsSelected) {
+      const deleted = deleteTable()(view.state, view.dispatch);
+      if (deleted) event.preventDefault();
+      return deleted;
+    }
+
+    if (!options.clearWholeTableCellSelectionOnDelete) return false;
+  }
+
+  if (!options.clearCellsOnDelete) return false;
 
   const cleared = clearSelectedCells(view.state, view.dispatch);
   if (cleared) event.preventDefault();
   return cleared;
 }
 
-function handleKeyDown(view: EditorView, event: KeyboardEvent): boolean {
-  if (handleShiftArrow(view, event)) return true;
+function handleKeyDown(
+  view: EditorView,
+  event: KeyboardEvent,
+  options: {
+    clearCellsOnDelete: boolean;
+    clearWholeTableCellSelectionOnDelete: boolean;
+    constrainShiftArrowToSection: boolean;
+    deleteTableOnAllCellsSelected: boolean;
+    enableShiftArrowSelection: boolean;
+  },
+): boolean {
+  if (event.shiftKey && !options.enableShiftArrowSelection) return false;
+  if (options.enableShiftArrowSelection && handleShiftArrow(view, event, options.constrainShiftArrowToSection)) {
+    return true;
+  }
   if (handleArrow(view, event)) return true;
-  return handleDeleteKey(view, event);
+  return handleDeleteKey(view, event, options);
 }
 
 function handleArrow(view: EditorView, event: KeyboardEvent): boolean {
@@ -162,11 +236,11 @@ function handleArrow(view: EditorView, event: KeyboardEvent): boolean {
   return true;
 }
 
-function handleShiftArrow(view: EditorView, event: KeyboardEvent): boolean {
+function handleShiftArrow(view: EditorView, event: KeyboardEvent, constrainToSection: boolean): boolean {
   const direction = getShiftArrowDirection(event);
   if (!direction) return false;
 
-  const selection = createShiftArrowSelection(view, direction.axis, direction.dir);
+  const selection = createShiftArrowSelection(view, direction.axis, direction.dir, constrainToSection);
   if (!selection || selection.eq(view.state.selection)) return false;
 
   event.preventDefault();
@@ -209,8 +283,10 @@ function createArrowSelection(
 
 function normalizeClipboardForSelection(
   state: EditorState,
-  clipboard: ReturnType<typeof parseTableSliceClipboard> extends infer T ? Exclude<T, null> : never,
-) {
+  clipboard: TableClipboard,
+  expandTableOnPaste: boolean,
+): TableClipboard {
+  if (expandTableOnPaste) return clipboard;
   if (!isCellSelection(state.selection)) return clipboard;
 
   const matrix = getSelectionMatrix(state);
@@ -231,6 +307,7 @@ function createShiftArrowSelection(
   view: EditorView,
   axis: 'horiz' | 'vert',
   dir: -1 | 1,
+  constrainToSection: boolean,
 ): CellSelection | null {
   const selection = view.state.selection;
   const cellSelection = selection instanceof CellSelection
@@ -240,6 +317,9 @@ function createShiftArrowSelection(
 
   const nextHeadCellPos = nextCellPos(view.state.doc, cellSelection.headCellPos, axis, dir);
   if (nextHeadCellPos == null) return null;
+  if (constrainToSection && !areCellsInSameSection(view.state.doc, cellSelection.headCellPos, nextHeadCellPos)) {
+    return null;
+  }
 
   return CellSelection.create(view.state.doc, cellSelection.anchorCellPos, nextHeadCellPos);
 }
@@ -526,6 +606,48 @@ function nextCellPos(
   const map = HtmlTableMap.get(table.node);
   const nextPos = map.nextCell(cellPos - table.pos, axis, dir);
   return nextPos == null ? null : table.pos + nextPos;
+}
+
+function isWholeTableCellSelection(state: EditorState): boolean {
+  if (!isCellSelection(state.selection)) return false;
+
+  const table = tableAround(state.selection.$anchor);
+  if (!table) return false;
+
+  const map = HtmlTableMap.get(table.node);
+  const rect = map.rectBetween(
+    state.selection.anchorCellPos - table.pos,
+    state.selection.headCellPos - table.pos,
+  );
+
+  return rect.left === 0
+    && rect.top === 0
+    && rect.right === map.width
+    && rect.bottom === map.height
+    && map.cellsInRect(rect).length === map.grid.cells.length;
+}
+
+function areCellsInSameSection(doc: ProseMirrorNode, firstCellPos: number, secondCellPos: number): boolean {
+  const firstTable = tableAround(doc.resolve(firstCellPos + 1));
+  const secondTable = tableAround(doc.resolve(secondCellPos + 1));
+  if (!firstTable || !secondTable || firstTable.pos !== secondTable.pos) return false;
+
+  const map = HtmlTableMap.get(firstTable.node);
+  const firstCell = findCellRefForTableOffset(map, firstCellPos - firstTable.pos);
+  const secondCell = findCellRefForTableOffset(map, secondCellPos - firstTable.pos);
+
+  return !!firstCell
+    && !!secondCell
+    && firstCell.section === secondCell.section
+    && firstCell.sectionIndex === secondCell.sectionIndex;
+}
+
+function findCellRefForTableOffset(map: HtmlTableMap, tableOffset: number) {
+  for (const [cell, pos] of map.cellPositions) {
+    if (pos === tableOffset) return cell;
+  }
+
+  return undefined;
 }
 
 function inSameTable(

@@ -34,6 +34,19 @@ describe('tableEditing', () => {
     expect(event.clipboardData.getData('text/html')).toContain('<table');
   });
 
+  it('does not handle cell-range clipboard when disabled', () => {
+    const plugin = tableEditing({ enableCellRangeClipboard: false });
+    const state = createStateWithCellSelection(['A', 'B', 'C', 'D'], [0, 3]);
+    const view = createView(state);
+    const event = createClipboardEvent();
+
+    const handled = plugin.props.handleDOMEvents?.copy?.call(plugin, view, event as unknown as ClipboardEvent);
+
+    expect(handled).toBe(false);
+    expect(event.prevented).toBe(false);
+    expect(event.clipboardData.getData('text/plain')).toBe('');
+  });
+
   it('clears partial cell selections on Delete', () => {
     const plugin = tableEditing();
     const state = createStateWithCellSelection(['A', 'B', 'C', 'D'], [0, 1]);
@@ -47,6 +60,19 @@ describe('tableEditing', () => {
     expect(getCellTexts(view.state.doc)).toEqual(['', '', 'C', 'D']);
   });
 
+  it('does not clear partial cell selections on Delete when disabled', () => {
+    const plugin = tableEditing({ clearCellsOnDelete: false });
+    const state = createStateWithCellSelection(['A', 'B', 'C', 'D'], [0, 1]);
+    const view = createView(state);
+    const event = createKeyboardEvent('Delete');
+
+    const handled = plugin.props.handleKeyDown?.call(plugin, view, event as unknown as KeyboardEvent);
+
+    expect(handled).toBe(false);
+    expect(event.prevented).toBe(false);
+    expect(getCellTexts(view.state.doc)).toEqual(['A', 'B', 'C', 'D']);
+  });
+
   it('clears whole-table CellSelections on Delete', () => {
     const plugin = tableEditing();
     const state = createStateWithCellSelection(['A', 'B', 'C', 'D'], [0, 3]);
@@ -58,6 +84,35 @@ describe('tableEditing', () => {
     expect(handled).toBe(true);
     expect(event.prevented).toBe(true);
     expect(getCellTexts(view.state.doc)).toEqual(['', '', '', '']);
+  });
+
+  it('deletes whole-table CellSelections on Delete when configured', () => {
+    const plugin = tableEditing({ deleteTableOnAllCellsSelected: true });
+    const state = createStateWithCellSelection(['A', 'B', 'C', 'D'], [0, 3]);
+    const view = createView(state);
+    const event = createKeyboardEvent('Delete');
+
+    const handled = plugin.props.handleKeyDown?.call(plugin, view, event as unknown as KeyboardEvent);
+
+    expect(handled).toBe(true);
+    expect(event.prevented).toBe(true);
+    expect(view.state.doc.child(0).type.name).toBe('paragraph');
+  });
+
+  it('does not clear whole-table CellSelections when whole-table clearing is disabled', () => {
+    const plugin = tableEditing({
+      clearWholeTableCellSelectionOnDelete: false,
+      deleteTableOnAllCellsSelected: false,
+    });
+    const state = createStateWithCellSelection(['A', 'B', 'C', 'D'], [0, 3]);
+    const view = createView(state);
+    const event = createKeyboardEvent('Delete');
+
+    const handled = plugin.props.handleKeyDown?.call(plugin, view, event as unknown as KeyboardEvent);
+
+    expect(handled).toBe(false);
+    expect(event.prevented).toBe(false);
+    expect(getCellTexts(view.state.doc)).toEqual(['A', 'B', 'C', 'D']);
   });
 
   it('clears partial cell selections on Mod-Backspace and Mod-Delete', () => {
@@ -465,6 +520,19 @@ describe('tableEditing', () => {
         cellPositions[1],
       ]);
     }
+  });
+
+  it('does not extend CellSelections with Shift-Arrow when disabled', () => {
+    const plugin = tableEditing({ enableShiftArrowSelection: false });
+    const state = createStateWithCellSelection(['A', 'B', 'C', 'D'], [0, 0]);
+    const view = createView(state);
+    const event = createKeyboardEvent('ArrowRight', { shiftKey: true });
+
+    const handled = plugin.props.handleKeyDown?.call(plugin, view, event as unknown as KeyboardEvent);
+
+    expect(handled).toBe(false);
+    expect(event.prevented).toBe(false);
+    expect(view.state.selection.eq(state.selection)).toBe(true);
   });
 
   it('starts a CellSelection from a text cursor at the end of a cell with Shift-ArrowRight', () => {
