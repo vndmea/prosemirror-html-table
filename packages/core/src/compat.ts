@@ -9,7 +9,7 @@ import {
   type HtmlTableCommandOptions,
 } from './commands.js';
 import { createHtmlTableGrid, type HtmlTableCellRef, type HtmlTableGrid } from './grid.js';
-import { htmlTableNodeNames } from './names.js';
+import { resolveHtmlTableNodeNames } from './names.js';
 import { CellSelection } from './selection.js';
 import { normalizeHtmlTable } from './normalize.js';
 import type { HtmlTableNodeNames } from './types.js';
@@ -31,6 +31,10 @@ export type ToggleHeaderType = 'column' | 'row' | 'cell';
 
 export interface ToggleHeaderOptions extends HtmlTableCommandOptions {
   useDeprecatedLogic?: boolean;
+}
+
+export interface SplitCellWithTypeOptions {
+  names?: Partial<HtmlTableNodeNames>;
 }
 
 export function findTable($pos: ResolvedPos): FindNodeResult | null {
@@ -86,12 +90,13 @@ export function setCellAttr(
 
 export function splitCellWithType(
   getCellType: (options: GetCellTypeOptions) => NodeType,
+  options: SplitCellWithTypeOptions = {},
 ): Command {
   return (state, dispatch) => {
     const tableResult = findTable(state.selection.$from);
     if (!tableResult) return false;
 
-    const names = htmlTableNodeNames;
+    const names = resolveHtmlTableNodeNames(options.names);
     const cellPos = resolveSelectedCellPos(state.selection);
     if (cellPos === undefined) return false;
 
@@ -207,7 +212,7 @@ function splitSelectedCellByType(
   }
 
   tableChildren[sectionChildIndex] = section.copy(Fragment.fromArray(sectionChildren));
-  return normalizeHtmlTable(table.copy(Fragment.fromArray(tableChildren)));
+  return normalizeHtmlTable(table.copy(Fragment.fromArray(tableChildren)), { names });
 }
 
 function collectCellPositions(

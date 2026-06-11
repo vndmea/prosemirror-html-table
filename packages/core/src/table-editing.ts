@@ -5,8 +5,10 @@ import { Decoration, DecorationSet, type EditorView } from 'prosemirror-view';
 import { applyTableClipboardToSelection, clearSelectedCells, clipTableClipboard, createSingleCellSliceClipboard, getSelectionMatrix, parseHtmlTableClipboard, parsePlainTextTableClipboard, parseTableSliceClipboard, serializeCellSelectionToHtmlTable, serializeCellSelectionToText } from './clipboard.js';
 import { deleteTable } from './commands.js';
 import { createFixTablesTransaction } from './fix-tables.js';
+import { inferHtmlTableNodeNames, resolveHtmlTableNodeNames } from './names.js';
 import { CellSelection, isCellSelection } from './selection.js';
 import { HtmlTableMap } from './table-map.js';
+import type { HtmlTableNodeNames } from './types.js';
 
 type TableClipboard = Exclude<ReturnType<typeof parseTableSliceClipboard>, null>;
 
@@ -19,6 +21,7 @@ export interface TableEditingOptions {
   enableCellRangeClipboard?: boolean;
   enableShiftArrowSelection?: boolean;
   expandTableOnPaste?: boolean;
+  names?: Partial<HtmlTableNodeNames>;
 }
 
 export const tableEditingKey = new PluginKey<number>('selectingCells');
@@ -33,7 +36,9 @@ export function tableEditing(options: TableEditingOptions = {}): Plugin {
     enableCellRangeClipboard = true,
     enableShiftArrowSelection = true,
     expandTableOnPaste = false,
+    names: customNames,
   } = options;
+  const names = resolveHtmlTableNodeNames(customNames);
 
   return new Plugin({
     key: tableEditingKey,
@@ -54,20 +59,20 @@ export function tableEditing(options: TableEditingOptions = {}): Plugin {
       decorations: drawCellSelection,
       handleDOMEvents: {
         copy(view, event) {
-          return handleClipboardCopy(view, event as ClipboardEvent, enableCellRangeClipboard);
+          return handleClipboardCopy(view, event as ClipboardEvent, enableCellRangeClipboard, names);
         },
         cut(view, event) {
-          return handleClipboardCut(view, event as ClipboardEvent, enableCellRangeClipboard);
+          return handleClipboardCut(view, event as ClipboardEvent, enableCellRangeClipboard, names);
         },
         paste(view, event) {
-          return handleClipboardPaste(view, event as ClipboardEvent, enableCellRangeClipboard, expandTableOnPaste);
+          return handleClipboardPaste(view, event as ClipboardEvent, enableCellRangeClipboard, expandTableOnPaste, names);
         },
         mousedown(view, event) {
           return handleMouseDown(view, event as MouseEvent);
         },
       },
       handlePaste(view, event, slice) {
-        return handlePaste(view, event as ClipboardEvent | null, slice, enableCellRangeClipboard, expandTableOnPaste);
+        return handlePaste(view, event as ClipboardEvent | null, slice, enableCellRangeClipboard, expandTableOnPaste, names);
       },
       handleKeyDown(view, event) {
         return handleKeyDown(view, event, {
@@ -76,6 +81,7 @@ export function tableEditing(options: TableEditingOptions = {}): Plugin {
           constrainShiftArrowToSection,
           deleteTableOnAllCellsSelected,
           enableShiftArrowSelection,
+          names,
         });
       },
       handleTripleClick(view, pos) {
@@ -86,7 +92,11 @@ export function tableEditing(options: TableEditingOptions = {}): Plugin {
       },
     },
     appendTransaction(_transactions, oldState, state) {
-      return normalizeSelection(state, createFixTablesTransaction(state, oldState), allowTableNodeSelection);
+      return normalizeSelection(
+        state,
+        createFixTablesTransaction(state, oldState, { names }),
+        allowTableNodeSelection,
+      );
     },
   });
 }
@@ -101,11 +111,16 @@ function drawCellSelection(state: EditorState): DecorationSet | null {
   return DecorationSet.create(state.doc, decorations);
 }
 
-function handleClipboardCopy(view: EditorView, event: ClipboardEvent, enabled: boolean): boolean {
+function handleClipboardCopy(
+  view: EditorView,
+  event: ClipboardEvent,
+  enabled: boolean,
+  names: HtmlTableNodeNames,
+): boolean {
   if (!enabled || !event.clipboardData || !isClipboardSelection(view.state)) return false;
 
-  const html = serializeCellSelectionToHtmlTable(view.state);
-  const text = serializeCellSelectionToText(view.state);
+  const html = serializeCellSelectionToHtmlTable(view.state, { names });
+  const text = serializeCellSelectionToText(view.state, { names });
   if (!html && !text) return false;
 
   if (html) event.clipboardData.setData('text/html', html);
@@ -114,14 +129,19 @@ function handleClipboardCopy(view: EditorView, event: ClipboardEvent, enabled: b
   return true;
 }
 
-function handleClipboardCut(view: EditorView, event: ClipboardEvent, enabled: boolean): boolean {
-  if (!handleClipboardCopy(view, event, enabled)) return false;
+function handleClipboardCut(
+  view: EditorView,
+  event: ClipboardEvent,
+  enabled: boolean,
+  names: HtmlTableNodeNames,
+): boolean {
+  if (!handleClipboardCopy(view, event, enabled, names)) return false;
 
   if (view.state.selection instanceof NodeSelection && view.state.selection.node.type.spec.tableRole === 'table') {
-    return deleteTable()(view.state, view.dispatch);
+    return deleteTable({ names })(view.state, view.dispatch);
   }
 
-  return clearSelectedCells(view.state, view.dispatch);
+  return clearSelectedCells(view.state, view.dispatch, { names });
 }
 
 function handleClipboardPaste(
@@ -129,6 +149,7 @@ function handleClipboardPaste(
   event: ClipboardEvent,
   enabled: boolean,
   expandTableOnPaste: boolean,
+  names: HtmlTableNodeNames,
 ): boolean {
   if (!enabled || !event.clipboardData || !isTablePasteTarget(view.state)) return false;
 
@@ -141,6 +162,7 @@ function handleClipboardPaste(
 
   const applied = applyTableClipboardToSelection(view.state, view.dispatch, clipboard, {
     expandTableOnPaste,
+    names,
   });
   if (!applied) return false;
 
@@ -154,21 +176,24 @@ function handlePaste(
   slice: Slice,
   enabled: boolean,
   expandTableOnPaste: boolean,
+  names: HtmlTableNodeNames,
 ): boolean {
   if (!enabled || !isTablePasteTarget(view.state)) return false;
 
   const clipboard =
-    parseTableSliceClipboard(slice, view.state.schema)
+    parseTableSliceClipboard(slice, view.state.schema, { names })
     ?? (isCellSelection(view.state.selection)
       ? createSingleCellSliceClipboard(view.state.schema, slice, {
         isHeader: view.state.selection.$anchor.parent.type.spec.tableRole === 'header_cell',
+        names,
       })
       : null);
   if (!clipboard) return false;
 
-  const nextClipboard = normalizeClipboardForSelection(view.state, clipboard, expandTableOnPaste);
+  const nextClipboard = normalizeClipboardForSelection(view.state, clipboard, expandTableOnPaste, names);
   const applied = applyTableClipboardToSelection(view.state, view.dispatch, nextClipboard, {
     expandTableOnPaste,
+    names,
   });
   if (!applied) return false;
 
@@ -183,14 +208,15 @@ function handleDeleteKey(
     clearCellsOnDelete: boolean;
     clearWholeTableCellSelectionOnDelete: boolean;
     deleteTableOnAllCellsSelected: boolean;
+    names: HtmlTableNodeNames;
   },
 ): boolean {
   if (event.key !== 'Backspace' && event.key !== 'Delete') return false;
   if (!isCellSelection(view.state.selection)) return false;
 
-  if (isWholeTableCellSelection(view.state)) {
+  if (isWholeTableCellSelection(view.state, options.names)) {
     if (options.deleteTableOnAllCellsSelected) {
-      const deleted = deleteTable()(view.state, view.dispatch);
+      const deleted = deleteTable({ names: options.names })(view.state, view.dispatch);
       if (deleted) event.preventDefault();
       return deleted;
     }
@@ -200,7 +226,7 @@ function handleDeleteKey(
 
   if (!options.clearCellsOnDelete) return false;
 
-  const cleared = clearSelectedCells(view.state, view.dispatch);
+  const cleared = clearSelectedCells(view.state, view.dispatch, { names: options.names });
   if (cleared) event.preventDefault();
   return cleared;
 }
@@ -214,21 +240,22 @@ function handleKeyDown(
     constrainShiftArrowToSection: boolean;
     deleteTableOnAllCellsSelected: boolean;
     enableShiftArrowSelection: boolean;
+    names: HtmlTableNodeNames;
   },
 ): boolean {
   if (event.shiftKey && !options.enableShiftArrowSelection) return false;
-  if (options.enableShiftArrowSelection && handleShiftArrow(view, event, options.constrainShiftArrowToSection)) {
+  if (options.enableShiftArrowSelection && handleShiftArrow(view, event, options.constrainShiftArrowToSection, options.names)) {
     return true;
   }
-  if (handleArrow(view, event)) return true;
+  if (handleArrow(view, event, options.names)) return true;
   return handleDeleteKey(view, event, options);
 }
 
-function handleArrow(view: EditorView, event: KeyboardEvent): boolean {
+function handleArrow(view: EditorView, event: KeyboardEvent, names: HtmlTableNodeNames): boolean {
   const direction = getArrowDirection(event);
   if (!direction) return false;
 
-  const selection = createArrowSelection(view, direction.axis, direction.dir);
+  const selection = createArrowSelection(view, direction.axis, direction.dir, names);
   if (!selection || selection.eq(view.state.selection)) return false;
 
   event.preventDefault();
@@ -236,11 +263,16 @@ function handleArrow(view: EditorView, event: KeyboardEvent): boolean {
   return true;
 }
 
-function handleShiftArrow(view: EditorView, event: KeyboardEvent, constrainToSection: boolean): boolean {
+function handleShiftArrow(
+  view: EditorView,
+  event: KeyboardEvent,
+  constrainToSection: boolean,
+  names: HtmlTableNodeNames,
+): boolean {
   const direction = getShiftArrowDirection(event);
   if (!direction) return false;
 
-  const selection = createShiftArrowSelection(view, direction.axis, direction.dir, constrainToSection);
+  const selection = createShiftArrowSelection(view, direction.axis, direction.dir, constrainToSection, names);
   if (!selection || selection.eq(view.state.selection)) return false;
 
   event.preventDefault();
@@ -252,6 +284,7 @@ function createArrowSelection(
   view: EditorView,
   axis: 'horiz' | 'vert',
   dir: -1 | 1,
+  names: HtmlTableNodeNames,
 ): Selection | null {
   const selection = view.state.selection;
 
@@ -268,7 +301,7 @@ function createArrowSelection(
     return Selection.near(view.state.doc.resolve(selection.head + dir), dir);
   }
 
-  const nextPos = nextCellPos(view.state.doc, cellPos, axis, dir);
+  const nextPos = nextCellPos(view.state.doc, cellPos, axis, dir, names);
   if (nextPos != null) {
     return Selection.near(view.state.doc.resolve(nextPos + 1), 1);
   }
@@ -285,11 +318,12 @@ function normalizeClipboardForSelection(
   state: EditorState,
   clipboard: TableClipboard,
   expandTableOnPaste: boolean,
+  names: HtmlTableNodeNames,
 ): TableClipboard {
   if (expandTableOnPaste) return clipboard;
   if (!isCellSelection(state.selection)) return clipboard;
 
-  const matrix = getSelectionMatrix(state);
+  const matrix = getSelectionMatrix(state, { names });
   const height = matrix.length;
   const width = matrix[0]?.length ?? 0;
   return width > 0 && height > 0 ? clipTableClipboard(state.schema, clipboard, width, height) : clipboard;
@@ -308,6 +342,7 @@ function createShiftArrowSelection(
   axis: 'horiz' | 'vert',
   dir: -1 | 1,
   constrainToSection: boolean,
+  names: HtmlTableNodeNames,
 ): CellSelection | null {
   const selection = view.state.selection;
   const cellSelection = selection instanceof CellSelection
@@ -315,9 +350,9 @@ function createShiftArrowSelection(
     : createCellSelectionFromTextCursor(view, axis, dir);
   if (!cellSelection) return null;
 
-  const nextHeadCellPos = nextCellPos(view.state.doc, cellSelection.headCellPos, axis, dir);
+  const nextHeadCellPos = nextCellPos(view.state.doc, cellSelection.headCellPos, axis, dir, names);
   if (nextHeadCellPos == null) return null;
-  if (constrainToSection && !areCellsInSameSection(view.state.doc, cellSelection.headCellPos, nextHeadCellPos)) {
+  if (constrainToSection && !areCellsInSameSection(view.state.doc, cellSelection.headCellPos, nextHeadCellPos, names)) {
     return null;
   }
 
@@ -598,23 +633,24 @@ function nextCellPos(
   cellPos: number,
   axis: 'horiz' | 'vert',
   dir: -1 | 1,
+  names: HtmlTableNodeNames,
 ): number | null {
   const $cell = doc.resolve(cellPos + 1);
   const table = tableAround($cell);
   if (!table) return null;
 
-  const map = HtmlTableMap.get(table.node);
+  const map = HtmlTableMap.get(table.node, { names: inferHtmlTableNodeNames(table.node, names) });
   const nextPos = map.nextCell(cellPos - table.pos, axis, dir);
   return nextPos == null ? null : table.pos + nextPos;
 }
 
-function isWholeTableCellSelection(state: EditorState): boolean {
+function isWholeTableCellSelection(state: EditorState, names: HtmlTableNodeNames): boolean {
   if (!isCellSelection(state.selection)) return false;
 
   const table = tableAround(state.selection.$anchor);
   if (!table) return false;
 
-  const map = HtmlTableMap.get(table.node);
+  const map = HtmlTableMap.get(table.node, { names: inferHtmlTableNodeNames(table.node, names) });
   const rect = map.rectBetween(
     state.selection.anchorCellPos - table.pos,
     state.selection.headCellPos - table.pos,
@@ -627,12 +663,17 @@ function isWholeTableCellSelection(state: EditorState): boolean {
     && map.cellsInRect(rect).length === map.grid.cells.length;
 }
 
-function areCellsInSameSection(doc: ProseMirrorNode, firstCellPos: number, secondCellPos: number): boolean {
+function areCellsInSameSection(
+  doc: ProseMirrorNode,
+  firstCellPos: number,
+  secondCellPos: number,
+  names: HtmlTableNodeNames,
+): boolean {
   const firstTable = tableAround(doc.resolve(firstCellPos + 1));
   const secondTable = tableAround(doc.resolve(secondCellPos + 1));
   if (!firstTable || !secondTable || firstTable.pos !== secondTable.pos) return false;
 
-  const map = HtmlTableMap.get(firstTable.node);
+  const map = HtmlTableMap.get(firstTable.node, { names: inferHtmlTableNodeNames(firstTable.node, names) });
   const firstCell = findCellRefForTableOffset(map, firstCellPos - firstTable.pos);
   const secondCell = findCellRefForTableOffset(map, secondCellPos - firstTable.pos);
 

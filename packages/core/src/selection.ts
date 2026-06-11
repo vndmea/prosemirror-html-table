@@ -2,7 +2,9 @@ import { Fragment, Slice, type Node as ProseMirrorNode, type ResolvedPos } from 
 import { Selection, TextSelection, type SelectionBookmark, type Transaction } from 'prosemirror-state';
 import type { Mappable } from 'prosemirror-transform';
 
+import { inferHtmlTableNodeNames } from './names.js';
 import { HtmlTableMap } from './table-map.js';
+import type { HtmlTableNodeNames } from './types.js';
 
 export class CellSelection extends Selection {
   constructor(
@@ -46,12 +48,13 @@ export class CellSelection extends Selection {
     }
 
     const table = context.table;
-    const map = HtmlTableMap.get(table);
+    const names = inferHtmlTableNodeNames(table);
+    const map = HtmlTableMap.get(table, { names });
     const rect = getSelectionRect(map, context.tablePos, this.anchorCellPos, this.headCellPos);
     const seen = new Set<number>();
     const sections = new Map<string, ProseMirrorNode[]>();
     const sectionOrder: string[] = [];
-    const sectionContexts = createSectionContextMap(table);
+    const sectionContexts = createSectionContextMap(table, names);
 
     for (let row = rect.top; row < rect.bottom; row += 1) {
       const rowRef = map.grid.rows[row];
@@ -109,7 +112,7 @@ export class CellSelection extends Selection {
     if (!context) return;
 
     const table = context.table;
-    const map = HtmlTableMap.get(table);
+    const map = HtmlTableMap.get(table, { names: inferHtmlTableNodeNames(table) });
     const mapFrom = tr.steps.length;
     const ranges = getReplacementRanges(table, map, context.tablePos, this.headCellPos, this.anchorCellPos);
 
@@ -145,7 +148,7 @@ export class CellSelection extends Selection {
     if (!context) return;
 
     const table = context.table;
-    const map = HtmlTableMap.get(table);
+    const map = HtmlTableMap.get(table, { names: inferHtmlTableNodeNames(table) });
     const rect = getSelectionRect(map, context.tablePos, this.anchorCellPos, this.headCellPos);
     const cells = map.cellsInRect(rect);
 
@@ -163,7 +166,7 @@ export class CellSelection extends Selection {
     const context = findTableContext(this.$anchor);
     if (!context) return false;
 
-    const map = HtmlTableMap.get(context.table);
+    const map = HtmlTableMap.get(context.table, { names: inferHtmlTableNodeNames(context.table) });
     const anchorRect = map.findCell(this.anchorCellPos - context.tablePos);
     const headRect = map.findCell(this.headCellPos - context.tablePos);
 
@@ -179,7 +182,7 @@ export class CellSelection extends Selection {
     const context = findTableContext(this.$anchor);
     if (!context) return false;
 
-    const map = HtmlTableMap.get(context.table);
+    const map = HtmlTableMap.get(context.table, { names: inferHtmlTableNodeNames(context.table) });
     const anchorRect = map.findCell(this.anchorCellPos - context.tablePos);
     const headRect = map.findCell(this.headCellPos - context.tablePos);
 
@@ -259,7 +262,7 @@ function createAxisSelection(
     throw new RangeError('CellSelection row/column helpers require positions inside the same table cell.');
   }
 
-  const map = HtmlTableMap.get(anchorTable.table);
+  const map = HtmlTableMap.get(anchorTable.table, { names: inferHtmlTableNodeNames(anchorTable.table) });
   const anchorRect = map.findCell(anchorCellPos - anchorTable.tablePos);
   const headRect = map.findCell(headCellPos - anchorTable.tablePos);
   let nextAnchorCellPos = anchorCellPos;
@@ -324,7 +327,7 @@ function isValidCellPosition(doc: ProseMirrorNode, pos: number): boolean {
   if (pos < 0 || pos >= doc.content.size) return false;
 
   const node = doc.nodeAt(pos);
-  return node?.type.name === 'htmlTableCell' || node?.type.name === 'htmlTableHeaderCell';
+  return isCellNode(node);
 }
 
 function clampSelectionPos(doc: ProseMirrorNode, pos: number): number {
@@ -383,7 +386,10 @@ function getSelectionRect(
   return map.rectBetween(anchorCellPos - tablePos, headCellPos - tablePos);
 }
 
-function createSectionContextMap(table: ProseMirrorNode): Map<string, { section: ProseMirrorNode }> {
+function createSectionContextMap(
+  table: ProseMirrorNode,
+  names: HtmlTableNodeNames,
+): Map<string, { section: ProseMirrorNode }> {
   const sections = new Map<string, { section: ProseMirrorNode }>();
   const sectionCounters = {
     head: 0,
@@ -392,7 +398,7 @@ function createSectionContextMap(table: ProseMirrorNode): Map<string, { section:
   };
 
   table.forEach((child) => {
-    const section = getSectionName(child);
+    const section = getSectionName(child, names);
     if (!section) return;
 
     const sectionIndex = sectionCounters[section];
@@ -508,10 +514,10 @@ function getReplacementRanges(
   });
 }
 
-function getSectionName(node: ProseMirrorNode): 'head' | 'body' | 'foot' | null {
-  if (node.type.name === 'htmlTableHead') return 'head';
-  if (node.type.name === 'htmlTableBody') return 'body';
-  if (node.type.name === 'htmlTableFoot') return 'foot';
+function getSectionName(node: ProseMirrorNode, names: HtmlTableNodeNames): 'head' | 'body' | 'foot' | null {
+  if (node.type.spec.tableRole === 'head' || node.type.name === names.head) return 'head';
+  if (node.type.spec.tableRole === 'body' || node.type.name === names.body) return 'body';
+  if (node.type.spec.tableRole === 'foot' || node.type.name === names.foot) return 'foot';
   return null;
 }
 

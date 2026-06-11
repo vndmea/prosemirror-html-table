@@ -76,6 +76,7 @@ function createTableSpec(config: NormalizedHtmlTableSchemaOptions): NodeSpec {
 function createCaptionSpec(config: NormalizedHtmlTableSchemaOptions): NodeSpec {
   return {
     content: config.captionContent,
+    tableRole: 'caption',
     defining: true,
     parseDOM: [{ tag: 'caption' }],
     toDOM: () => ['caption', 0],
@@ -85,6 +86,7 @@ function createCaptionSpec(config: NormalizedHtmlTableSchemaOptions): NodeSpec {
 function createColgroupSpec(config: NormalizedHtmlTableSchemaOptions): NodeSpec {
   return {
     content: `${config.names.col}+`,
+    tableRole: 'colgroup',
     isolating: true,
     parseDOM: [{ tag: 'colgroup' }],
     toDOM: () => ['colgroup', 0],
@@ -94,6 +96,7 @@ function createColgroupSpec(config: NormalizedHtmlTableSchemaOptions): NodeSpec 
 function createColSpec(): NodeSpec {
   return {
     atom: true,
+    tableRole: 'col',
     attrs: {
       span: { default: null },
       width: { default: null },
@@ -122,6 +125,7 @@ function createColSpec(): NodeSpec {
 function createSectionSpec(tag: 'thead' | 'tbody' | 'tfoot', content: string): NodeSpec {
   return {
     content,
+    tableRole: tag === 'thead' ? 'head' : tag === 'tbody' ? 'body' : 'foot',
     isolating: true,
     parseDOM: [{ tag }],
     toDOM: () => [tag, 0],

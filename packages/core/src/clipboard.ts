@@ -4,7 +4,7 @@ import { Transform } from 'prosemirror-transform';
 
 import { createHtmlTableCellAttributes } from './cell-attributes.js';
 import { createHtmlTableGrid, type HtmlTableCellRef, type HtmlTableGrid, type HtmlTableSectionName } from './grid.js';
-import { htmlTableNodeNames } from './names.js';
+import { inferHtmlTableNodeNames, resolveHtmlTableNodeNames } from './names.js';
 import { CellSelection, isCellSelection } from './selection.js';
 import type { HtmlTableNodeNames } from './types.js';
 
@@ -85,33 +85,44 @@ export interface ParsedTableClipboard {
   table?: ProseMirrorNode;
 }
 
-export interface ApplyTableClipboardOptions {
+export interface HtmlTableClipboardOptions {
   tablePos?: number;
+  names?: Partial<HtmlTableNodeNames>;
+}
+
+export interface ApplyTableClipboardOptions extends HtmlTableClipboardOptions {
   expandTableOnPaste?: boolean;
 }
 
-export function parseTableSliceClipboard(slice: Slice, schema: Schema): ParsedTableClipboard | null {
-  const tableNode = findTableNodeInSlice(slice);
+export function parseTableSliceClipboard(
+  slice: Slice,
+  schema: Schema,
+  options: Pick<HtmlTableClipboardOptions, 'names'> = {},
+): ParsedTableClipboard | null {
+  const names = resolveHtmlTableNodeNames(options.names);
+  const tableNode = findTableNodeInSlice(slice, names);
   if (tableNode) {
+    const tableNames = inferHtmlTableNodeNames(tableNode, names);
     const result: ParsedTableClipboard = {
-      rows: extractClipboardRows(schema, tableNode, htmlTableNodeNames),
+      rows: extractClipboardRows(schema, tableNode, tableNames),
     };
-    if (tableNode.type.name === htmlTableNodeNames.table) {
+    if (tableNode.type.name === tableNames.table || tableNode.type.spec.tableRole === 'table') {
       result.table = tableNode;
     }
     return result;
   }
 
-  const rows = extractRowsFromSlice(slice, schema);
+  const rows = extractRowsFromSlice(slice, schema, names);
   return rows.length > 0 ? { rows } : null;
 }
 
 export function createSingleCellSliceClipboard(
   schema: Schema,
   slice: Slice,
-  options: { isHeader?: boolean } = {},
+  options: Pick<HtmlTableClipboardOptions, 'names'> & { isHeader?: boolean } = {},
 ): ParsedTableClipboard {
-  const content = fitSliceToCellContent(schema, slice, options.isHeader ?? false);
+  const names = resolveHtmlTableNodeNames(options.names);
+  const content = fitSliceToCellContent(schema, slice, options.isHeader ?? false, names);
   return {
     rows: [[{
       content,
@@ -148,7 +159,7 @@ export function clipTableClipboard(
 
 export function serializeCellSelectionToHtmlTable(
   state: EditorState,
-  options: { tablePos?: number } = {},
+  options: HtmlTableClipboardOptions = {},
 ): string | null {
   const wholeTable = getWholeTableClipboardContext(state, options);
   if (wholeTable) {
@@ -175,7 +186,7 @@ export function serializeCellSelectionToHtmlTable(
 
 export function serializeCellSelectionToText(
   state: EditorState,
-  options: { tablePos?: number } = {},
+  options: HtmlTableClipboardOptions = {},
 ): string | null {
   const wholeTable = getWholeTableClipboardContext(state, options);
   if (wholeTable) {
@@ -220,7 +231,12 @@ export function applyTableClipboardToSelection(
   clipboard: ParsedTableClipboard,
   options: ApplyTableClipboardOptions = {},
 ): boolean {
-  if (clipboard.table && state.selection instanceof NodeSelection && state.selection.node.type.name === htmlTableNodeNames.table) {
+  const names = resolveHtmlTableNodeNames(options.names);
+  if (
+    clipboard.table
+    && state.selection instanceof NodeSelection
+    && (state.selection.node.type.name === names.table || state.selection.node.type.spec.tableRole === 'table')
+  ) {
     if (!dispatch) return true;
     dispatch(state.tr.replaceSelectionWith(clipboard.table).scrollIntoView());
     return true;
@@ -279,7 +295,7 @@ export function applyTableClipboardToSelection(
 export function clearSelectedCells(
   state: EditorState,
   dispatch?: (tr: Transaction) => void,
-  options: { tablePos?: number } = {},
+  options: HtmlTableClipboardOptions = {},
 ): boolean {
   const selectionInfo = getCellSelectionInfo(state, options);
   if (isCellSelection(state.selection) && !selectionInfo) return false;
@@ -302,9 +318,13 @@ export function clearSelectedCells(
 
 export function isWholeTableSelection(
   state: EditorState,
-  options: { tablePos?: number } = {},
+  options: HtmlTableClipboardOptions = {},
 ): boolean {
-  if (state.selection instanceof NodeSelection && state.selection.node.type.name === htmlTableNodeNames.table) {
+  const names = resolveHtmlTableNodeNames(options.names);
+  if (
+    state.selection instanceof NodeSelection
+    && (state.selection.node.type.name === names.table || state.selection.node.type.spec.tableRole === 'table')
+  ) {
     return true;
   }
 
@@ -322,7 +342,7 @@ export function isWholeTableSelection(
 
 export function getTopLeftCell(
   state: EditorState,
-  options: { tablePos?: number } = {},
+  options: HtmlTableClipboardOptions = {},
 ): HtmlTableCellRef | undefined {
   return getCellSelectionInfo(state, options)?.grid.slots[getCellSelectionInfo(state, options)!.top]?.[
     getCellSelectionInfo(state, options)!.left
@@ -331,7 +351,7 @@ export function getTopLeftCell(
 
 export function getBottomRightCell(
   state: EditorState,
-  options: { tablePos?: number } = {},
+  options: HtmlTableClipboardOptions = {},
 ): HtmlTableCellRef | undefined {
   const selectionInfo = getCellSelectionInfo(state, options);
   return selectionInfo?.grid.slots[selectionInfo.bottom]?.[selectionInfo.right]?.cell;
@@ -339,7 +359,7 @@ export function getBottomRightCell(
 
 export function selectedCells(
   state: EditorState,
-  options: { tablePos?: number } = {},
+  options: HtmlTableClipboardOptions = {},
 ): HtmlTableCellRef[] {
   return getCellSelectionInfo(state, options)?.cells ?? [];
 }
@@ -347,7 +367,7 @@ export function selectedCells(
 export function forEachSelectedCell(
   state: EditorState,
   callback: (cell: HtmlTableCellRef, rowIndex: number, columnIndex: number) => void,
-  options: { tablePos?: number } = {},
+  options: HtmlTableClipboardOptions = {},
 ): void {
   const selectionInfo = getCellSelectionInfo(state, options);
   if (!selectionInfo) return;
@@ -359,7 +379,7 @@ export function forEachSelectedCell(
 
 export function getSelectionMatrix(
   state: EditorState,
-  options: { tablePos?: number } = {},
+  options: HtmlTableClipboardOptions = {},
 ): Array<Array<HtmlTableCellRef | null>> {
   const selectionInfo = getCellSelectionInfo(state, options);
   if (!selectionInfo) return [];
@@ -419,10 +439,14 @@ function decodeClipboardPayload(payload: string | null, schema: Schema): ParsedT
 
 function getWholeTableClipboardContext(
   state: EditorState,
-  options: { tablePos?: number },
+  options: HtmlTableClipboardOptions,
 ): TableContext | undefined {
-  if (state.selection instanceof NodeSelection && state.selection.node.type.name === htmlTableNodeNames.table) {
-    return findTableContext(state, { tablePos: state.selection.from });
+  const names = resolveHtmlTableNodeNames(options.names);
+  if (
+    state.selection instanceof NodeSelection
+    && (state.selection.node.type.name === names.table || state.selection.node.type.spec.tableRole === 'table')
+  ) {
+    return findTableContext(state, { ...options, tablePos: state.selection.from });
   }
 
   if (!isWholeTableSelection(state, options)) return undefined;
@@ -445,27 +469,31 @@ function getClipboardRowsFromSelection(schema: Schema, selectionInfo: CellSelect
   return rows;
 }
 
-function extractRowsFromSlice(slice: Slice, schema: Schema): ParsedClipboardCell[][] {
+function extractRowsFromSlice(
+  slice: Slice,
+  schema: Schema,
+  names: HtmlTableNodeNames,
+): ParsedClipboardCell[][] {
   const rowNodes: ProseMirrorNode[] = [];
   const standaloneCells: ProseMirrorNode[] = [];
 
   slice.content.forEach((node) => {
-    if (node.type.name === htmlTableNodeNames.table) {
-      rowNodes.push(...getTableRowNodes(node));
+    if (node.type.name === names.table || node.type.spec.tableRole === 'table') {
+      rowNodes.push(...getTableRowNodes(node, inferHtmlTableNodeNames(node, names)));
       return;
     }
 
-    if (node.type.name === htmlTableNodeNames.head || node.type.name === htmlTableNodeNames.body || node.type.name === htmlTableNodeNames.foot) {
+    if (getSectionName(node, names)) {
       node.forEach((row) => rowNodes.push(row));
       return;
     }
 
-    if (node.type.name === htmlTableNodeNames.row) {
+    if (node.type.name === names.row || node.type.spec.tableRole === 'row') {
       rowNodes.push(node);
       return;
     }
 
-    if (node.type.name === htmlTableNodeNames.cell || node.type.name === htmlTableNodeNames.headerCell) {
+    if (isCellNode(node, names)) {
       standaloneCells.push(node);
     }
   });
@@ -474,14 +502,14 @@ function extractRowsFromSlice(slice: Slice, schema: Schema): ParsedClipboardCell
     return rowNodes.map((row) => {
       const cells: ParsedClipboardCell[] = [];
       row.forEach((cell) => {
-        cells.push(createParsedClipboardCell(schema, htmlTableNodeNames, cell));
+        cells.push(createParsedClipboardCell(schema, names, cell));
       });
       return cells;
     });
   }
 
   if (standaloneCells.length > 0) {
-    return [standaloneCells.map((cell) => createParsedClipboardCell(schema, htmlTableNodeNames, cell))];
+    return [standaloneCells.map((cell) => createParsedClipboardCell(schema, names, cell))];
   }
 
   return [];
@@ -951,11 +979,11 @@ function setClipboardCellRowSpan(schema: Schema, cell: ParsedClipboardCell, rows
   return next;
 }
 
-function findTableNodeInSlice(slice: Slice): ProseMirrorNode | null {
+function findTableNodeInSlice(slice: Slice, names: HtmlTableNodeNames): ProseMirrorNode | null {
   let tableNode: ProseMirrorNode | null = null;
 
   slice.content.descendants((node) => {
-    if (tableNode || node.type.name !== htmlTableNodeNames.table) return !tableNode;
+    if (tableNode || (node.type.name !== names.table && node.type.spec.tableRole !== 'table')) return !tableNode;
     tableNode = node;
     return false;
   });
@@ -963,12 +991,10 @@ function findTableNodeInSlice(slice: Slice): ProseMirrorNode | null {
   return tableNode;
 }
 
-function getTableRowNodes(table: ProseMirrorNode): ProseMirrorNode[] {
+function getTableRowNodes(table: ProseMirrorNode, names: HtmlTableNodeNames): ProseMirrorNode[] {
   const rows: ProseMirrorNode[] = [];
   table.forEach((child) => {
-    if (child.type.name !== htmlTableNodeNames.head && child.type.name !== htmlTableNodeNames.body && child.type.name !== htmlTableNodeNames.foot) {
-      return;
-    }
+    if (!getSectionName(child, names)) return;
     child.forEach((row) => rows.push(row));
   });
   return rows;
@@ -1177,8 +1203,13 @@ function createTextCellContent(schema: Schema, text: string): Fragment {
   return Fragment.fromArray(nodes);
 }
 
-function fitSliceToCellContent(schema: Schema, slice: Slice, isHeader: boolean): Fragment {
-  const cellType = isHeader ? schema.nodes[htmlTableNodeNames.headerCell] : schema.nodes[htmlTableNodeNames.cell];
+function fitSliceToCellContent(
+  schema: Schema,
+  slice: Slice,
+  isHeader: boolean,
+  names: HtmlTableNodeNames,
+): Fragment {
+  const cellType = isHeader ? schema.nodes[names.headerCell] : schema.nodes[names.cell];
   if (!cellType) return slice.content;
 
   const emptyCell = cellType.createAndFill();
@@ -1235,7 +1266,7 @@ function updateCellsMatching(
   return context.table.copy(Fragment.fromArray(tableChildren));
 }
 
-function getCellSelectionInfo(state: EditorState, options: { tablePos?: number }): CellSelectionInfo | undefined {
+function getCellSelectionInfo(state: EditorState, options: HtmlTableClipboardOptions): CellSelectionInfo | undefined {
   const context = findTableContext(state, options);
   if (!context) return undefined;
 
@@ -1271,26 +1302,26 @@ function getCellSelectionInfo(state: EditorState, options: { tablePos?: number }
   };
 }
 
-function findTableContext(state: EditorState, options: { tablePos?: number }): TableContext | undefined {
-  const names: HtmlTableNodeNames = { ...htmlTableNodeNames };
+function findTableContext(state: EditorState, options: HtmlTableClipboardOptions): TableContext | undefined {
+  const names = resolveHtmlTableNodeNames(options.names);
   if (typeof options.tablePos === 'number') {
     const table = state.doc.nodeAt(options.tablePos);
-    if (table?.type.name !== names.table) return undefined;
-    return { table, tablePos: options.tablePos, names };
+    if (!table || (table.type.name !== names.table && table.type.spec.tableRole !== 'table')) return undefined;
+    return { table, tablePos: options.tablePos, names: inferHtmlTableNodeNames(table, names) };
   }
 
   const $from = getSelectionStart(state.selection);
   for (let depth = $from.depth; depth >= 0; depth -= 1) {
     const node = $from.node(depth);
-    if (node.type.name === names.table) {
-      return { table: node, tablePos: $from.before(depth), names };
+    if (node.type.name === names.table || node.type.spec.tableRole === 'table') {
+      return { table: node, tablePos: depth === 0 ? 0 : $from.before(depth), names: inferHtmlTableNodeNames(node, names) };
     }
   }
 
   return undefined;
 }
 
-function findCellContext(state: EditorState, options: { tablePos?: number }): CellContext | undefined {
+function findCellContext(state: EditorState, options: HtmlTableClipboardOptions): CellContext | undefined {
   const context = findTableContext(state, options);
   if (!context) return undefined;
   const grid = createHtmlTableGrid(context.table, { names: context.names });
@@ -1338,7 +1369,7 @@ function findAncestorCell(
 ): HtmlTableCellRef | undefined {
   for (let depth = selection.$from.depth; depth > 0; depth -= 1) {
     const node = selection.$from.node(depth);
-    if (node.type.name !== htmlTableNodeNames.cell && node.type.name !== htmlTableNodeNames.headerCell) continue;
+    if (!isCellNode(node, inferHtmlTableNodeNames(node))) continue;
 
     const cellPos = selection.$from.before(depth);
     return (
@@ -1424,10 +1455,18 @@ function getChildren(node: ProseMirrorNode): ProseMirrorNode[] {
 }
 
 function getSectionName(node: ProseMirrorNode, names: HtmlTableNodeNames): HtmlTableSectionName | undefined {
-  if (node.type.name === names.head) return 'head';
-  if (node.type.name === names.body) return 'body';
-  if (node.type.name === names.foot) return 'foot';
+  if (node.type.spec.tableRole === 'head' || node.type.name === names.head) return 'head';
+  if (node.type.spec.tableRole === 'body' || node.type.name === names.body) return 'body';
+  if (node.type.spec.tableRole === 'foot' || node.type.name === names.foot) return 'foot';
   return undefined;
+}
+
+function isCellNode(node: ProseMirrorNode, names: HtmlTableNodeNames): boolean {
+  const role = node.type.spec.tableRole;
+  return role === 'cell'
+    || role === 'header_cell'
+    || node.type.name === names.cell
+    || node.type.name === names.headerCell;
 }
 
 function findGlobalRowIndexByNode(grid: HtmlTableGrid, row: ProseMirrorNode): number {

@@ -1,7 +1,7 @@
 import type { Node as ProseMirrorNode } from 'prosemirror-model';
 
 import { createHtmlTableGrid, type HtmlTableCellRef, type HtmlTableGrid, type HtmlTableGridOptions } from './grid.js';
-import { htmlTableNodeNames } from './names.js';
+import { inferHtmlTableNodeNames, resolveHtmlTableNodeNames } from './names.js';
 import type { HtmlTableNodeNames } from './types.js';
 
 export interface HtmlTableRect {
@@ -37,7 +37,9 @@ export class HtmlTableMap {
   }
 
   static get(table: ProseMirrorNode, options: HtmlTableMapOptions = {}): HtmlTableMap {
-    const names = resolveNodeNames(options.names);
+    const names = options.names
+      ? resolveHtmlTableNodeNames(options.names)
+      : inferHtmlTableNodeNames(table);
     const cacheKey = createNamesCacheKey(names);
     const cached = htmlTableMapCache.get(table)?.get(cacheKey);
     if (cached) return cached;
@@ -180,7 +182,7 @@ function createHtmlTableMap(
   options: HtmlTableMapOptions,
   names: HtmlTableNodeNames,
 ): HtmlTableMap {
-  const grid = createHtmlTableGrid(table, options);
+  const grid = createHtmlTableGrid(table, { ...options, names });
   const cellPositions = new Map<HtmlTableCellRef, number>();
   const rowStartOffsets = Array.from({ length: grid.height }, () => -1);
   const rowEndOffsets = Array.from({ length: grid.height }, () => -1);
@@ -230,13 +232,6 @@ function createHtmlTableMap(
   });
 
   return new HtmlTableMap(grid, map, cellPositions, rowStartOffsets, rowEndOffsets);
-}
-
-function resolveNodeNames(names?: Partial<HtmlTableNodeNames>): HtmlTableNodeNames {
-  return {
-    ...htmlTableNodeNames,
-    ...names,
-  };
 }
 
 function createNamesCacheKey(names: HtmlTableNodeNames): string {
