@@ -140,6 +140,8 @@ The core package also exports `tableEditing()` for pure ProseMirror usage and `o
 import { officialCompat, tableEditing } from 'prosemirror-html-table';
 ```
 
+`createFixTablesTransaction(state, oldState)` scopes repair to tables touched by the document diff. Omit `oldState` for a full-document `fixTables` pass.
+
 Pure ProseMirror users should install `tableEditing()` directly. Tiptap users should use `HtmlTableExtensions`; its editing plugin delegates the core selection, clipboard, keyboard, and repair behavior to `tableEditing()` while mapping Tiptap options such as `enableCellRangeClipboard`, `clearCellsOnDelete`, and `deleteTableOnAllCellsSelected`.
 
 Header commands convert between `htmlTableHeaderCell` and `htmlTableCell` while preserving cell attributes, content, and marks.
@@ -318,11 +320,11 @@ This project is not a drop-in replacement for `prosemirror-tables`.
 The next major areas are:
 
 ```txt
-1. document the official compatibility layer and keep its API contract stable
-2. support custom node names throughout CellSelection, tableEditing, clipboard, and compat helpers
-3. continue closing official `tableEditing()` parity gaps around edge-case paste and repair flows
-4. harden malformed HTML / Excel / Word import and large-table performance
-5. add pure ProseMirror / compat demo coverage
+1. continue closing official `tableEditing()` parity gaps around edge-case paste flows
+2. harden malformed HTML / Excel / Word import and large-table performance
+3. add a Tiptap TableKit command and configuration parity table
+4. add pure ProseMirror / compat demo coverage
+5. stabilize public API names and official compat type aliases
 ```
 
 ## Development

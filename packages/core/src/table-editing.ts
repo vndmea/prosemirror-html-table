@@ -91,10 +91,12 @@ export function tableEditing(options: TableEditingOptions = {}): Plugin {
         return tableEditingKey.getState(view.state) != null ? view.state.selection : null;
       },
     },
-    appendTransaction(_transactions, oldState, state) {
+    appendTransaction(transactions, oldState, state) {
+      const fixOldState = transactions.some((transaction) => transaction.docChanged) ? oldState : undefined;
+
       return normalizeSelection(
         state,
-        createFixTablesTransaction(state, oldState, { names }),
+        createFixTablesTransaction(state, fixOldState, { names }),
         allowTableNodeSelection,
       );
     },

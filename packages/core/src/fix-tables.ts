@@ -12,16 +12,20 @@ export function createFixTablesTransaction(
   oldState?: EditorState,
   options: FixTablesTransactionOptions = {},
 ): Transaction | undefined {
-  void oldState;
-
   const names: HtmlTableNodeNames = {
     ...htmlTableNodeNames,
     ...options.names,
   };
+  const changedRange = oldState ? findChangedRange(oldState.doc, state.doc) : undefined;
+  if (oldState && !changedRange) return undefined;
+
   const replacements: Array<{ pos: number; node: ProseMirrorNode; normalized: ProseMirrorNode }> = [];
 
   state.doc.descendants((node, pos) => {
     if (node.type.name !== names.table) return true;
+    if (changedRange && !rangesOverlap(pos, pos + node.nodeSize, changedRange.from, changedRange.to)) {
+      return false;
+    }
 
     const normalized = normalizeHtmlTable(node, options);
     if (!node.eq(normalized)) {
@@ -43,4 +47,33 @@ export function createFixTablesTransaction(
   }
 
   return transaction;
+}
+
+function findChangedRange(
+  oldDoc: ProseMirrorNode,
+  newDoc: ProseMirrorNode,
+): { from: number; to: number } | undefined {
+  const from = oldDoc.content.findDiffStart(newDoc.content);
+  if (from == null) return undefined;
+
+  const end = oldDoc.content.findDiffEnd(newDoc.content);
+  if (!end) return { from, to: from };
+
+  return {
+    from,
+    to: Math.max(from, end.b),
+  };
+}
+
+function rangesOverlap(
+  leftFrom: number,
+  leftTo: number,
+  rightFrom: number,
+  rightTo: number,
+): boolean {
+  if (rightFrom === rightTo) {
+    return leftFrom <= rightFrom && rightFrom <= leftTo;
+  }
+
+  return leftFrom < rightTo && rightFrom < leftTo;
 }
