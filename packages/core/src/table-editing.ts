@@ -96,7 +96,7 @@ export function tableEditing(options: TableEditingOptions = {}): Plugin {
 
       return normalizeSelection(
         state,
-        createFixTablesTransaction(state, fixOldState, { names }),
+        createFixTablesTransaction(state, fixOldState, { names, transactions }),
         allowTableNodeSelection,
       );
     },

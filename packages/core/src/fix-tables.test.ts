@@ -1,5 +1,5 @@
 import { Schema, type Node as ProseMirrorNode } from 'prosemirror-model';
-import { EditorState } from 'prosemirror-state';
+import { EditorState, type Transaction } from 'prosemirror-state';
 import { describe, expect, it } from 'vitest';
 
 import { createFixTablesTransaction, createHtmlTableNodeSpecs } from './index.js';
@@ -122,7 +122,46 @@ describe('createFixTablesTransaction', () => {
     expect(nextDoc.child(0).eq(prefixTables[0]!)).toBe(true);
     expect(nextDoc.child(nextDoc.childCount - 1).eq(suffixTables[suffixTables.length - 1]!)).toBe(true);
   });
+
+  it('uses transaction mapping to avoid repairing untouched tables shifted by collaborative edits', () => {
+    const changedMalformed = schema.nodes.htmlTable!.create(null, []);
+    const untouchedMalformed = schema.nodes.htmlTable!.create(null, []);
+    const oldState = EditorState.create({
+      schema,
+      doc: schema.nodes.doc!.create(null, [
+        createParagraph('before'),
+        untouchedMalformed,
+        createValidTable('middle'),
+        changedMalformed,
+      ]),
+    });
+    const changedTablePos = getChildPos(oldState.doc, 3);
+    let transaction = oldState.tr.insert(0, createParagraph('remote insert'));
+    const mappedChangedTablePos = transactionMappedPos(transaction, changedTablePos);
+    const nextChangedMalformed = changedMalformed.type.create({ width: 720 }, changedMalformed.content);
+    transaction = transaction.replaceWith(
+      mappedChangedTablePos,
+      mappedChangedTablePos + changedMalformed.nodeSize,
+      nextChangedMalformed,
+    );
+    const state = oldState.apply(transaction);
+
+    const fixTransaction = createFixTablesTransaction(state, oldState, {
+      transactions: [transaction],
+    });
+
+    expect(fixTransaction).toBeDefined();
+    const nextDoc = fixTransaction!.doc;
+    expect(nextDoc.childCount).toBe(state.doc.childCount);
+    expect(nextDoc.child(2).firstChild).toBeNull();
+    expect(nextDoc.child(4).firstChild?.type.name).toBe('htmlTableBody');
+    expect(nextDoc.child(3).eq(createValidTable('middle'))).toBe(true);
+  });
 });
+
+function createParagraph(text: string): ProseMirrorNode {
+  return schema.nodes.paragraph!.create(null, schema.text(text));
+}
 
 function createValidTable(text: string): ProseMirrorNode {
   return schema.nodes.htmlTable!.create(null, [
@@ -134,4 +173,18 @@ function createValidTable(text: string): ProseMirrorNode {
       ]),
     ]),
   ]);
+}
+
+function getChildPos(doc: ProseMirrorNode, childIndex: number): number {
+  let pos = 0;
+
+  for (let index = 0; index < childIndex; index += 1) {
+    pos += doc.child(index).nodeSize;
+  }
+
+  return pos;
+}
+
+function transactionMappedPos(transaction: Transaction, pos: number): number {
+  return transaction.mapping.map(pos);
 }
