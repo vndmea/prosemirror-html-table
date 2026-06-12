@@ -1,0 +1,11 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "prosemirror-html-table": ["../../packages/core/src/index.ts"]
+    },
+    "types": ["vite/client"]
+  },
+  "include": ["src/**/*.ts", "vite.config.ts"]
+}

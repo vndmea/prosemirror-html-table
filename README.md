@@ -26,6 +26,7 @@ packages/tiptap  Tiptap v3 node extensions and command wrappers built on top of 
 ## Playground
 
 A Vue 3 + Tiptap v3 playground is available in `examples/vue3-tiptap-table`.
+A minimal pure ProseMirror compatibility demo is available in `examples/prosemirror-compat-demo`.
 
 Online:
 
@@ -36,9 +37,11 @@ Local:
 ```bash
 npm install
 npm run dev --workspace vue3-tiptap-table-demo
+npm run dev --workspace prosemirror-compat-demo
 ```
 
 The playground includes a full HTML table with `caption`, `colgroup`, `thead`, `tbody`, and `tfoot`, plus row/column handles, nested context menus, resize and extend controls, selection overlays, and a compact toolbar for table-level commands.
+The pure ProseMirror demo exercises `tableEditing()`, `CellSelection.content()`, `officialCompat`, JSON output, and serialized HTML output without Tiptap.
 
 ## Install
 
@@ -373,6 +376,12 @@ Run the Vue demo:
 
 ```bash
 npm run dev --workspace vue3-tiptap-table-demo
+```
+
+Run the pure ProseMirror compat demo:
+
+```bash
+npm run dev --workspace prosemirror-compat-demo
 ```
 
 ## License

@@ -1,0 +1,20 @@
+{
+  "name": "prosemirror-compat-demo",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "prosemirror-html-table": "0.1.0",
+    "prosemirror-model": "^1.0.0",
+    "prosemirror-state": "^1.0.0",
+    "prosemirror-view": "^1.0.0"
+  },
+  "devDependencies": {
+    "vite": "^6.0.0"
+  }
+}
