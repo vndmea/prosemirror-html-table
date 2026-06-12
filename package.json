@@ -16,7 +16,7 @@
   "scripts": {
     "clean": "rimraf packages/*/dist examples/*/dist coverage docs/site",
     "build": "npm run build:packages",
-    "build:packages": "npm run build -w prosemirror-html-table && npm run build -w tiptap-html-table",
+    "build:packages": "npm run build -w prosemirror-html-table && npm run build -w tiptap-html-table && npm run build -w prosemirror-html-table-s1000d",
     "build:demo:pages": "cross-env GITHUB_PAGES=true npm run build -w vue3-tiptap-table-demo",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run",

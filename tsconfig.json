@@ -5,6 +5,7 @@
     "baseUrl": ".",
     "paths": {
       "prosemirror-html-table": ["packages/core/src/index.ts"],
+      "prosemirror-html-table-s1000d": ["packages/s1000d/src/index.ts"],
       "tiptap-html-table": ["packages/tiptap/src/index.ts"]
     }
   },

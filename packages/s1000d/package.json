@@ -1,0 +1,54 @@
+{
+  "name": "prosemirror-html-table-s1000d",
+  "version": "0.1.0",
+  "description": "S1000D/CALS table support for prosemirror-html-table.",
+  "type": "module",
+  "license": "MIT",
+  "author": "vndmea",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/vndmea/prosemirror-html-table.git",
+    "directory": "packages/s1000d"
+  },
+  "homepage": "https://github.com/vndmea/prosemirror-html-table#readme",
+  "bugs": {
+    "url": "https://github.com/vndmea/prosemirror-html-table/issues"
+  },
+  "keywords": [
+    "s1000d",
+    "cals",
+    "prosemirror",
+    "table",
+    "xml"
+  ],
+  "sideEffects": false,
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit"
+  },
+  "peerDependencies": {
+    "prosemirror-model": "^1.0.0"
+  },
+  "devDependencies": {
+    "prosemirror-model": "^1.0.0"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  }
+}
