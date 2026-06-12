@@ -1,10 +1,40 @@
 export { createS1000DTableAdapter } from './adapter.js';
 export type { S1000DTableAdapter } from './adapter.js';
+export {
+  addS1000DRowAfter,
+  canOperateOnS1000DTable,
+  deleteS1000DRow,
+  findS1000DEntryContext,
+  findS1000DRowContext,
+  findS1000DTableContext,
+  getActiveS1000DTgroup,
+  getActiveS1000DTgroupGrid,
+  isGraphicOnlyS1000DTable,
+  rejectGraphicOnlyS1000DTable,
+} from './commands.js';
+export type {
+  S1000DEntryContext,
+  S1000DRowContext,
+  S1000DTableCommandOptions,
+  S1000DTableContext,
+} from './commands.js';
+export { createS1000DTableGrid, createS1000DTgroupGrid, getS1000DEntryAt } from './grid.js';
+export type {
+  S1000DEntryRef,
+  S1000DGridSlot,
+  S1000DRowRef,
+  S1000DTableGrid,
+  S1000DTableSectionName,
+  S1000DTgroupGrid,
+} from './grid.js';
 export { createS1000DTableNodeSpecs, normalizeS1000DTableSchemaOptions } from './schema.js';
 export { parseS1000DTableXml, serializeS1000DTableXml } from './xml/index.js';
 export { createS1000DTableExtensions } from './tiptap.js';
 export { normalizeS1000DTableProfile } from './profile.js';
 export type { S1000DTableProfile } from './profile.js';
+export { createEmptyS1000DEntry, createEmptyS1000DEntryContent, normalizeS1000DTable, normalizeS1000DTgroup } from './normalize.js';
+export { S1000DTableMap, createS1000DTableMap } from './table-map.js';
+export type { S1000DTableRect } from './table-map.js';
 export { validateS1000DTable } from './validation.js';
 export type {
   S1000DTableValidationIssue,
