@@ -31,7 +31,7 @@ export function tableEditing(options: TableEditingOptions = {}): Plugin {
     allowTableNodeSelection = false,
     clearCellsOnDelete = true,
     clearWholeTableCellSelectionOnDelete = true,
-    constrainShiftArrowToSection = false,
+    constrainShiftArrowToSection = true,
     deleteTableOnAllCellsSelected = false,
     enableCellRangeClipboard = true,
     enableShiftArrowSelection = true,
@@ -243,9 +243,9 @@ function handleKeyDown(
     names: HtmlTableNodeNames;
   },
 ): boolean {
-  if (event.shiftKey && !options.enableShiftArrowSelection) return false;
-  if (options.enableShiftArrowSelection && handleShiftArrow(view, event, options.constrainShiftArrowToSection, options.names)) {
-    return true;
+  if (event.shiftKey) {
+    if (!options.enableShiftArrowSelection) return false;
+    return handleShiftArrow(view, event, options.constrainShiftArrowToSection, options.names);
   }
   if (handleArrow(view, event, options.names)) return true;
   return handleDeleteKey(view, event, options);

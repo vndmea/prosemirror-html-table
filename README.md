@@ -120,6 +120,20 @@ Data:        sortBodyRowsByColumn
 
 These commands use the section-aware grid internally. They cover dedicated cell selection, rectangular merge, merged-cell splitting, row/column move and duplication, section operations, and full-table normalization through `fixTables`.
 
+Cross-section behavior is explicit:
+
+| Operation | Section policy |
+| --- | --- |
+| Selection, copy, cut, paste | Can span `thead`, `tbody`, and `tfoot`; slices preserve section wrappers. |
+| `Shift-Arrow` selection | Stops at section boundaries by default; set `constrainShiftArrowToSection: false` to allow expansion. |
+| `mergeCells` / `mergeOrSplit` merge path | Requires one rectangular section; cross-section selections return `false`. |
+| `splitCell` | Splits only the current merged cell inside its own section. |
+| `addRowBefore` / `addRowAfter`, `deleteRow`, `moveRowUp` / `moveRowDown`, `duplicateRow` | Operate within the active section. |
+| `moveRowToIndex` | Same-section by default; set `allowCrossSectionMove: true` for explicit cross-section moves. |
+| `moveRowToHead` / `moveRowToBody` / `moveRowToFoot` | Explicit cross-section conversion commands; blocked for rows entangled by rowspan. |
+| Column add/delete/move/duplicate | Apply across all sections because columns are one logical table axis. |
+| `sortBodyRowsByColumn` | Sorts only the active `tbody` section and returns `false` when merged cells make row order ambiguous. |
+
 The core package also exports `tableEditing()` for pure ProseMirror usage and `officialCompat` helpers for migration-oriented code:
 
 ```ts
@@ -294,7 +308,7 @@ This project is not a drop-in replacement for `prosemirror-tables`.
 
 - It preserves full HTML table sections and elements, while the default `prosemirror-tables` model uses a simpler table tree.
 - `HtmlTableMap` now provides a section-aware `TableMap`-style adapter, including `colCount`, but it is not a drop-in replacement because positions are resolved against the richer HTML table structure.
-- `CellSelection` now includes the main official-style helpers such as `content()`, `forEachCell()`, `rowSelection()`, and `colSelection()`. Compatibility gaps may still exist around JSON shape, custom node names, and edge-case plugin behavior.
+- `CellSelection` now includes the main official-style helpers such as `content()`, `forEachCell()`, `rowSelection()`, and `colSelection()`. Compatibility gaps may still exist around JSON shape and edge-case plugin behavior.
 - Core `tableEditing()` now handles cell selection visuals, mouse selection, keyboard navigation, cell-range clipboard, delete behavior, and append-transaction repair. The remaining work is to document and harden edge cases rather than to add the basic plugin entry point.
 - `setCellAttribute` updates the current cell and returns `false` when the target cell already has the requested value. Use the dedicated text-align, background-color, and vertical-align commands for selection-aware bulk formatting.
 - `Shift-Arrow` range expansion currently treats section boundaries as hard boundaries.
@@ -306,9 +320,9 @@ The next major areas are:
 ```txt
 1. document the official compatibility layer and keep its API contract stable
 2. support custom node names throughout CellSelection, tableEditing, clipboard, and compat helpers
-3. harden cross-section selection, merge, paste, and row/column operation semantics
-4. continue closing official `tableEditing()` parity gaps around edge-case paste and repair flows
-5. harden malformed HTML / Excel / Word import and large-table performance
+3. continue closing official `tableEditing()` parity gaps around edge-case paste and repair flows
+4. harden malformed HTML / Excel / Word import and large-table performance
+5. add pure ProseMirror / compat demo coverage
 ```
 
 ## Development

@@ -1385,6 +1385,37 @@ describe('html table commands', () => {
     expect(firstCell.attrs.rowspan).toBe(2);
   });
 
+  it('does not merge a selection across table sections', () => {
+    const table = schema.nodes.htmlTable!.create(null, [
+      schema.nodes.htmlTableHead!.create(null, [
+        schema.nodes.htmlTableRow!.create(null, [
+          schema.nodes.htmlTableHeaderCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('H1'))]),
+          schema.nodes.htmlTableHeaderCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('H2'))]),
+        ]),
+      ]),
+      schema.nodes.htmlTableBody!.create(null, [
+        schema.nodes.htmlTableRow!.create(null, [
+          schema.nodes.htmlTableCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('A1'))]),
+          schema.nodes.htmlTableCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('A2'))]),
+        ]),
+      ]),
+    ]);
+    const doc = schema.nodes.doc!.create(null, [table]);
+    const headerPositions = findNodePositions(doc, 'htmlTableHeaderCell');
+    const bodyPositions = findNodePositions(doc, 'htmlTableCell');
+    const state = EditorState.create({
+      schema,
+      doc,
+      selection: CellSelection.create(doc, headerPositions[0]!, bodyPositions[1]!),
+    });
+
+    const result = mergeCells()(state, () => {
+      throw new Error('mergeCells should not dispatch across table sections.');
+    });
+
+    expect(result).toBe(false);
+  });
+
   it('splits a merged cell back into individual cells', () => {
     const state = createStateWithTable(1, 2);
     const cellPositions = findNodePositions(state.doc, 'htmlTableHeaderCell');

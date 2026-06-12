@@ -522,6 +522,59 @@ describe('tableEditing', () => {
     }
   });
 
+  it('stops Shift-Arrow expansion at section boundaries by default', () => {
+    const plugin = tableEditing();
+    const table = createSectionedTable([
+      ['H1', 'H2'],
+      ['B1', 'B2'],
+    ]);
+    const doc = schema.nodes.doc!.create(null, [table]);
+    const headerPositions = findNodePositions(doc, 'htmlTableHeaderCell');
+    const state = EditorState.create({
+      schema,
+      doc,
+      selection: CellSelection.create(doc, headerPositions[0]!),
+    });
+    const view = createView(state);
+    const event = createKeyboardEvent('ArrowDown', { shiftKey: true });
+
+    const handled = plugin.props.handleKeyDown?.call(plugin, view, event as unknown as KeyboardEvent);
+
+    expect(handled).toBe(false);
+    expect(event.prevented).toBe(false);
+    expect(view.state.selection.eq(state.selection)).toBe(true);
+  });
+
+  it('can extend Shift-Arrow selections across sections when explicitly enabled', () => {
+    const plugin = tableEditing({ constrainShiftArrowToSection: false });
+    const table = createSectionedTable([
+      ['H1', 'H2'],
+      ['B1', 'B2'],
+    ]);
+    const doc = schema.nodes.doc!.create(null, [table]);
+    const headerPositions = findNodePositions(doc, 'htmlTableHeaderCell');
+    const bodyPositions = findNodePositions(doc, 'htmlTableCell');
+    const state = EditorState.create({
+      schema,
+      doc,
+      selection: CellSelection.create(doc, headerPositions[0]!),
+    });
+    const view = createView(state);
+    const event = createKeyboardEvent('ArrowDown', { shiftKey: true });
+
+    const handled = plugin.props.handleKeyDown?.call(plugin, view, event as unknown as KeyboardEvent);
+
+    expect(handled).toBe(true);
+    expect(event.prevented).toBe(true);
+    expect(view.state.selection).toBeInstanceOf(CellSelection);
+    if (view.state.selection instanceof CellSelection) {
+      expect([view.state.selection.anchorCellPos, view.state.selection.headCellPos]).toEqual([
+        headerPositions[0],
+        bodyPositions[0],
+      ]);
+    }
+  });
+
   it('does not extend CellSelections with Shift-Arrow when disabled', () => {
     const plugin = tableEditing({ enableShiftArrowSelection: false });
     const state = createStateWithCellSelection(['A', 'B', 'C', 'D'], [0, 0]);
