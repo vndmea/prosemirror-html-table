@@ -211,6 +211,45 @@ describe('html table clipboard helpers', () => {
     });
   });
 
+  it('keeps table row order across colgroup, repeated sections, and orphan rows', () => {
+    const html = [
+      '<table>',
+      '<colgroup><col width="100"><col width="140"><col width="180"></colgroup>',
+      '<thead><tr><th>H1</th></tr></thead>',
+      '<tbody><tr><td>B1</td></tr></tbody>',
+      '<tr><td>Loose</td></tr>',
+      '<tbody><tr><td>B2</td></tr></tbody>',
+      '<tfoot><tr><td>F1</td></tr></tfoot>',
+      '<tfoot><tr><td>F2</td></tr></tfoot>',
+      '</table>',
+    ].join('');
+
+    const parsed = parseHtmlTableClipboard(html, schema);
+
+    expect(parsed?.rows.map((row) => row.map((cell) => cell.text))).toEqual([
+      ['H1'],
+      ['B1'],
+      ['Loose'],
+      ['B2'],
+      ['F1'],
+      ['F2'],
+    ]);
+    expect(parsed?.rows[0]?.[0]?.isHeader).toBe(true);
+  });
+
+  it('preserves empty HTML table rows as blank clipboard cells', () => {
+    const html = '<table><tbody><tr><td>A</td></tr><tr></tr><tr><td>C</td></tr></tbody></table>';
+
+    const parsed = parseHtmlTableClipboard(html, schema);
+
+    expect(parsed?.rows.map((row) => row.map((cell) => cell.text))).toEqual([
+      ['A'],
+      [''],
+      ['C'],
+    ]);
+    expect(parsed?.rows[1]?.[0]?.content?.childCount).toBe(1);
+  });
+
   it('applies TSV clipboard data to the selected cells', () => {
     const table = createHtmlTableNode(schema, { rows: 3, cols: 3, withHeaderRow: false });
     const state = createStateForTable(withCellTexts(table, ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i']));

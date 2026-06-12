@@ -13,7 +13,7 @@ const TABLE_TAG_PATTERN = /<table\b/i;
 const START_FRAGMENT_PATTERN = /<!--\s*StartFragment\s*-->/i;
 const END_FRAGMENT_PATTERN = /<!--\s*EndFragment\s*-->/i;
 const HTML_ENTRY_PATTERN = /<!--\s*StartFragment\s*-->|<!doctype\s+html\b|<html\b|<body\b|<table\b/i;
-const SECTION_TAG_PATTERN = /<(thead|tbody|tfoot)\b[^>]*>([\s\S]*?)<\/\1>/gi;
+const TABLE_CONTENT_PATTERN = /<table\b[^>]*>([\s\S]*?)<\/table>/gi;
 const ROW_TAG_PATTERN = /<tr\b[^>]*>([\s\S]*?)<\/tr>/gi;
 const CELL_TAG_PATTERN = /<(td|th)\b([^>]*)>([\s\S]*?)<\/\1>/gi;
 const ATTR_PATTERN = /([a-zA-Z_:][-a-zA-Z0-9_:.]*)\s*=\s*("([^"]*)"|'([^']*)'|([^\s"'=<>`]+))/g;
@@ -1175,8 +1175,8 @@ function normalizeClipboardHtml(html: string): string {
 
 function extractRowsFromHtml(html: string): Array<Array<{ tag: string; attrs: string; innerHtml: string }>> {
   const rows: Array<Array<{ tag: string; attrs: string; innerHtml: string }>> = [];
-  const sectionRows = extractSectionRows(html);
-  const rowSources = sectionRows.length > 0 ? sectionRows : extractStandaloneRows(html);
+  const tableSources = extractTableContents(html);
+  const rowSources = (tableSources.length > 0 ? tableSources : [html]).flatMap((source) => extractStandaloneRows(source));
 
   for (const rowHtml of rowSources) {
     const row: Array<{ tag: string; attrs: string; innerHtml: string }> = [];
@@ -1185,20 +1185,20 @@ function extractRowsFromHtml(html: string): Array<Array<{ tag: string; attrs: st
     while ((match = CELL_TAG_PATTERN.exec(rowHtml))) {
       row.push({ tag: match[1]!.toLowerCase(), attrs: match[2] ?? '', innerHtml: match[3] ?? '' });
     }
-    if (row.length > 0) rows.push(row);
+    rows.push(row.length > 0 ? row : [{ tag: 'td', attrs: '', innerHtml: '' }]);
   }
 
   return rows;
 }
 
-function extractSectionRows(html: string): string[] {
-  const rows: string[] = [];
-  let sectionMatch: RegExpExecArray | null;
-  SECTION_TAG_PATTERN.lastIndex = 0;
-  while ((sectionMatch = SECTION_TAG_PATTERN.exec(html))) {
-    rows.push(...extractStandaloneRows(sectionMatch[2] ?? ''));
+function extractTableContents(html: string): string[] {
+  const tables: string[] = [];
+  let tableMatch: RegExpExecArray | null;
+  TABLE_CONTENT_PATTERN.lastIndex = 0;
+  while ((tableMatch = TABLE_CONTENT_PATTERN.exec(html))) {
+    tables.push(tableMatch[1] ?? '');
   }
-  return rows;
+  return tables;
 }
 
 function extractStandaloneRows(html: string): string[] {
