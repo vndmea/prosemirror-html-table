@@ -3,6 +3,7 @@ import {
   collectElementAttrs,
   colspecAttrs,
   entryAttrs,
+  entryBlockAttrs,
   graphicAttrs,
   rowAttrs,
   sectionAttrs,
@@ -116,12 +117,11 @@ function parseEntryElement(
   const children: ProseMirrorNode[] = [];
 
   for (const child of childElements(element)) {
-    const text = child.textContent?.trim() ?? '';
-    if (text) children.push(createFallbackBlock(schema, text));
+    children.push(createEntryBlock(schema, names, child));
   }
 
   const directText = getDirectText(element);
-  if (directText) children.unshift(createFallbackBlock(schema, directText));
+  if (directText) children.unshift(createEntryBlockFromText(schema, names, 'para', directText));
 
   return createNode(schema, names.entry, collectElementAttrs(element, entryAttrs), children);
 }
@@ -131,13 +131,40 @@ function createTextContainer(schema: Schema, nodeName: string, text: string): Pr
   return createNode(schema, nodeName, {}, content ? [content] : []);
 }
 
-function createFallbackBlock(schema: Schema, text: string): ProseMirrorNode {
-  const paragraphType = schema.nodes.paragraph;
-  if (!paragraphType) {
-    throw new Error('S1000D table XML import requires a paragraph node for fallback entry content.');
+function createEntryBlock(
+  schema: Schema,
+  names: S1000DTableNodeNames,
+  element: XmlElement,
+): ProseMirrorNode {
+  return createEntryBlockFromText(
+    schema,
+    names,
+    isEntryBlockName(element.localName) ? element.localName : 'para',
+    element.textContent.trim(),
+    collectElementAttrs(element, entryBlockAttrs),
+  );
+}
+
+function createEntryBlockFromText(
+  schema: Schema,
+  names: S1000DTableNodeNames,
+  xmlName: string,
+  text: string,
+  attrs: Record<string, unknown> = {},
+): ProseMirrorNode {
+  const nodeType = schema.nodes[names.entryBlock] ?? schema.nodes.paragraph;
+  if (!nodeType) {
+    throw new Error('S1000D table XML import requires s1000dEntryBlock or paragraph node for entry content.');
   }
 
-  return paragraphType.create(null, text ? schema.text(text) : undefined);
+  if (nodeType.name === names.entryBlock) {
+    return nodeType.create(
+      { ...attrs, xmlName },
+      text ? schema.text(text) : undefined,
+    );
+  }
+
+  return nodeType.create(null, text ? schema.text(text) : undefined);
 }
 
 function createLeaf(schema: Schema, nodeName: string, attrs: Record<string, unknown>): ProseMirrorNode {
@@ -154,4 +181,12 @@ function createNode(
   if (!nodeType) throw new Error(`Missing S1000D node type: ${nodeName}`);
 
   return nodeType.create(attrs, children.length > 0 ? children : undefined);
+}
+
+function isEntryBlockName(value: string): value is 'para' | 'warning' | 'caution' | 'note' | 'legend' {
+  return value === 'para'
+    || value === 'warning'
+    || value === 'caution'
+    || value === 'note'
+    || value === 'legend';
 }

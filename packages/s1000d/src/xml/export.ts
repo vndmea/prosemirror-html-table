@@ -42,7 +42,7 @@ function serializeNode(node: ProseMirrorNode, names: S1000DTableNodeNames): stri
     case names.row:
       return serializeContainer('row', node, names, rowAttrs);
     case names.entry:
-      return serializeEntry(node);
+      return serializeEntry(node, names);
     case names.graphic:
       return serializeLeaf('graphic', node, graphicAttrs);
     default:
@@ -63,11 +63,16 @@ function serializeTextContainer(xmlName: string, node: ProseMirrorNode): string 
   return `<${xmlName}>${escapeXmlText(node.textContent)}</${xmlName}>`;
 }
 
-function serializeEntry(node: ProseMirrorNode): string {
+function serializeEntry(node: ProseMirrorNode, names: S1000DTableNodeNames): string {
   const content = node.childCount === 0
     ? ''
     : Array.from({ length: node.childCount }, (_value, index) => {
       const child = node.child(index);
+      if (child.type.name === names.entryBlock) {
+        const xmlName = typeof child.attrs.xmlName === 'string' ? child.attrs.xmlName : 'para';
+        return `<${xmlName}${renderXmlAttrs(child.attrs, [])}>${escapeXmlText(child.textContent)}</${xmlName}>`;
+      }
+
       return `<para>${escapeXmlText(child.textContent)}</para>`;
     }).join('');
 

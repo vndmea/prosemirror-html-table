@@ -29,6 +29,8 @@ export type {
   ParseS1000DTableXmlOptions,
   S1000DColspecAttrs,
   S1000DEntryAttrs,
+  S1000DEntryBlockAttrs,
+  S1000DEntryBlockName,
   S1000DGraphicAttrs,
   S1000DRawAttrs,
   S1000DRowAttrs,

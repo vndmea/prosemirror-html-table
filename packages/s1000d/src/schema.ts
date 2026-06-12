@@ -4,6 +4,7 @@ import {
   createAttrs,
   createGroupedAttrs,
   entryAttrs,
+  entryBlockAttrs,
   graphicAttrs,
   rowAttrs,
   sectionAttrs,
@@ -25,7 +26,7 @@ export function normalizeS1000DTableSchemaOptions(
     names: resolveS1000DTableNodeNames(options.names),
     tableGroup: options.tableGroup ?? 'block',
     titleContent: options.titleContent ?? 'inline*',
-    entryContent: options.entryContent ?? 'block*',
+    entryContent: options.entryContent ?? `${resolveS1000DTableNodeNames(options.names).entryBlock}*`,
   };
 }
 
@@ -44,6 +45,7 @@ export function createS1000DTableNodeSpecs(options: S1000DTableSchemaOptions = {
     [names.tbody]: createSectionSpec('tbody', `${names.row}+`),
     [names.row]: createRowSpec(config),
     [names.entry]: createEntrySpec(config),
+    [names.entryBlock]: createEntryBlockSpec(),
     [names.graphic]: createGraphicSpec(),
   };
 }
@@ -126,6 +128,16 @@ function createEntrySpec(config: NormalizedS1000DTableSchemaOptions): NodeSpec {
     isolating: true,
     attrs: createAttrs(entryAttrs),
     toDOM: () => ['td', { 'data-s1000d': 'entry' }, 0],
+  };
+}
+
+function createEntryBlockSpec(): NodeSpec {
+  return {
+    content: 'inline*',
+    group: 'block',
+    defining: true,
+    attrs: createAttrs(entryBlockAttrs),
+    toDOM: (node) => [String(node.attrs.xmlName ?? 'para'), { 'data-s1000d': 'entry-block' }, 0],
   };
 }
 

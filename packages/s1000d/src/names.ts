@@ -9,6 +9,7 @@ export const s1000dTableNodeNames = {
   tbody: 's1000dTbody',
   row: 's1000dRow',
   entry: 's1000dEntry',
+  entryBlock: 's1000dEntryBlock',
   graphic: 's1000dGraphic',
 } as const;
 

@@ -90,6 +90,13 @@ export interface S1000DEntryAttrs {
   rawAttrs: S1000DRawAttrs;
 }
 
+export type S1000DEntryBlockName = 'para' | 'warning' | 'caution' | 'note' | 'legend';
+
+export interface S1000DEntryBlockAttrs {
+  xmlName: S1000DEntryBlockName;
+  rawAttrs: S1000DRawAttrs;
+}
+
 export interface S1000DGraphicAttrs {
   infoEntityIdent: string | null;
   rawAttrs: S1000DRawAttrs;

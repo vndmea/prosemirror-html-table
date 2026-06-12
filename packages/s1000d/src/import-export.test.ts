@@ -49,4 +49,15 @@ describe('S1000D table XML import/export', () => {
       '<table><graphic infoEntityIdent="ICN-001" xlink:href="urn:test"/></table>',
     );
   });
+
+  it('preserves mixed S1000D entry content element names and attrs', () => {
+    const node = parseS1000DTableXml(
+      '<table><tgroup cols="1"><tbody><row><entry><para id="p1">Para</para><warning id="w1">Warn</warning><caution id="c1">Caution</caution><note id="n1">Note</note><legend id="l1">Legend</legend></entry></row></tbody></tgroup></table>',
+      schema,
+    );
+
+    expect(canonicalXml(serializeS1000DTableXml(node))).toBe(
+      '<table><tgroup cols="1"><tbody><row><entry><para id="p1">Para</para><warning id="w1">Warn</warning><caution id="c1">Caution</caution><note id="n1">Note</note><legend id="l1">Legend</legend></entry></row></tbody></tgroup></table>',
+    );
+  });
 });
