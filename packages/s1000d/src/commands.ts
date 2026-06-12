@@ -375,17 +375,22 @@ function moveS1000DColumn(
     }
 
     const nextRowsTgroup = mapTgroupRowsWithGrid(context.activeTgroup, grid, (row, rowRef) => {
-      const rowChildren = getChildren(row);
-      const sourceEntry = grid.slots[rowRef.rowIndex]?.[sourceColumn]?.entry;
-      const targetEntry = grid.slots[rowRef.rowIndex]?.[targetColumn]?.entry;
-      if (!sourceEntry || !targetEntry) {
-        return row;
-      }
+      const rowEntries = grid.entries
+        .filter((entry) => entry.rowIndex === rowRef.rowIndex)
+        .map((entry) => ({
+          entry,
+          node: row.child(entry.entryIndex),
+          nextColumnIndex: swapColumnIndex(entry.columnIndex, sourceColumn, targetColumn),
+        }))
+        .sort((left, right) => {
+          if (left.nextColumnIndex !== right.nextColumnIndex) {
+            return left.nextColumnIndex - right.nextColumnIndex;
+          }
+          return left.entry.entryIndex - right.entry.entryIndex;
+        })
+        .map((item) => item.node);
 
-      const movedEntry = rowChildren[sourceEntry.entryIndex];
-      rowChildren[sourceEntry.entryIndex] = rowChildren[targetEntry.entryIndex]!;
-      rowChildren[targetEntry.entryIndex] = movedEntry!;
-      return row.copy(Fragment.fromArray(rowChildren));
+      return row.copy(Fragment.fromArray(rowEntries));
     });
     const nextTgroup = columnEditing.colspecs.length > 0
       ? swapTgroupColspecs(nextRowsTgroup, sourceColumn, targetColumn, columnEditing.colspecs)
@@ -862,21 +867,22 @@ function canReorderS1000DColumnPair(
     if (!sourceSlot || !targetSlot || !sourceEntry || !targetEntry) {
       return false;
     }
-    if (!sourceSlot.isAnchor || !targetSlot.isAnchor) {
-      return false;
-    }
-    if (sourceEntry.rowIndex !== rowIndex || sourceEntry.columnIndex !== sourceColumn) {
-      return false;
-    }
-    if (targetEntry.rowIndex !== rowIndex || targetEntry.columnIndex !== targetColumn) {
-      return false;
-    }
-    if (sourceEntry.rowSpan !== 1 || targetEntry.rowSpan !== 1) {
+    if (sourceEntry.rowSpan < 1 || targetEntry.rowSpan < 1) {
       return false;
     }
   }
 
   return true;
+}
+
+function swapColumnIndex(columnIndex: number, sourceColumn: number, targetColumn: number): number {
+  if (columnIndex === sourceColumn) {
+    return targetColumn;
+  }
+  if (columnIndex === targetColumn) {
+    return sourceColumn;
+  }
+  return columnIndex;
 }
 
 function findBestEntryForSelection(

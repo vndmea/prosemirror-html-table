@@ -394,6 +394,34 @@ describe('S1000D table commands and adapters', () => {
     expect(moveS1000DColumnLeft()(state)).toBe(false);
   });
 
+  it('moves columns when morerows is involved but entries remain single-column', () => {
+    const table = parseS1000DTableXml(
+      '<table id="tab-1"><tgroup cols="3"><tbody><row id="row-1"><entry morerows="1">A</entry><entry>B</entry><entry>C</entry></row><row id="row-2"><entry>D</entry><entry>E</entry></row></tbody></tgroup></table>',
+      extendedSchema,
+      { profile: 'extended' },
+    );
+    const doc = extendedSchema.nodes.doc!.create(null, [table]);
+    const state = EditorState.create({
+      doc,
+      selection: TextSelection.create(doc, findTextPosition(doc, 'B')),
+    });
+
+    let nextState = state;
+    const result = moveS1000DColumnRight()(state, (transaction) => {
+      nextState = nextState.apply(transaction);
+    });
+
+    expect(result).toBe(true);
+    const nextTable = findS1000DTableContext(nextState)?.table;
+    const nextTgroup = nextTable?.child(0);
+    const nextTbody = nextTgroup?.child(0);
+    expect(nextTbody?.child(0)?.textContent).toBe('ACB');
+    expect(nextTbody?.child(1)?.textContent).toBe('ED');
+    expect(nextTbody?.child(0)?.child(0)?.attrs.morerows).toBe('1');
+    expect(findS1000DEntryContext(nextState)?.entry.columnIndex).toBe(2);
+    expect(findS1000DEntryContext(nextState)?.entry.node.textContent).toBe('B');
+  });
+
   it('deletes a spanned column in colspec tables by shrinking namest/nameend', () => {
     const table = parseS1000DTableXml(
       '<table id="tab-1"><tgroup cols="3"><colspec colname="c1" colnum="1"/><colspec colname="c2" colnum="2"/><colspec colname="c3" colnum="3"/><tbody><row id="row-1"><entry namest="c1" nameend="c2">A</entry><entry colname="c3">B</entry></row><row id="row-2"><entry colname="c1">C</entry><entry colname="c2">D</entry><entry colname="c3">E</entry></row></tbody></tgroup></table>',
