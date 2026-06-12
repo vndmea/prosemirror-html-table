@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 import {
   S1000DTableMap,
   canOperateOnS1000DTable,
+  createS1000DTableAdapter,
   createS1000DTableGrid,
   findS1000DEntryContext,
   findS1000DRowContext,
@@ -113,6 +114,29 @@ describe('S1000D table commands and adapters', () => {
     const normalized = normalizeS1000DTgroup(table.child(0)!);
 
     expect(normalized.attrs.cols).toBe('1');
+    expect(normalized.child(0)!.child(0)!.childCount).toBe(1);
+  });
+
+  it('exposes adapter helpers for empty entries, span copies, and normalization', () => {
+    const table = parseS1000DTableXml(
+      '<table id="tab-1"><tgroup cols="3"><tbody><row id="row-1"><entry namest="c1" nameend="c2" morerows="1">A</entry></row></tbody></tgroup></table>',
+      schema,
+    );
+    const adapter = createS1000DTableAdapter();
+    const entry = table.child(0)!.child(0)!.child(0)!.child(0)!;
+    const copied = adapter.copyEntryWithSpan(entry, {
+      namest: 'c2',
+      nameend: 'c3',
+      morerows: '2',
+    });
+    const empty = adapter.createEmptyEntry(table);
+    const normalized = adapter.normalizeTable(table);
+
+    expect(copied.attrs.namest).toBe('c2');
+    expect(copied.attrs.nameend).toBe('c3');
+    expect(copied.attrs.morerows).toBe('2');
+    expect(empty.type.name).toBe('s1000dEntry');
+    expect(normalized.child(0)!.attrs.cols).toBe('1');
     expect(normalized.child(0)!.child(0)!.childCount).toBe(1);
   });
 });

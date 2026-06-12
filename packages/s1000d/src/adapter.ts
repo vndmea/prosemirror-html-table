@@ -3,6 +3,7 @@ import type { Selection } from 'prosemirror-state';
 
 import { createS1000DTgroupGrid, type S1000DTgroupGrid } from './grid.js';
 import { s1000dTableNodeNames } from './names.js';
+import { createEmptyS1000DEntry, normalizeS1000DTable } from './normalize.js';
 import { createS1000DTableMap, S1000DTableMap } from './table-map.js';
 
 export interface S1000DTableAdapter {
@@ -16,6 +17,12 @@ export interface S1000DTableAdapter {
   isGraphicOnlyTable: (table: ProseMirrorNode) => boolean;
   createGrid: (tgroup: ProseMirrorNode, tgroupIndex?: number) => S1000DTgroupGrid;
   createMap: (table: ProseMirrorNode, tgroupIndex?: number) => S1000DTableMap;
+  createEmptyEntry: (table: ProseMirrorNode) => ProseMirrorNode;
+  copyEntryWithSpan: (
+    entry: ProseMirrorNode,
+    attrs?: Partial<Record<'namest' | 'nameend' | 'spanname' | 'morerows', string | null>>,
+  ) => ProseMirrorNode;
+  normalizeTable: (table: ProseMirrorNode) => ProseMirrorNode;
 }
 
 export function createS1000DTableAdapter(): S1000DTableAdapter {
@@ -30,6 +37,9 @@ export function createS1000DTableAdapter(): S1000DTableAdapter {
     isGraphicOnlyTable,
     createGrid: (tgroup, tgroupIndex = 0) => createS1000DTgroupGrid(tgroup, tgroupIndex),
     createMap: (table, tgroupIndex = 0) => createS1000DTableMap(table, tgroupIndex),
+    createEmptyEntry: (table) => createEmptyS1000DEntry(table.type.schema),
+    copyEntryWithSpan,
+    normalizeTable: (table) => normalizeS1000DTable(table),
   };
 }
 
@@ -73,4 +83,18 @@ function isGraphicOnlyTable(table: ProseMirrorNode): boolean {
   });
 
   return hasGraphic;
+}
+
+function copyEntryWithSpan(
+  entry: ProseMirrorNode,
+  attrs: Partial<Record<'namest' | 'nameend' | 'spanname' | 'morerows', string | null>> = {},
+): ProseMirrorNode {
+  return entry.type.create(
+    {
+      ...entry.attrs,
+      ...attrs,
+    },
+    entry.content,
+    entry.marks,
+  );
 }
