@@ -235,6 +235,38 @@ Row and column handles support drag reorder by default. Cross-section row drag s
 
 Use `editor.commands.fitHtmlTableToWidth()` to measure the current table wrapper and persist table width plus `colgroup` / `colwidth` values. Use `editor.commands.distributeHtmlTableColumns()` to assign equal column widths.
 
+Official Tiptap Table / TableKit parity:
+
+| Official item | This package | Status | Notes |
+| --- | --- | --- | --- |
+| `TableKit` bundle | `HtmlTableExtensions` | Different bundle | Official TableKit bundles `Table`, `TableRow`, `TableCell`, and `TableHeader`; this package also includes `caption`, `colgroup`, `col`, `thead`, `tbody`, and `tfoot` nodes. |
+| `HTMLAttributes` | `HTMLAttributes` | Supported | Applied to the rendered table element. |
+| `resizable` | `resizable` | Supported | Uses this package's resize view and persists widths through `colgroup` / `colwidth`. |
+| `renderWrapper` | `renderWrapper` | Supported | Controls the table wrapper used by the node view. |
+| `handleWidth` | `handleWidth` | Supported | Width of resize / handle affordances. |
+| `cellMinWidth` | `cellMinWidth` | Supported | Minimum column width used by resize and fit operations. |
+| `View` | `View` | Supported | Custom table node view class hook. |
+| `lastColumnResizable` | `lastColumnResizable` | Supported | Blocks the last resize handle when disabled. |
+| `allowTableNodeSelection` | `allowTableNodeSelection` | Supported | Also controls direct table handle selection. |
+
+| Official command | This package | Status | Notes |
+| --- | --- | --- | --- |
+| `insertTable` | `insertHtmlTable` | Supported | Adds options for caption and full HTML table sections. |
+| `addColumnBefore` / `addColumnAfter` | `addHtmlTableColumnBefore` / `addHtmlTableColumnAfter` | Supported | Applies across all sections as one logical table axis. |
+| `deleteColumn` | `deleteHtmlTableColumn` | Supported | Keeps `colgroup` aligned with the logical grid. |
+| `addRowBefore` / `addRowAfter` | `addHtmlTableRowBefore` / `addHtmlTableRowAfter` | Supported | Section-aware; inserts in the active section. |
+| `deleteRow` | `deleteHtmlTableRow` | Supported | Section-aware row deletion. |
+| `deleteTable` | `deleteHtmlTable` | Supported | Deletes the active table. |
+| `mergeCells` / `splitCell` / `mergeOrSplit` | `mergeHtmlTableCells` / `splitHtmlTableCell` / `mergeOrSplitHtmlTableCells` | Supported | Merge requires one rectangular section; split operates on the current merged cell. |
+| `toggleHeaderColumn` / `toggleHeaderRow` / `toggleHeaderCell` | `toggleHtmlTableHeaderColumn` / `toggleHtmlTableHeaderRow` / `toggleHtmlTableHeaderCell` | Supported | Converts `td` / `th` while preserving attrs and content. |
+| `setCellAttribute` | `setHtmlTableCellAttribute` | Supported | Current-cell command; dedicated selection-aware commands exist for text align, background, and vertical align. |
+| `goToNextCell` / `goToPreviousCell` | `goToNextHtmlTableCell` / `goToPreviousHtmlTableCell` | Supported | Optional cycling is available. |
+| `fixTables` | `fixHtmlTables` | Supported | Uses the full HTML table normalizer. |
+
+Project-specific enhancements include `caption` and `colgroup` commands, explicit `thead` / `tbody` / `tfoot` section commands, row / column duplication and movement, row / column drag handles, body row sorting, table fit / distribute width commands, and section-aware cell range clipboard behavior.
+
+Intentional differences: node names and document structure are not drop-in replacements for official Tiptap TableKit; the grid is section-aware; cross-section merge is rejected by default; `HtmlTableExtensions` is the recommended Tiptap entry point instead of mixing official TableKit nodes with this package.
+
 Keyboard shortcuts:
 
 | Shortcut | Behavior |
