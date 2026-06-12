@@ -6,6 +6,14 @@ import { inferHtmlTableNodeNames } from './names.js';
 import { HtmlTableMap } from './table-map.js';
 import type { HtmlTableNodeNames } from './types.js';
 
+export interface CellSelectionJSON {
+  type?: string;
+  anchor?: number;
+  head?: number;
+  anchorCellPos?: number;
+  headCellPos?: number;
+}
+
 export class CellSelection extends Selection {
   constructor(
     $anchorCell: ReturnType<ProseMirrorNode['resolve']>,
@@ -25,8 +33,13 @@ export class CellSelection extends Selection {
     );
   }
 
-  static fromJSON(doc: ProseMirrorNode, json: { anchorCellPos: number; headCellPos: number }): CellSelection {
-    return CellSelection.create(doc, json.anchorCellPos, json.headCellPos);
+  static fromJSON(doc: ProseMirrorNode, json: CellSelectionJSON): CellSelection {
+    const anchorCellPos = json.anchor ?? json.anchorCellPos;
+    const headCellPos = json.head ?? json.headCellPos ?? anchorCellPos;
+    if (typeof anchorCellPos !== 'number' || typeof headCellPos !== 'number') {
+      throw new RangeError('Invalid CellSelection JSON');
+    }
+    return CellSelection.create(doc, anchorCellPos, headCellPos);
   }
 
   map(doc: ProseMirrorNode, mapping: Mappable): Selection {
@@ -202,9 +215,11 @@ export class CellSelection extends Selection {
     );
   }
 
-  toJSON(): { type: string; anchorCellPos: number; headCellPos: number } {
+  toJSON(): CellSelectionJSON & { type: string; anchor: number; head: number; anchorCellPos: number; headCellPos: number } {
     return {
       type: 'html-table-cell',
+      anchor: this.anchorCellPos,
+      head: this.headCellPos,
       anchorCellPos: this.anchorCellPos,
       headCellPos: this.headCellPos,
     };

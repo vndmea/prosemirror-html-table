@@ -80,6 +80,52 @@ describe('CellSelection row and column helpers', () => {
     expect(selection.isColSelection()).toBe(false);
   });
 
+  it('serializes CellSelection JSON with official anchor and head names', () => {
+    const table = createHtmlTableNode(schema, { rows: 2, cols: 2, withHeaderRow: false });
+    const doc = schema.nodes.doc!.create(null, [table]);
+    const cellPositions = findNodePositions(doc, ['htmlTableCell']);
+    const anchor = cellPositions[0]!;
+    const head = cellPositions[3]!;
+    const selection = CellSelection.create(doc, anchor, head);
+
+    expect(selection.toJSON()).toEqual({
+      type: 'html-table-cell',
+      anchor,
+      head,
+      anchorCellPos: anchor,
+      headCellPos: head,
+    });
+  });
+
+  it('reads official and legacy CellSelection JSON shapes', () => {
+    const table = createHtmlTableNode(schema, { rows: 2, cols: 2, withHeaderRow: false });
+    const doc = schema.nodes.doc!.create(null, [table]);
+    const cellPositions = findNodePositions(doc, ['htmlTableCell']);
+    const first = cellPositions[0]!;
+    const second = cellPositions[1]!;
+    const third = cellPositions[2]!;
+    const fourth = cellPositions[3]!;
+
+    const official = CellSelection.fromJSON(doc, {
+      anchor: first,
+      head: fourth,
+    });
+    const legacy = CellSelection.fromJSON(doc, {
+      anchorCellPos: second,
+      headCellPos: third,
+    });
+
+    expect([official.anchorCellPos, official.headCellPos]).toEqual([first, fourth]);
+    expect([legacy.anchorCellPos, legacy.headCellPos]).toEqual([second, third]);
+  });
+
+  it('rejects invalid CellSelection JSON', () => {
+    const table = createHtmlTableNode(schema, { rows: 1, cols: 1, withHeaderRow: false });
+    const doc = schema.nodes.doc!.create(null, [table]);
+
+    expect(() => CellSelection.fromJSON(doc, {})).toThrow(RangeError);
+  });
+
   it('serializes partial selections as a table-internal slice grouped by section', () => {
     const table = schema.nodes.htmlTable!.create(null, [
       schema.nodes.htmlTableHead!.create(null, [

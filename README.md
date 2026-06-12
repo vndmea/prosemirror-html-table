@@ -158,7 +158,7 @@ Selection commands use a dedicated `CellSelection` for cell, row, and column ran
 | Official API | This package | Status | Notes |
 | --- | --- | --- | --- |
 | `tableEditing()` | `tableEditing()` | Supported | Core ProseMirror plugin for cell selection, clipboard, keyboard behavior, and table repair. |
-| `CellSelection` | `CellSelection` | Supported | Includes `content()`, `forEachCell()`, `rowSelection()`, and `colSelection()`; JSON uses `anchorCellPos` / `headCellPos`. |
+| `CellSelection` | `CellSelection` | Supported | Includes `content()`, `forEachCell()`, `rowSelection()`, and `colSelection()`; JSON emits official `anchor` / `head` and still reads legacy `anchorCellPos` / `headCellPos`. |
 | `TableMap` | `HtmlTableMap` | Supported adapter | Section-aware map with `findCell`, `colCount`, `nextCell`, `rectBetween`, `cellsInRect`, `positionAt`, and `get`. |
 | `findTable()` | `officialCompat.findTable()` | Supported adapter | Returns the closest `htmlTable` node with table position metadata. |
 | `findCellPos()` | `officialCompat.findCellPos()` | Supported adapter | Resolves a document position to the nearest table cell position when possible. |
