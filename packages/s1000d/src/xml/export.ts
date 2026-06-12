@@ -1,50 +1,56 @@
 import type { Node as ProseMirrorNode } from 'prosemirror-model';
 import {
-  colspecAttrs,
-  entryAttrs,
   escapeXmlText,
-  graphicAttrs,
   renderXmlAttrs,
-  rowAttrs,
-  sectionAttrs,
-  spanspecAttrs,
-  tableAttrs,
-  tgroupAttrs,
 } from '../attrs.js';
 import { resolveS1000DTableNodeNames, type S1000DTableNodeNames } from '../names.js';
+import {
+  getKnownColspecAttrs,
+  getKnownEntryAttrs,
+  getKnownRowAttrs,
+  getKnownSectionAttrs,
+  getKnownSpanspecAttrs,
+  getKnownTableAttrs,
+  getKnownTgroupAttrs,
+  normalizeS1000DTableProfile,
+} from '../profile.js';
 import type { SerializeS1000DTableXmlOptions } from '../types.js';
 
 export function serializeS1000DTableXml(
   node: ProseMirrorNode,
   options: SerializeS1000DTableXmlOptions = {},
 ): string {
-  return serializeNode(node, resolveS1000DTableNodeNames(options.names));
+  return serializeNode(
+    node,
+    resolveS1000DTableNodeNames(options.names),
+    normalizeS1000DTableProfile(options.profile),
+  );
 }
 
-function serializeNode(node: ProseMirrorNode, names: S1000DTableNodeNames): string {
+function serializeNode(node: ProseMirrorNode, names: S1000DTableNodeNames, profile: SerializeS1000DTableXmlOptions['profile']): string {
   switch (node.type.name) {
     case names.table:
-      return serializeContainer('table', node, names, tableAttrs);
+      return serializeContainer('table', node, names, profile, getKnownTableAttrs(profile));
     case names.title:
       return serializeTextContainer('title', node);
     case names.tgroup:
-      return serializeContainer('tgroup', node, names, tgroupAttrs);
+      return serializeContainer('tgroup', node, names, profile, getKnownTgroupAttrs(profile));
     case names.colspec:
-      return serializeLeaf('colspec', node, colspecAttrs);
+      return serializeLeaf('colspec', node, getKnownColspecAttrs(profile));
     case names.spanspec:
-      return serializeLeaf('spanspec', node, spanspecAttrs);
+      return serializeLeaf('spanspec', node, getKnownSpanspecAttrs(profile));
     case names.thead:
-      return serializeContainer('thead', node, names, sectionAttrs);
+      return serializeContainer('thead', node, names, profile, getKnownSectionAttrs(profile));
     case names.tfoot:
-      return serializeContainer('tfoot', node, names, sectionAttrs);
+      return serializeContainer('tfoot', node, names, profile, getKnownSectionAttrs(profile));
     case names.tbody:
-      return serializeContainer('tbody', node, names, sectionAttrs);
+      return serializeContainer('tbody', node, names, profile, getKnownSectionAttrs(profile));
     case names.row:
-      return serializeContainer('row', node, names, rowAttrs);
+      return serializeContainer('row', node, names, profile, getKnownRowAttrs(profile));
     case names.entry:
-      return serializeEntry(node, names);
+      return serializeEntry(node, names, getKnownEntryAttrs(profile));
     case names.graphic:
-      return serializeLeaf('graphic', node, graphicAttrs);
+      return serializeLeaf('graphic', node, ['infoEntityIdent']);
     default:
       return escapeXmlText(node.textContent);
   }
@@ -54,16 +60,17 @@ function serializeContainer(
   xmlName: string,
   node: ProseMirrorNode,
   names: S1000DTableNodeNames,
+  profile: SerializeS1000DTableXmlOptions['profile'],
   knownAttrs: readonly string[],
 ): string {
-  return `<${xmlName}${renderXmlAttrs(node.attrs, knownAttrs)}>${serializeChildren(node, names)}</${xmlName}>`;
+  return `<${xmlName}${renderXmlAttrs(node.attrs, knownAttrs)}>${serializeChildren(node, names, profile)}</${xmlName}>`;
 }
 
 function serializeTextContainer(xmlName: string, node: ProseMirrorNode): string {
   return `<${xmlName}>${escapeXmlText(node.textContent)}</${xmlName}>`;
 }
 
-function serializeEntry(node: ProseMirrorNode, names: S1000DTableNodeNames): string {
+function serializeEntry(node: ProseMirrorNode, names: S1000DTableNodeNames, knownAttrs: readonly string[]): string {
   const content = node.childCount === 0
     ? ''
     : Array.from({ length: node.childCount }, (_value, index) => {
@@ -76,18 +83,22 @@ function serializeEntry(node: ProseMirrorNode, names: S1000DTableNodeNames): str
       return `<para>${escapeXmlText(child.textContent)}</para>`;
     }).join('');
 
-  return `<entry${renderXmlAttrs(node.attrs, entryAttrs)}>${content}</entry>`;
+  return `<entry${renderXmlAttrs(node.attrs, knownAttrs)}>${content}</entry>`;
 }
 
 function serializeLeaf(xmlName: string, node: ProseMirrorNode, knownAttrs: readonly string[]): string {
   return `<${xmlName}${renderXmlAttrs(node.attrs, knownAttrs)}/>`;
 }
 
-function serializeChildren(node: ProseMirrorNode, names: S1000DTableNodeNames): string {
+function serializeChildren(
+  node: ProseMirrorNode,
+  names: S1000DTableNodeNames,
+  profile: SerializeS1000DTableXmlOptions['profile'],
+): string {
   const children: string[] = [];
 
   node.forEach((child) => {
-    children.push(serializeNode(child, names));
+    children.push(serializeNode(child, names, profile));
   });
 
   return children.join('');

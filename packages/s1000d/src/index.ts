@@ -3,8 +3,14 @@ export type { S1000DTableAdapter } from './adapter.js';
 export { createS1000DTableNodeSpecs, normalizeS1000DTableSchemaOptions } from './schema.js';
 export { parseS1000DTableXml, serializeS1000DTableXml } from './xml/index.js';
 export { createS1000DTableExtensions } from './tiptap.js';
+export { normalizeS1000DTableProfile } from './profile.js';
+export type { S1000DTableProfile } from './profile.js';
 export { validateS1000DTable } from './validation.js';
-export type { S1000DTableValidationIssue, S1000DTableValidationResult } from './validation.js';
+export type {
+  S1000DTableValidationIssue,
+  S1000DTableValidationOptions,
+  S1000DTableValidationResult,
+} from './validation.js';
 export {
   findColspecIndex,
   findSpanspec,

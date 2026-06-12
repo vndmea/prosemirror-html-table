@@ -1,5 +1,6 @@
 import type { NodeSpec } from 'prosemirror-model';
 import type { S1000DTableNodeNames } from './names.js';
+import type { S1000DTableProfile } from './profile.js';
 
 export type S1000DRawAttrs = Record<string, string>;
 
@@ -107,6 +108,7 @@ export interface S1000DTableSchemaOptions {
   tableGroup?: string;
   titleContent?: string;
   entryContent?: string;
+  profile?: S1000DTableProfile;
 }
 
 export interface NormalizedS1000DTableSchemaOptions {
@@ -114,14 +116,17 @@ export interface NormalizedS1000DTableSchemaOptions {
   tableGroup: string;
   titleContent: string;
   entryContent: string;
+  profile: S1000DTableProfile;
 }
 
 export type S1000DTableNodeSpecs = Record<string, NodeSpec>;
 
 export interface ParseS1000DTableXmlOptions {
   names?: Partial<S1000DTableNodeNames>;
+  profile?: S1000DTableProfile;
 }
 
 export interface SerializeS1000DTableXmlOptions {
   names?: Partial<S1000DTableNodeNames>;
+  profile?: S1000DTableProfile;
 }
