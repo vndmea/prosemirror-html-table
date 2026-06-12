@@ -10,9 +10,15 @@ import {
 } from './commands.js';
 import { createHtmlTableGrid, type HtmlTableCellRef, type HtmlTableGrid } from './grid.js';
 import { resolveHtmlTableNodeNames } from './names.js';
-import { CellSelection } from './selection.js';
+import { CellSelection, type CellSelectionJSON } from './selection.js';
+import { HtmlTableMap, type HtmlTableMapOptions, type HtmlTableRect } from './table-map.js';
 import { normalizeHtmlTable } from './normalize.js';
 import type { HtmlTableNodeNames } from './types.js';
+
+export { HtmlTableMap as TableMap };
+export type TableRect = HtmlTableRect;
+export type TableMapOptions = HtmlTableMapOptions;
+export type { CellSelectionJSON };
 
 export interface FindNodeResult {
   node: ProseMirrorNode;

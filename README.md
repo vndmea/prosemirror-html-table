@@ -40,8 +40,8 @@ npm run dev --workspace vue3-tiptap-table-demo
 npm run dev --workspace prosemirror-compat-demo
 ```
 
-The playground includes a full HTML table with `caption`, `colgroup`, `thead`, `tbody`, and `tfoot`, plus row/column handles, nested context menus, resize and extend controls, selection overlays, and a compact toolbar for table-level commands.
-The pure ProseMirror demo exercises `tableEditing()`, `CellSelection.content()`, `officialCompat`, JSON output, and serialized HTML output without Tiptap.
+The Vue playground is the full Tiptap integration surface: it includes a full HTML table with `caption`, `colgroup`, `thead`, `tbody`, and `tfoot`, plus row/column handles, nested context menus, resize and extend controls, selection overlays, and a compact toolbar for table-level commands.
+The pure ProseMirror demo is the minimal compatibility surface: it exercises `tableEditing()`, `CellSelection.content()`, `officialCompat`, JSON output, and serialized HTML output without Tiptap.
 
 ## Install
 
@@ -159,7 +159,9 @@ Selection commands use a dedicated `CellSelection` for cell, row, and column ran
 | --- | --- | --- | --- |
 | `tableEditing()` | `tableEditing()` | Supported | Core ProseMirror plugin for cell selection, clipboard, keyboard behavior, and table repair. |
 | `CellSelection` | `CellSelection` | Supported | Includes `content()`, `forEachCell()`, `rowSelection()`, and `colSelection()`; JSON emits official `anchor` / `head` and still reads legacy `anchorCellPos` / `headCellPos`. |
-| `TableMap` | `HtmlTableMap` | Supported adapter | Section-aware map with `findCell`, `colCount`, `nextCell`, `rectBetween`, `cellsInRect`, `positionAt`, and `get`. |
+| `TableMap` | `TableMap` / `HtmlTableMap` | Supported adapter | `TableMap` is a compat alias for `HtmlTableMap`; section-aware map with `findCell`, `colCount`, `nextCell`, `rectBetween`, `cellsInRect`, `positionAt`, and `get`. |
+| `TableRect` | `TableRect` / `HtmlTableRect` | Supported type alias | Compat alias for the rectangle shape returned by `TableMap` helpers. |
+| `CellSelectionJSON` | `CellSelectionJSON` | Supported type | Uses official `anchor` / `head`; legacy `anchorCellPos` / `headCellPos` is still accepted on read. |
 | `findTable()` | `officialCompat.findTable()` | Supported adapter | Returns the closest `htmlTable` node with table position metadata. |
 | `findCellPos()` | `officialCompat.findCellPos()` | Supported adapter | Resolves a document position to the nearest table cell position when possible. |
 | `findCellRange()` | `officialCompat.findCellRange()` | Supported adapter | Returns anchor/head cell positions only when both cells are in the same table. |
@@ -183,6 +185,12 @@ const plugins = [
 ];
 const setVisited = officialCompat.setCellAttr('data-example', 'visited');
 ```
+
+### API stability
+
+Stable core APIs include schema helpers, `HtmlTableMap` / `TableMap`, `CellSelection`, `tableEditing()`, normalization helpers, clipboard helpers, and the command set documented above. `officialCompat` exports are stable adapter names for migration, but they still operate on this package's full HTML table schema. Tiptap node extensions, command wrappers, options, and `HtmlTableExtensions` are stable public entry points.
+
+Experimental interaction APIs include Tiptap context menu, handle, overlay geometry, and DOM measurement helpers. They are exported for advanced integrations and the bundled demos, but their exact shapes may change before a stable major release.
 
 ### Tiptap interaction layer
 
@@ -355,11 +363,9 @@ This project is not a drop-in replacement for `prosemirror-tables`.
 The next major areas are:
 
 ```txt
-1. continue closing official `tableEditing()` parity gaps around edge-case paste flows
-2. harden malformed HTML / Excel / Word import and large-table performance
-3. add a Tiptap TableKit command and configuration parity table
-4. add pure ProseMirror / compat demo coverage
-5. stabilize public API names and official compat type aliases
+1. collect real Office / Excel / Google Sheets clipboard fixtures
+2. add large-table and collaboration-style stress regression tests
+3. keep tightening edge-case paste flows and release docs
 ```
 
 ## Development

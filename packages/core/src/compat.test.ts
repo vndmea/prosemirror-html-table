@@ -9,10 +9,12 @@ import {
   findCellPos,
   findCellRange,
   findTable,
+  HtmlTableMap,
   mergeCells,
   officialCompat,
   setCellAttr,
   splitCellWithType,
+  TableMap,
   toggleHeader,
 } from './index.js';
 
@@ -217,6 +219,8 @@ describe('official compat helpers', () => {
   });
 
   it('exposes the compat layer through the officialCompat namespace', () => {
+    expect(TableMap).toBe(HtmlTableMap);
+    expect(officialCompat.TableMap).toBe(HtmlTableMap);
     expect(officialCompat.findTable).toBe(findTable);
     expect(officialCompat.findCellPos).toBe(findCellPos);
     expect(officialCompat.findCellRange).toBe(findCellRange);

@@ -83,6 +83,7 @@ export {
   findTable,
   setCellAttr,
   splitCellWithType,
+  TableMap,
   toggleHeader,
 } from './compat.js';
 export * as officialCompat from './compat.js';
@@ -109,7 +110,15 @@ export type {
   HtmlTableSortRowsOptions,
 } from './commands.js';
 export type { ApplyTableClipboardOptions, HtmlTableClipboardOptions, ParsedClipboardCell, ParsedTableClipboard } from './clipboard.js';
-export type { FindNodeResult, GetCellTypeOptions, SplitCellWithTypeOptions, ToggleHeaderOptions, ToggleHeaderType } from './compat.js';
+export type {
+  FindNodeResult,
+  GetCellTypeOptions,
+  SplitCellWithTypeOptions,
+  TableMapOptions,
+  TableRect,
+  ToggleHeaderOptions,
+  ToggleHeaderType,
+} from './compat.js';
 export type { FixTablesTransactionOptions } from './fix-tables.js';
 export type { NormalizeHtmlTableOptions } from './normalize.js';
 export type { CellSelectionJSON } from './selection.js';
