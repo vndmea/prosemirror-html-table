@@ -156,6 +156,36 @@ describe('tableEditing', () => {
     expect(getCellTexts(view.state.doc)).toEqual(['X', 'Y', 'Z', 'W']);
   });
 
+  it('uses plain text paste data when HTML table data would drop surrounding content', () => {
+    const plugin = tableEditing();
+    const table = withCellTexts(createHtmlTableNode(schema, { rows: 3, cols: 2, withHeaderRow: false }), [
+      'a',
+      'b',
+      'c',
+      'd',
+      'e',
+      'f',
+    ]);
+    const doc = schema.nodes.doc!.create(null, [table]);
+    const cellPositions = findNodePositions(doc, 'htmlTableCell');
+    const state = EditorState.create({
+      schema,
+      doc,
+      selection: TextSelection.near(doc.resolve(cellPositions[0]! + 1)),
+    });
+    const view = createView(state);
+    const event = createClipboardEvent({
+      html: '<p>Before</p><table><tr><td>A</td><td>B</td></tr></table><p>After</p>',
+      plain: 'Before\nA\tB\nAfter',
+    });
+
+    const handled = plugin.props.handleDOMEvents?.paste?.call(plugin, view, event as unknown as ClipboardEvent);
+
+    expect(handled).toBe(true);
+    expect(event.prevented).toBe(true);
+    expect(getCellTexts(view.state.doc)).toEqual(['Before', 'b', 'A', 'B', 'After', 'f']);
+  });
+
   it('repeats a single slice across a CellSelection via handlePaste', () => {
     const plugin = tableEditing();
     const state = createStateWithCellSelection(['a', 'b', 'c', 'd'], [0, 3]);

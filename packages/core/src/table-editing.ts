@@ -2,7 +2,7 @@ import { type Node as ProseMirrorNode, type Slice } from 'prosemirror-model';
 import { NodeSelection, Plugin, PluginKey, Selection, TextSelection, type EditorState, type Transaction } from 'prosemirror-state';
 import { Decoration, DecorationSet, type EditorView } from 'prosemirror-view';
 
-import { applyTableClipboardToSelection, clearSelectedCells, clipTableClipboard, createSingleCellSliceClipboard, getSelectionMatrix, parseHtmlTableClipboard, parsePlainTextTableClipboard, parseTableSliceClipboard, serializeCellSelectionToHtmlTable, serializeCellSelectionToText } from './clipboard.js';
+import { applyTableClipboardToSelection, clearSelectedCells, clipTableClipboard, createSingleCellSliceClipboard, getSelectionMatrix, parseHtmlTableClipboard, parsePlainTextTableClipboard, parseTableSliceClipboard, serializeCellSelectionToHtmlTable, serializeCellSelectionToText, type ParsedTableClipboard } from './clipboard.js';
 import { deleteTable } from './commands.js';
 import { createFixTablesTransaction } from './fix-tables.js';
 import { inferHtmlTableNodeNames, resolveHtmlTableNodeNames } from './names.js';
@@ -157,9 +157,11 @@ function handleClipboardPaste(
 
   const html = event.clipboardData.getData('text/html');
   const text = event.clipboardData.getData('text/plain');
-  const clipboard =
-    parseHtmlTableClipboard(html, view.state.schema)
-    ?? parsePlainTextTableClipboard(text, view.state.schema);
+  const htmlClipboard = parseHtmlTableClipboard(html, view.state.schema);
+  const plainTextClipboard = parsePlainTextTableClipboard(text, view.state.schema);
+  const clipboard = shouldPreferPlainTextClipboard(htmlClipboard, plainTextClipboard, text)
+    ? plainTextClipboard
+    : htmlClipboard ?? plainTextClipboard;
   if (!clipboard) return false;
 
   const applied = applyTableClipboardToSelection(view.state, view.dispatch, clipboard, {
@@ -170,6 +172,29 @@ function handleClipboardPaste(
 
   event.preventDefault();
   return true;
+}
+
+function shouldPreferPlainTextClipboard(
+  htmlClipboard: ParsedTableClipboard | null,
+  plainTextClipboard: ParsedTableClipboard | null,
+  plainText: string,
+): boolean {
+  if (!htmlClipboard || !plainTextClipboard) return false;
+
+  const normalizedPlainText = normalizeClipboardText(plainText);
+  if (!normalizedPlainText) return false;
+
+  return normalizeClipboardText(serializeClipboardText(htmlClipboard)) !== normalizedPlainText;
+}
+
+function serializeClipboardText(clipboard: ParsedTableClipboard): string {
+  return clipboard.rows
+    .map((row) => row.map((cell) => cell.text ?? cell.content?.textBetween(0, cell.content.size, '\n', ' ') ?? '').join('\t'))
+    .join('\n');
+}
+
+function normalizeClipboardText(text: string): string {
+  return text.replace(/\r\n?/g, '\n').replace(/\u00a0/g, ' ').trim();
 }
 
 function handlePaste(
