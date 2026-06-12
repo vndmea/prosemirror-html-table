@@ -1,8 +1,12 @@
 export { createS1000DTableAdapter } from './adapter.js';
 export type { S1000DTableAdapter } from './adapter.js';
 export {
+  addS1000DColumnAfter,
+  addS1000DColumnBefore,
+  addS1000DRowBefore,
   addS1000DRowAfter,
   canOperateOnS1000DTable,
+  deleteS1000DColumn,
   deleteS1000DRow,
   findS1000DEntryContext,
   findS1000DRowContext,
@@ -10,6 +14,10 @@ export {
   getActiveS1000DTgroup,
   getActiveS1000DTgroupGrid,
   isGraphicOnlyS1000DTable,
+  moveS1000DColumnLeft,
+  moveS1000DColumnRight,
+  moveS1000DRowDown,
+  moveS1000DRowUp,
   rejectGraphicOnlyS1000DTable,
 } from './commands.js';
 export type {

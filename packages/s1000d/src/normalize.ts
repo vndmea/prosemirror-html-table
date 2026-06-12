@@ -29,13 +29,15 @@ export function normalizeS1000DTgroup(tgroup: ProseMirrorNode): ProseMirrorNode 
   const grid = createS1000DTgroupGrid(tgroup);
   const targetWidth = Math.max(1, grid.width);
   const children: ProseMirrorNode[] = [];
-  let generatedRowIndex = 0;
+  let rowIndex = 0;
 
   tgroup.forEach((child) => {
     if (child.type.name === s1000dTableNodeNames.thead
       || child.type.name === s1000dTableNodeNames.tbody
       || child.type.name === s1000dTableNodeNames.tfoot) {
-      children.push(normalizeSection(child, schema, targetWidth));
+      const normalizedSection = normalizeSection(child, schema, targetWidth, grid, rowIndex);
+      rowIndex += child.childCount;
+      children.push(normalizedSection);
       return;
     }
 
@@ -84,9 +86,12 @@ function normalizeSection(
   section: ProseMirrorNode,
   schema: Schema,
   targetWidth: number,
+  grid: ReturnType<typeof createS1000DTgroupGrid>,
+  startRowIndex: number,
 ): ProseMirrorNode {
   const rows: ProseMirrorNode[] = [];
   let generatedRowIndex = 0;
+  let rowIndex = startRowIndex;
 
   section.forEach((row) => {
     const rowChildren: ProseMirrorNode[] = [];
@@ -94,11 +99,14 @@ function normalizeSection(
       rowChildren.push(entry);
     });
 
-    while (rowChildren.length < targetWidth) {
+    let occupiedWidth = getOccupiedWidth(grid, rowIndex);
+    while (occupiedWidth < targetWidth) {
       rowChildren.push(createEmptyS1000DEntry(schema));
+      occupiedWidth += 1;
     }
 
-    rows.push(row.type.create(row.attrs, Fragment.fromArray(rowChildren.slice(0, targetWidth)), row.marks));
+    rows.push(row.type.create(row.attrs, Fragment.fromArray(rowChildren), row.marks));
+    rowIndex += 1;
   });
 
   if (rows.length === 0) {
@@ -106,9 +114,28 @@ function normalizeSection(
     if (!rowType) {
       throw new Error(`Missing node type in schema: ${s1000dTableNodeNames.row}`);
     }
-    rows.push(rowType.create({ id: `row-generated-${generatedRowIndex}` }, [createEmptyS1000DEntry(schema)]));
+    rows.push(rowType.create(
+      { id: `row-generated-${generatedRowIndex}` },
+      Array.from({ length: targetWidth }, () => createEmptyS1000DEntry(schema)),
+    ));
     generatedRowIndex += 1;
   }
 
   return section.type.create(section.attrs, Fragment.fromArray(rows), section.marks);
+}
+
+function getOccupiedWidth(
+  grid: ReturnType<typeof createS1000DTgroupGrid>,
+  rowIndex: number,
+): number {
+  const row = grid.slots[rowIndex];
+  if (!row) return 0;
+
+  for (let index = row.length - 1; index >= 0; index -= 1) {
+    if (row[index]) {
+      return index + 1;
+    }
+  }
+
+  return 0;
 }
