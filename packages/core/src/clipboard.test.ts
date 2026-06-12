@@ -153,6 +153,64 @@ describe('html table clipboard helpers', () => {
     }
   });
 
+  it('parses Windows CF_HTML fragments that wrap table markup in clipboard headers', () => {
+    const html = [
+      'Version:0.9',
+      'StartHTML:0000000105',
+      'EndHTML:0000000350',
+      'StartFragment:0000000140',
+      'EndFragment:0000000290',
+      '<html><body><!--StartFragment--><table><tr><td>A</td><td>B</td></tr></table><!--EndFragment--></body></html>',
+    ].join('\r\n');
+
+    const parsed = parseHtmlTableClipboard(html, schema);
+
+    expect(parsed?.rows.map((row) => row.map((cell) => cell.text))).toEqual([['A', 'B']]);
+  });
+
+  it('parses Office-style wrapper markup and preserves supported cell attributes', () => {
+    const html = [
+      '<html><body><div class="WordSection1">',
+      '<table><tbody><tr>',
+      '<th style="text-align:center;background-color:#fff;mso-number-format:\'@\';vertical-align:middle" width="120">Name</th>',
+      '<td align="right">42</td>',
+      '</tr></tbody></table>',
+      '</div></body></html>',
+    ].join('');
+
+    const parsed = parseHtmlTableClipboard(html, schema);
+    const header = parsed?.rows[0]?.[0];
+    const value = parsed?.rows[0]?.[1];
+
+    expect(parsed?.rows.map((row) => row.map((cell) => cell.text))).toEqual([['Name', '42']]);
+    expect(header?.isHeader).toBe(true);
+    expect(header?.attrs).toMatchObject({
+      backgroundColor: '#fff',
+      colwidth: [120],
+      textAlign: 'center',
+      verticalAlign: 'middle',
+    });
+    expect(value?.attrs).toMatchObject({
+      textAlign: 'right',
+    });
+  });
+
+  it('sanitizes invalid spans and colwidths from malformed HTML table cells', () => {
+    const html = '<table><tbody><tr><td rowspan="0" colspan="-2" data-colwidth="0,120,NaN">A</td></tr></tbody></table>';
+
+    const parsed = parseHtmlTableClipboard(html, schema);
+    const cell = parsed?.rows[0]?.[0];
+
+    expect(cell?.text).toBe('A');
+    expect(cell?.colspan).toBe(1);
+    expect(cell?.rowspan).toBe(1);
+    expect(cell?.attrs).toMatchObject({
+      colspan: 1,
+      colwidth: [120],
+      rowspan: 1,
+    });
+  });
+
   it('applies TSV clipboard data to the selected cells', () => {
     const table = createHtmlTableNode(schema, { rows: 3, cols: 3, withHeaderRow: false });
     const state = createStateForTable(withCellTexts(table, ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i']));

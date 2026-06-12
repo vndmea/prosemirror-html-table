@@ -10,6 +10,9 @@ import type { HtmlTableNodeNames } from './types.js';
 
 const CLIPBOARD_PAYLOAD_ATTR = 'data-pmht-clipboard';
 const TABLE_TAG_PATTERN = /<table\b/i;
+const START_FRAGMENT_PATTERN = /<!--\s*StartFragment\s*-->/i;
+const END_FRAGMENT_PATTERN = /<!--\s*EndFragment\s*-->/i;
+const HTML_ENTRY_PATTERN = /<!--\s*StartFragment\s*-->|<!doctype\s+html\b|<html\b|<body\b|<table\b/i;
 const SECTION_TAG_PATTERN = /<(thead|tbody|tfoot)\b[^>]*>([\s\S]*?)<\/\1>/gi;
 const ROW_TAG_PATTERN = /<tr\b[^>]*>([\s\S]*?)<\/tr>/gi;
 const CELL_TAG_PATTERN = /<(td|th)\b([^>]*)>([\s\S]*?)<\/\1>/gi;
@@ -201,12 +204,13 @@ export function serializeCellSelectionToText(
 }
 
 export function parseHtmlTableClipboard(html: string, schema: Schema): ParsedTableClipboard | null {
-  if (!TABLE_TAG_PATTERN.test(html)) return null;
+  const normalizedHtml = normalizeClipboardHtml(html);
+  if (!TABLE_TAG_PATTERN.test(normalizedHtml)) return null;
 
-  const payload = decodeClipboardPayload(extractClipboardPayload(html), schema);
+  const payload = decodeClipboardPayload(extractClipboardPayload(normalizedHtml), schema);
   if (payload) return payload;
 
-  const rows = extractRowsFromHtml(html).map((row) => row.map((cell) => parseHtmlClipboardCell(cell, schema)));
+  const rows = extractRowsFromHtml(normalizedHtml).map((row) => row.map((cell) => parseHtmlClipboardCell(cell, schema)));
   return rows.length > 0 ? { rows } : null;
 }
 
@@ -1152,6 +1156,21 @@ function parseHtmlClipboardCell(cell: { tag: string; attrs: string; innerHtml: s
     rowspan: Math.max(1, Number(attrs.rowspan ?? 1)),
     isHeader: cell.tag === 'th',
   };
+}
+
+function normalizeClipboardHtml(html: string): string {
+  const withoutBom = html.replace(/^\uFEFF/u, '');
+  const fragmentStart = START_FRAGMENT_PATTERN.exec(withoutBom);
+  if (fragmentStart) {
+    const afterStart = fragmentStart.index + fragmentStart[0].length;
+    const rest = withoutBom.slice(afterStart);
+    const fragmentEnd = END_FRAGMENT_PATTERN.exec(rest);
+    const fragment = fragmentEnd ? rest.slice(0, fragmentEnd.index) : rest;
+    if (TABLE_TAG_PATTERN.test(fragment)) return fragment;
+  }
+
+  const firstHtml = HTML_ENTRY_PATTERN.exec(withoutBom);
+  return firstHtml && firstHtml.index > 0 ? withoutBom.slice(firstHtml.index) : withoutBom;
 }
 
 function extractRowsFromHtml(html: string): Array<Array<{ tag: string; attrs: string; innerHtml: string }>> {

@@ -198,7 +198,7 @@ The Tiptap package now includes:
 - native text selection inside cells
 - Tab / Shift-Tab navigation
 - Shift-Arrow cell-range expansion
-- cell-range copy / cut / paste with HTML table + TSV clipboard data
+- cell-range copy / cut / paste with HTML table + TSV clipboard data, including CF_HTML / Office wrapper normalization
 - Delete / Backspace clearing for partial cell selections
 - Backspace / Delete whole-table removal when every cell is selected
 ```
