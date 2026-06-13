@@ -43,6 +43,11 @@ See also:
 - [`examples/s1000d-snippets/tiptap-basic.ts`](../../examples/s1000d-snippets/tiptap-basic.ts)
 - [`examples/s1000d-snippets/clipboard-basic.ts`](../../examples/s1000d-snippets/clipboard-basic.ts)
 - [`examples/s1000d-snippets/renderer-basic.ts`](../../examples/s1000d-snippets/renderer-basic.ts)
+- `examples/s1000d-react-demo`
+  - visual React demo for loading S1000D XML, editing the table, exporting XML, rendering final HTML, and running E2E
+  - start with `npm run dev:demo:s1000d`
+  - test with `npm run test:e2e:s1000d`
+  - included in the full repository E2E run: `npm run test:e2e`
 
 ## Install
 
@@ -202,6 +207,13 @@ Tiptap notes:
 
 - Tiptap `renderHTML` is editor DOM, not final HTML output
 - the current section-heavy editor DOM should be treated as internal / experimental
+
+## Demo And E2E
+
+- run the S1000D visual demo with `npm run dev:demo:s1000d`
+- run only the S1000D Playwright suite with `npm run test:e2e:s1000d`
+- run the full repository Playwright suite with `npm run test:e2e`
+- run only the original Vue/Tiptap Playwright suite with `npm run test:e2e:tiptap`
 
 ## Clipboard Behavior
 

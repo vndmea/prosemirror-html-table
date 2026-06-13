@@ -1,0 +1,49 @@
+body {
+  font-family: system-ui, sans-serif;
+  margin: 16px;
+}
+
+button {
+  margin: 4px;
+}
+
+.s1000d-demo__actions {
+  margin-bottom: 12px;
+}
+
+.s1000d-demo__editor {
+  border: 1px solid #ccc;
+  padding: 8px;
+  margin-block: 12px;
+  min-height: 240px;
+}
+
+.s1000d-demo__editor .ProseMirror {
+  min-height: 220px;
+  outline: none;
+}
+
+.s1000d-demo__editor table,
+.s1000d-demo__preview table {
+  border-collapse: collapse;
+}
+
+.s1000d-demo__editor td,
+.s1000d-demo__editor th,
+.s1000d-demo__preview td,
+.s1000d-demo__preview th {
+  border: 1px solid #999;
+  padding: 4px 8px;
+}
+
+pre {
+  border: 1px solid #ddd;
+  padding: 8px;
+  white-space: pre-wrap;
+}
+
+.s1000d-demo__preview {
+  border: 1px solid #ddd;
+  padding: 8px;
+  min-height: 80px;
+}

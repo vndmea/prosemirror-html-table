@@ -1,0 +1,14 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "paths": {
+      "prosemirror-html-table-s1000d": ["../../packages/s1000d/src/index.ts"],
+      "prosemirror-html-table-s1000d/clipboard": ["../../packages/s1000d/src/clipboard.ts"],
+      "prosemirror-html-table-s1000d/renderer": ["../../packages/s1000d/src/renderer.ts"],
+      "prosemirror-html-table-s1000d/tiptap": ["../../packages/s1000d/src/tiptap.ts"]
+    },
+    "types": ["vite/client"]
+  },
+  "include": ["src/**/*.ts", "src/**/*.tsx", "vite.config.ts"]
+}

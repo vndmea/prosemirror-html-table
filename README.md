@@ -27,6 +27,7 @@ packages/tiptap  Tiptap v3 node extensions and command wrappers built on top of 
 
 A Vue 3 + Tiptap v3 playground is available in `examples/vue3-tiptap-table`.
 A minimal pure ProseMirror compatibility demo is available in `examples/prosemirror-compat-demo`.
+A React + Tiptap S1000D visual demo is available in `examples/s1000d-react-demo`.
 
 Online:
 
@@ -38,10 +39,38 @@ Local:
 npm install
 npm run dev --workspace vue3-tiptap-table-demo
 npm run dev --workspace prosemirror-compat-demo
+npm run dev:demo:s1000d
 ```
 
 The Vue playground is the full Tiptap integration surface: it includes a full HTML table with `caption`, `colgroup`, `thead`, `tbody`, and `tfoot`, plus row/column handles, nested context menus, resize and extend controls, selection overlays, and a compact toolbar for table-level commands.
 The pure ProseMirror demo is the minimal compatibility surface: it exercises `tableEditing()`, `CellSelection.content()`, `officialCompat`, JSON output, and serialized HTML output without Tiptap.
+The S1000D React demo is the visual package-level verification surface: it loads S1000D XML, renders editable tables, runs S1000D commands, exports XML, renders final HTML, and exercises the clipboard MVP.
+
+## E2E test suites
+
+- `npm run test:e2e`
+  - runs the full end-to-end suite
+  - first the Vue/Tiptap demo tests
+  - then the S1000D React demo tests
+
+- `npm run test:e2e:tiptap`
+  - runs the original Vue/Tiptap demo E2E suite only
+
+- `npm run test:e2e:s1000d`
+  - runs the S1000D React demo E2E suite only
+
+## S1000D demo surfaces
+
+- `examples/s1000d-snippets`
+  - API snippets only
+  - meant for typecheck coverage and copy/paste examples
+  - not a visual browser demo
+
+- `examples/s1000d-react-demo`
+  - visual React demo
+  - local run: `npm run dev:demo:s1000d`
+  - E2E: `npm run test:e2e:s1000d`
+  - included in full E2E: `npm run test:e2e`
 
 ## Install
 
@@ -375,6 +404,7 @@ npm install
 npm run lint
 npm run typecheck
 npm test
+npm run test:e2e
 npm run build
 ```
 
@@ -388,6 +418,18 @@ Run the pure ProseMirror compat demo:
 
 ```bash
 npm run dev --workspace prosemirror-compat-demo
+```
+
+Run only the original Vue/Tiptap E2E suite:
+
+```bash
+npm run test:e2e:tiptap
+```
+
+Run only the S1000D React demo E2E suite:
+
+```bash
+npm run test:e2e:s1000d
 ```
 
 ## License
