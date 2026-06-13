@@ -91,7 +91,16 @@ export function findS1000DTableAroundSelection(selection: Selection): LocatedS10
 }
 
 export function findS1000DTableByResolvedPos(doc: ProseMirrorNode, pos: number): LocatedS1000DTable | null {
-  const resolved = doc.resolve(Math.max(0, Math.min(pos, doc.content.size)));
+  const clampedPos = Math.max(0, Math.min(pos, doc.content.size));
+  const directNode = doc.nodeAt(clampedPos);
+  if (directNode?.type.name === s1000dTableNodeNames.table) {
+    return {
+      table: directNode,
+      tablePos: clampedPos,
+    };
+  }
+
+  const resolved = doc.resolve(clampedPos);
 
   for (let depth = resolved.depth; depth >= 0; depth -= 1) {
     const node = resolved.node(depth);

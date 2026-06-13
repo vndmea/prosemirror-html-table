@@ -12,6 +12,7 @@ import {
   createS1000DTableExtensions,
   defaultS1000DTableTiptapOptions,
 } from './tiptap.js';
+import { findS1000DTableByResolvedPos, resolveRequiredS1000DTableContext } from './context.js';
 import { getRenderedS1000DTableContext, s1000dTableDomAdapter } from './dom-adapter.js';
 import { applyS1000DColumnWidthsToTgroup, createS1000DTableOverlayPlugin } from './overlay.js';
 
@@ -189,6 +190,20 @@ describe('S1000D tiptap integration', () => {
     expect(nextTgroup.child(0)?.attrs.colwidth).toBe('160px');
     expect(nextTgroup.child(1)?.attrs.colwidth).toBe('240px');
     expect(nextTgroup.attrs.cols).toBe('2');
+  });
+
+  it('resolves table context correctly when looked up by exact tablePos', () => {
+    const state = createStateWithSelection(['A', 'B', 'C', 'D'], [0, 3]);
+
+    const located = findS1000DTableByResolvedPos(state.doc, 0);
+    const context = resolveRequiredS1000DTableContext(state, { tablePos: 0 });
+
+    expect(located).not.toBeNull();
+    expect(located?.tablePos).toBe(0);
+    expect(located?.table.type.name).toBe('s1000dTable');
+    expect(context).not.toBeNull();
+    expect(context?.tablePos).toBe(0);
+    expect(context?.activeTgroupIndex).toBe(0);
   });
 });
 

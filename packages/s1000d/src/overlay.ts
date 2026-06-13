@@ -11,7 +11,12 @@ import { s1000dTableNodeNames } from './names.js';
 import { findS1000DEntryPosition } from './position.js';
 import { S1000DCellSelection, isS1000DCellSelection } from './selection.js';
 import type { S1000DEntryRef, S1000DTgroupGrid } from './grid.js';
-import { getVisibleTableRect, toTableRect, type TableGeometry, type TableRect } from '../../tiptap/src/table-interaction/dom-geometry.js';
+import {
+  getVisibleTableRect,
+  toTableRect,
+  type TableGeometry,
+  type TableRect,
+} from '../../tiptap/src/table-interaction/dom-geometry.js';
 import {
   getTableOverlayPositionState,
   getVisibleTableSelectionRect,
@@ -26,6 +31,7 @@ const MIN_HANDLE_INSET = 8;
 const HANDLE_SIZE = 14;
 const RESIZE_HANDLE_WIDTH = 12;
 const MIN_COLUMN_WIDTH = 48;
+const DRAG_SELECTION_THRESHOLD = 4;
 const OVERLAY_SELECTOR = '[data-s1000d-table-overlay]';
 
 export const s1000dTableOverlayPluginKey = new PluginKey('s1000d-table-overlay');
@@ -101,9 +107,29 @@ class S1000DTableOverlayView {
   private readonly columnBand: HTMLDivElement;
   private readonly cellFill: HTMLDivElement;
   private readonly cellOutline: HTMLDivElement;
+  private readonly hoverRowBand: HTMLDivElement;
+  private readonly hoverColumnBand: HTMLDivElement;
+  private readonly hoverCellFill: HTMLDivElement;
+  private readonly hoverCellOutline: HTMLDivElement;
   private hoveredTablePos: number | null = null;
   private hoveredRowIndex: number | null = null;
   private hoveredColumnIndex: number | null = null;
+  private hoverMode: 'cell' | 'row-handle' | 'column-handle' | null = null;
+  private pendingCellDrag:
+    | {
+        tablePos: number;
+        anchorEntryPos: number;
+        startX: number;
+        startY: number;
+      }
+    | null = null;
+  private activeCellDrag:
+    | {
+        tablePos: number;
+        anchorEntryPos: number;
+        headEntryPos: number;
+      }
+    | null = null;
   private activeResize:
     | {
         tablePos: number;
@@ -116,9 +142,12 @@ class S1000DTableOverlayView {
   private readonly resizeLifecycle: TableResizeLifecycle;
   private readonly onMouseMove = (event: MouseEvent) => this.handleMouseMove(event);
   private readonly onMouseLeave = (event: MouseEvent) => this.handleMouseLeave(event);
+  private readonly onMouseDown = (event: MouseEvent) => this.handleMouseDown(event);
   private readonly onViewportChange = () => this.render();
   private readonly onResizeMove = (event: MouseEvent) => this.handleResizeMove(event);
   private readonly onResizeEnd = () => this.finishResize();
+  private readonly onDocumentMouseMove = (event: MouseEvent) => this.handleDocumentMouseMove(event);
+  private readonly onDocumentMouseUp = (event: MouseEvent) => this.finishCellDrag(event);
 
   constructor(view: EditorView) {
     this.view = view;
@@ -143,7 +172,9 @@ class S1000DTableOverlayView {
     this.columnHandlesParent = createLayer(this.root.ownerDocument, 's1000d-table-overlay__columns');
     this.resizersParent = createLayer(this.root.ownerDocument, 's1000d-table-overlay__resizers');
     this.rowBand = createBand(this.root.ownerDocument);
+    this.rowBand.dataset.testid = 's1000d-selection-row-band';
     this.columnBand = createBand(this.root.ownerDocument);
+    this.columnBand.dataset.testid = 's1000d-selection-column-band';
     this.cellFill = createBox(this.root.ownerDocument, {
       background: 'rgba(37, 99, 235, 0.08)',
       borderRadius: '2px',
@@ -159,8 +190,43 @@ class S1000DTableOverlayView {
       position: 'absolute',
       zIndex: '3',
     });
+    this.cellFill.dataset.testid = 's1000d-selection-cell-fill';
+    this.cellOutline.dataset.testid = 's1000d-selection-cell-outline';
+    this.hoverRowBand = createBand(this.root.ownerDocument, {
+      background: 'rgba(37, 99, 235, 0.08)',
+      boxShadow: 'inset 0 0 0 1px rgba(37, 99, 235, 0.22)',
+      zIndex: '1',
+    });
+    this.hoverRowBand.dataset.testid = 's1000d-hover-row-band';
+    this.hoverColumnBand = createBand(this.root.ownerDocument, {
+      background: 'rgba(37, 99, 235, 0.08)',
+      boxShadow: 'inset 0 0 0 1px rgba(37, 99, 235, 0.22)',
+      zIndex: '1',
+    });
+    this.hoverColumnBand.dataset.testid = 's1000d-hover-column-band';
+    this.hoverCellFill = createBox(this.root.ownerDocument, {
+      background: 'rgba(37, 99, 235, 0.06)',
+      borderRadius: '2px',
+      pointerEvents: 'none',
+      position: 'absolute',
+      zIndex: '1',
+    });
+    this.hoverCellFill.dataset.testid = 's1000d-hover-cell-fill';
+    this.hoverCellOutline = createBox(this.root.ownerDocument, {
+      border: '1px dashed rgba(37, 99, 235, 0.5)',
+      borderRadius: '2px',
+      boxSizing: 'border-box',
+      pointerEvents: 'none',
+      position: 'absolute',
+      zIndex: '2',
+    });
+    this.hoverCellOutline.dataset.testid = 's1000d-hover-cell-outline';
 
     this.root.append(
+      this.hoverRowBand,
+      this.hoverColumnBand,
+      this.hoverCellFill,
+      this.hoverCellOutline,
       this.rowBand,
       this.columnBand,
       this.cellFill,
@@ -173,7 +239,11 @@ class S1000DTableOverlayView {
     this.resizeLifecycle = new TableResizeLifecycle(this.root.ownerDocument, this.onResizeMove, this.onResizeEnd);
 
     this.view.dom.addEventListener('mousemove', this.onMouseMove);
+    this.view.dom.addEventListener('mouseover', this.onMouseMove);
     this.view.dom.addEventListener('mouseleave', this.onMouseLeave);
+    this.view.dom.addEventListener('mousedown', this.onMouseDown);
+    this.root.ownerDocument.addEventListener('mousemove', this.onMouseMove);
+    this.root.ownerDocument.addEventListener('mouseover', this.onMouseMove);
     this.root.ownerDocument.defaultView?.addEventListener('resize', this.onViewportChange);
     this.root.ownerDocument.addEventListener('scroll', this.onViewportChange, true);
     this.render();
@@ -187,9 +257,14 @@ class S1000DTableOverlayView {
   destroy(): void {
     this.resizeLifecycle.destroy();
     this.view.dom.removeEventListener('mousemove', this.onMouseMove);
+    this.view.dom.removeEventListener('mouseover', this.onMouseMove);
     this.view.dom.removeEventListener('mouseleave', this.onMouseLeave);
+    this.view.dom.removeEventListener('mousedown', this.onMouseDown);
+    this.root.ownerDocument.removeEventListener('mousemove', this.onMouseMove);
+    this.root.ownerDocument.removeEventListener('mouseover', this.onMouseMove);
     this.root.ownerDocument.defaultView?.removeEventListener('resize', this.onViewportChange);
     this.root.ownerDocument.removeEventListener('scroll', this.onViewportChange, true);
+    this.stopCellDragListeners();
     this.overlayHost.detach();
   }
 
@@ -210,11 +285,14 @@ class S1000DTableOverlayView {
       ROW_HANDLE_OFFSET,
       COLUMN_HANDLE_OFFSET,
     );
-    const selectionInfo = getS1000DSelectionInfo(this.view.state, { tablePos: context.tablePos });
+    const selectionInfo =
+      getS1000DSelectionInfo(this.view.state, { tablePos: context.tablePos })
+      ?? getS1000DSelectionInfo(this.view.state);
     const rowSelection = isS1000DCellSelection(this.view.state.selection) && this.view.state.selection.isRowSelection();
     const columnSelection = isS1000DCellSelection(this.view.state.selection) && this.view.state.selection.isColSelection();
 
     this.renderSelection(geometry, positionState, selectionInfo, rowSelection, columnSelection);
+    this.renderHoverFeedback(context, geometry, positionState, selectionInfo);
     this.renderRowHandles(context, geometry, positionState, selectionInfo, rowSelection);
     this.renderColumnHandles(context, geometry, positionState, selectionInfo, columnSelection);
     this.renderResizeHandles(context, geometry, positionState);
@@ -233,6 +311,10 @@ class S1000DTableOverlayView {
     this.columnBand.hidden = true;
     this.cellFill.hidden = true;
     this.cellOutline.hidden = true;
+    this.hoverRowBand.hidden = true;
+    this.hoverColumnBand.hidden = true;
+    this.hoverCellFill.hidden = true;
+    this.hoverCellOutline.hidden = true;
 
     if (!selectionInfo) {
       return;
@@ -267,6 +349,69 @@ class S1000DTableOverlayView {
     applyRect(this.cellOutline, rect);
     this.cellFill.hidden = false;
     this.cellOutline.hidden = false;
+  }
+
+  private renderHoverFeedback(
+    context: S1000DTableDOMContext,
+    geometry: TableGeometry,
+    positionState: TableOverlayPositionState,
+    selectionInfo: ReturnType<typeof getS1000DSelectionInfo> | undefined,
+  ): void {
+    this.hoverRowBand.hidden = true;
+    this.hoverColumnBand.hidden = true;
+    this.hoverCellFill.hidden = true;
+    this.hoverCellOutline.hidden = true;
+
+    if (this.hoveredTablePos !== context.tablePos) {
+      return;
+    }
+
+    if (this.hoverMode === 'row-handle' && this.hoveredRowIndex !== null) {
+      const rect = getVisibleContentRowRect(geometry, positionState, this.hoveredRowIndex);
+      if (rect) {
+        applyRect(this.hoverRowBand, rect);
+        this.hoverRowBand.hidden = false;
+      }
+      return;
+    }
+
+    if (this.hoverMode === 'column-handle' && this.hoveredColumnIndex !== null) {
+      const rect = getVisibleContentColumnRect(geometry, positionState, this.hoveredColumnIndex);
+      if (rect) {
+        applyRect(this.hoverColumnBand, rect);
+        this.hoverColumnBand.hidden = false;
+      }
+      return;
+    }
+
+    if (this.hoverMode === 'cell' && this.hoveredRowIndex !== null && this.hoveredColumnIndex !== null) {
+      const rect = getVisibleCellRect(geometry, positionState, this.hoveredRowIndex, this.hoveredColumnIndex);
+      if (rect) {
+        applyRect(this.hoverCellFill, rect);
+        applyRect(this.hoverCellOutline, rect);
+        this.hoverCellFill.hidden = false;
+        this.hoverCellOutline.hidden = false;
+        return;
+      }
+    }
+
+    if (this.hoverMode === 'cell' && selectionInfo) {
+      const rect = getVisibleTableSelectionRect(
+        geometry,
+        positionState.tableLeft,
+        positionState.tableTop,
+        selectionInfo.left,
+        selectionInfo.right,
+        selectionInfo.top,
+        selectionInfo.bottom,
+      );
+      if (rect) {
+        applyRect(this.hoverCellFill, rect);
+        applyRect(this.hoverCellOutline, rect);
+        this.hoverCellFill.hidden = false;
+        this.hoverCellOutline.hidden = false;
+      }
+    }
   }
 
   private renderRowHandles(
@@ -404,6 +549,8 @@ class S1000DTableOverlayView {
     });
     handle.textContent = axis === 'row' ? '⋮' : '⋯';
     handle.addEventListener('mousedown', (event) => this.handleAxisMouseDown(event, axis));
+    handle.addEventListener('mouseenter', () => this.handleAxisHover(handle, axis));
+    handle.addEventListener('mouseleave', (event) => this.handleAxisLeave(event));
     return handle;
   }
 
@@ -453,6 +600,37 @@ class S1000DTableOverlayView {
     event.stopPropagation();
     this.view.dispatch(this.view.state.tr.setSelection(selection).scrollIntoView());
     this.view.focus();
+  }
+
+  private handleAxisHover(handle: HTMLButtonElement, axis: 'row' | 'column'): void {
+    const tablePos = Number(handle.dataset.tablePos);
+    const axisIndex = Number(handle.dataset[axis === 'row' ? 'rowIndex' : 'columnIndex']);
+    if (!Number.isInteger(tablePos) || !Number.isInteger(axisIndex)) {
+      return;
+    }
+
+    this.hoveredTablePos = tablePos;
+    this.hoverMode = axis === 'row' ? 'row-handle' : 'column-handle';
+    if (axis === 'row') {
+      this.hoveredRowIndex = axisIndex;
+      this.hoveredColumnIndex = null;
+    } else {
+      this.hoveredRowIndex = null;
+      this.hoveredColumnIndex = axisIndex;
+    }
+    this.render();
+  }
+
+  private handleAxisLeave(event: MouseEvent): void {
+    const relatedTarget = event.relatedTarget;
+    if (relatedTarget instanceof Element && relatedTarget.closest(OVERLAY_SELECTOR)) {
+      return;
+    }
+
+    this.hoveredRowIndex = null;
+    this.hoveredColumnIndex = null;
+    this.hoverMode = null;
+    this.render();
   }
 
   private handleResizeStart(event: MouseEvent): void {
@@ -540,14 +718,29 @@ class S1000DTableOverlayView {
   }
 
   private handleMouseMove(event: MouseEvent): void {
-    const hovered = findS1000DTableAtDOM(this.view, event.target);
+    if (this.activeCellDrag || this.pendingCellDrag) {
+      return;
+    }
+
+    const eventElement = getPointerElement(this.root.ownerDocument, event);
+    const hoveredRowHandle = eventElement?.closest('[data-testid="s1000d-row-handle"]') as HTMLButtonElement | null;
+    if (hoveredRowHandle) {
+      this.handleAxisHover(hoveredRowHandle, 'row');
+      return;
+    }
+
+    const hoveredColumnHandle = eventElement?.closest('[data-testid="s1000d-column-handle"]') as HTMLButtonElement | null;
+    if (hoveredColumnHandle) {
+      this.handleAxisHover(hoveredColumnHandle, 'column');
+      return;
+    }
+
+    const activeContext = this.getActiveContext();
+    const hovered = activeContext && hitTestRenderedTablePoint(activeContext, event.clientX, event.clientY)
+      ? activeContext
+      : findS1000DTableAtDOM(this.view, eventElement ?? event.target);
     if (!hovered) {
-      if (this.hoveredTablePos !== null || this.hoveredRowIndex !== null || this.hoveredColumnIndex !== null) {
-        this.hoveredTablePos = null;
-        this.hoveredRowIndex = null;
-        this.hoveredColumnIndex = null;
-        this.render();
-      }
+      this.clearHoverState();
       return;
     }
 
@@ -559,6 +752,7 @@ class S1000DTableOverlayView {
       this.hoveredTablePos === hovered.tablePos
       && this.hoveredRowIndex === rowIndex
       && this.hoveredColumnIndex === columnIndex
+      && this.hoverMode === 'cell'
     ) {
       return;
     }
@@ -566,6 +760,7 @@ class S1000DTableOverlayView {
     this.hoveredTablePos = hovered.tablePos;
     this.hoveredRowIndex = rowIndex;
     this.hoveredColumnIndex = columnIndex;
+    this.hoverMode = 'cell';
     this.render();
   }
 
@@ -579,9 +774,149 @@ class S1000DTableOverlayView {
       return;
     }
 
+    this.clearHoverState();
+  }
+
+  private handleMouseDown(event: MouseEvent): void {
+    if (event.button !== 0 || this.activeResize) {
+      return;
+    }
+
+    const target = getPointerElement(this.root.ownerDocument, event) ?? (event.target instanceof Element ? event.target : event.target instanceof Node ? event.target.parentElement : null);
+    if (!target || target.closest(OVERLAY_SELECTOR) || !target.closest('td, th')) {
+      return;
+    }
+
+    const context = findS1000DTableAtDOM(this.view, target);
+    if (!context?.activeTgroup) {
+      return;
+    }
+
+    const hit = getGridHitAtPoint(context, event.clientX, event.clientY, false);
+    if (!hit) {
+      return;
+    }
+
+    const anchorEntryPos = findS1000DEntryPosition(context, hit.entry);
+    if (typeof anchorEntryPos !== 'number') {
+      return;
+    }
+
+    this.pendingCellDrag = {
+      tablePos: context.tablePos,
+      anchorEntryPos,
+      startX: event.clientX,
+      startY: event.clientY,
+    };
+    this.startCellDragListeners();
+  }
+
+  private handleDocumentMouseMove(event: MouseEvent): void {
+    const pendingCellDrag = this.pendingCellDrag;
+    if (pendingCellDrag && !this.activeCellDrag) {
+      const movedX = Math.abs(event.clientX - pendingCellDrag.startX);
+      const movedY = Math.abs(event.clientY - pendingCellDrag.startY);
+      if (Math.max(movedX, movedY) < DRAG_SELECTION_THRESHOLD) {
+        return;
+      }
+
+      this.activeCellDrag = {
+        tablePos: pendingCellDrag.tablePos,
+        anchorEntryPos: pendingCellDrag.anchorEntryPos,
+        headEntryPos: pendingCellDrag.anchorEntryPos,
+      };
+      this.view.dispatch(
+        this.view.state.tr.setSelection(
+          S1000DCellSelection.create(this.view.state.doc, pendingCellDrag.anchorEntryPos, pendingCellDrag.anchorEntryPos),
+        ),
+      );
+    }
+
+    if (!this.activeCellDrag) {
+      return;
+    }
+
+    const context = getRenderedS1000DTableContext(this.view, this.activeCellDrag.tablePos);
+    if (!context?.activeTgroup) {
+      this.finishCellDrag();
+      return;
+    }
+
+    const hit = getGridHitAtPoint(context, event.clientX, event.clientY, true);
+    if (!hit) {
+      return;
+    }
+
+    const headEntryPos = findS1000DEntryPosition(context, hit.entry);
+    if (typeof headEntryPos !== 'number') {
+      return;
+    }
+
+    this.hoveredTablePos = context.tablePos;
+    this.hoveredRowIndex = hit.rowIndex;
+    this.hoveredColumnIndex = hit.columnIndex;
+    this.hoverMode = 'cell';
+
+    if (this.activeCellDrag.headEntryPos === headEntryPos) {
+      return;
+    }
+
+    this.activeCellDrag.headEntryPos = headEntryPos;
+    event.preventDefault();
+    this.view.dispatch(
+      this.view.state.tr.setSelection(
+        S1000DCellSelection.create(this.view.state.doc, this.activeCellDrag.anchorEntryPos, headEntryPos),
+      ),
+    );
+    this.render();
+  }
+
+  private finishCellDrag(event?: MouseEvent): void {
+    if (this.activeCellDrag) {
+      this.view.dispatch(
+        this.view.state.tr.setSelection(
+          S1000DCellSelection.create(
+            this.view.state.doc,
+            this.activeCellDrag.anchorEntryPos,
+            this.activeCellDrag.headEntryPos,
+          ),
+        ).scrollIntoView(),
+      );
+      this.view.focus();
+      event?.preventDefault();
+    }
+
+    this.pendingCellDrag = null;
+    this.activeCellDrag = null;
+    this.stopCellDragListeners();
+  }
+
+  private startCellDragListeners(): void {
+    const ownerDocument = this.root.ownerDocument;
+    ownerDocument.addEventListener('mousemove', this.onDocumentMouseMove);
+    ownerDocument.addEventListener('mouseup', this.onDocumentMouseUp);
+  }
+
+  private stopCellDragListeners(): void {
+    const ownerDocument = this.root.ownerDocument;
+    ownerDocument.removeEventListener('mousemove', this.onDocumentMouseMove);
+    ownerDocument.removeEventListener('mouseup', this.onDocumentMouseUp);
+  }
+
+  private clearHoverState(): void {
+    if (
+      this.hoveredTablePos === null
+      && this.hoveredRowIndex === null
+      && this.hoveredColumnIndex === null
+      && this.hoverMode === null
+    ) {
+      return;
+    }
+
     this.hoveredTablePos = null;
     this.hoveredRowIndex = null;
     this.hoveredColumnIndex = null;
+    this.hoverMode = null;
     this.render();
   }
 
@@ -600,6 +935,10 @@ class S1000DTableOverlayView {
     this.columnBand.hidden = true;
     this.cellFill.hidden = true;
     this.cellOutline.hidden = true;
+    this.hoverRowBand.hidden = true;
+    this.hoverColumnBand.hidden = true;
+    this.hoverCellFill.hidden = true;
+    this.hoverCellOutline.hidden = true;
     this.overlayHost.detach();
   }
 }
@@ -615,7 +954,10 @@ function createLayer(ownerDocument: Document, className: string): HTMLDivElement
   return element;
 }
 
-function createBand(ownerDocument: Document): HTMLDivElement {
+function createBand(
+  ownerDocument: Document,
+  style: Partial<CSSStyleDeclaration> = {},
+): HTMLDivElement {
   return createBox(ownerDocument, {
     position: 'absolute',
     zIndex: '1',
@@ -623,6 +965,7 @@ function createBand(ownerDocument: Document): HTMLDivElement {
     borderRadius: '2px',
     boxShadow: 'inset 0 0 0 1px rgba(37, 99, 235, 0.18)',
     pointerEvents: 'none',
+    ...style,
   });
 }
 
@@ -712,6 +1055,88 @@ function getVisibleColumnRect(
   };
 }
 
+function getVisibleContentRowRect(
+  geometry: TableGeometry,
+  positionState: TableOverlayPositionState,
+  rowIndex: number,
+): TableRect | null {
+  const row = geometry.rows[rowIndex];
+  if (!row) {
+    return null;
+  }
+
+  const top = positionState.tableTop + row.top;
+  const bottom = top + row.height;
+  const visibleTop = positionState.visibleTableTop;
+  const visibleBottom = visibleTop + positionState.visibleTableHeight;
+  const clampedTop = Math.max(top, visibleTop);
+  const clampedBottom = Math.min(bottom, visibleBottom);
+  if (clampedBottom <= clampedTop) {
+    return null;
+  }
+
+  return {
+    left: positionState.visibleTableLeft,
+    top: clampedTop,
+    right: positionState.visibleTableLeft + positionState.visibleTableWidth,
+    bottom: clampedBottom,
+    width: positionState.visibleTableWidth,
+    height: clampedBottom - clampedTop,
+  };
+}
+
+function getVisibleContentColumnRect(
+  geometry: TableGeometry,
+  positionState: TableOverlayPositionState,
+  columnIndex: number,
+): TableRect | null {
+  const column = geometry.columns[columnIndex];
+  if (!column) {
+    return null;
+  }
+
+  const left = positionState.tableLeft + column.left;
+  const right = left + column.width;
+  const visibleLeft = positionState.visibleTableLeft;
+  const visibleRight = visibleLeft + positionState.visibleTableWidth;
+  const clampedLeft = Math.max(left, visibleLeft);
+  const clampedRight = Math.min(right, visibleRight);
+  if (clampedRight <= clampedLeft) {
+    return null;
+  }
+
+  return {
+    left: clampedLeft,
+    top: positionState.visibleTableTop,
+    right: clampedRight,
+    bottom: positionState.visibleTableTop + positionState.visibleTableHeight,
+    width: clampedRight - clampedLeft,
+    height: positionState.visibleTableHeight,
+  };
+}
+
+function getVisibleCellRect(
+  geometry: TableGeometry,
+  positionState: TableOverlayPositionState,
+  rowIndex: number,
+  columnIndex: number,
+): TableRect | null {
+  const rowRect = getVisibleContentRowRect(geometry, positionState, rowIndex);
+  const columnRect = getVisibleContentColumnRect(geometry, positionState, columnIndex);
+  if (!rowRect || !columnRect) {
+    return null;
+  }
+
+  return {
+    left: columnRect.left,
+    top: rowRect.top,
+    right: columnRect.right,
+    bottom: rowRect.bottom,
+    width: columnRect.width,
+    height: rowRect.height,
+  };
+}
+
 function findAxisAnchorEntry(
   grid: S1000DTgroupGrid,
   axis: 'row' | 'column',
@@ -756,12 +1181,84 @@ function getHoveredColumnIndex(geometry: TableGeometry, clientX: number): number
   return column?.index ?? null;
 }
 
+function getGridHitAtPoint(
+  context: S1000DTableDOMContext,
+  clientX: number,
+  clientY: number,
+  clampToTable: boolean,
+): { entry: S1000DEntryRef; rowIndex: number; columnIndex: number } | undefined {
+  if (!context.activeTgroup) {
+    return undefined;
+  }
+
+  const geometry = measureS1000DRenderedTableGeometry(context.dom, context.wrapper);
+  const localX = clampToTable
+    ? clamp(clientX - geometry.tableRect.left, 0, Math.max(0, geometry.tableRect.width - 1))
+    : clientX - geometry.tableRect.left;
+  const localY = clampToTable
+    ? clamp(clientY - geometry.tableRect.top, 0, Math.max(0, geometry.tableRect.height - 1))
+    : clientY - geometry.tableRect.top;
+  const rowIndex = findIndexByOffset(geometry.rows.map((row) => ({ start: row.top, size: row.height })), localY);
+  const columnIndex = findIndexByOffset(geometry.columns.map((column) => ({ start: column.left, size: column.width })), localX);
+  if (rowIndex === null || columnIndex === null) {
+    return undefined;
+  }
+
+  const grid = createS1000DTableAdapter().createGrid(context.activeTgroup, context.activeTgroupIndex);
+  const entry = grid.slots[rowIndex]?.[columnIndex]?.entry;
+  return entry ? { entry, rowIndex, columnIndex } : undefined;
+}
+
+function findIndexByOffset(
+  items: ReadonlyArray<{ start: number; size: number }>,
+  offset: number,
+): number | null {
+  const match = items.findIndex((item) => offset >= item.start && offset <= item.start + item.size);
+  return match >= 0 ? match : null;
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
+}
+
+function getPointerElement(ownerDocument: Document, event: MouseEvent): Element | null {
+  const pointTarget = ownerDocument.elementFromPoint(event.clientX, event.clientY);
+  if (pointTarget instanceof Element) {
+    return pointTarget;
+  }
+
+  if (event.target instanceof Element) {
+    return event.target;
+  }
+
+  return event.target instanceof Node ? event.target.parentElement : null;
+}
+
+function hitTestRenderedTablePoint(
+  context: S1000DTableDOMContext,
+  clientX: number,
+  clientY: number,
+): boolean {
+  const geometry = measureS1000DRenderedTableGeometry(context.dom, context.wrapper);
+  return clientX >= geometry.tableRect.left
+    && clientX <= geometry.tableRect.right
+    && clientY >= geometry.tableRect.top
+    && clientY <= geometry.tableRect.bottom;
+}
+
 function measureS1000DRenderedTableGeometry(table: HTMLTableElement, wrapper?: HTMLElement): TableGeometry {
   const tableRect = measureS1000DTableRect(table);
   const wrapperRect = wrapper ? toTableRect(wrapper.getBoundingClientRect()) : tableRect;
   const visibleTableRect = getVisibleTableRect(tableRect, wrapperRect);
   const columnBoundaries = measureS1000DColumnBoundaries(table, tableRect);
-  const rowBoundaries = measureS1000DRowBoundaries(table, tableRect);
+  const rows = Array.from(table.querySelectorAll('tr')).map((row, index) => {
+    const rect = row.getBoundingClientRect();
+    return {
+      index,
+      top: rect.top - tableRect.top,
+      height: rect.height,
+    };
+  });
 
   return {
     tableRect,
@@ -774,11 +1271,7 @@ function measureS1000DRenderedTableGeometry(table: HTMLTableElement, wrapper?: H
       left: columnBoundaries[index] ?? 0,
       width: Math.max(0, (columnBoundaries[index + 1] ?? 0) - (columnBoundaries[index] ?? 0)),
     })),
-    rows: Array.from({ length: Math.max(0, rowBoundaries.length - 1) }, (_value, index) => ({
-      index,
-      top: rowBoundaries[index] ?? 0,
-      height: Math.max(0, (rowBoundaries[index + 1] ?? 0) - (rowBoundaries[index] ?? 0)),
-    })),
+    rows,
   };
 }
 
@@ -806,37 +1299,88 @@ function measureS1000DTableRect(table: HTMLTableElement): TableRect {
 }
 
 function measureS1000DColumnBoundaries(table: HTMLTableElement, tableRect: TableRect): number[] {
-  const cols = Array.from(table.querySelectorAll('col'));
-  if (cols.length > 0) {
-    const boundaries: number[] = [0];
-    for (const col of cols) {
-      const width = col.getBoundingClientRect().width;
-      boundaries.push((boundaries[boundaries.length - 1] ?? 0) + width);
-    }
-    return boundaries;
-  }
-
-  const firstRow = table.querySelector('tr');
-  const cells = firstRow ? Array.from(firstRow.querySelectorAll(':scope > td, :scope > th')) : [];
-  if (cells.length === 0) {
-    return [0, tableRect.width];
-  }
-
-  const boundaries = [0];
-  let cursor = 0;
-  for (const cell of cells) {
-    cursor += cell.getBoundingClientRect().width;
-    boundaries.push(cursor);
-  }
-  return boundaries;
-}
-
-function measureS1000DRowBoundaries(table: HTMLTableElement, tableRect: TableRect): number[] {
   const rows = Array.from(table.querySelectorAll('tr'));
-  const boundaries: number[] = [0];
+  const activeRowSpans: number[] = [];
+  const boundaries: Array<number | undefined> = [0];
+  const spanningCells: Array<{ start: number; span: number; left: number; right: number }> = [];
+  let width = 0;
+
   for (const row of rows) {
-    const rect = row.getBoundingClientRect();
-    boundaries.push(rect.bottom - tableRect.top);
+    let columnIndex = 0;
+
+    for (const cell of Array.from(row.cells)) {
+      while ((activeRowSpans[columnIndex] ?? 0) > 0) {
+        columnIndex += 1;
+      }
+
+      const colSpan = Math.max(1, cell.colSpan || 1);
+      const rowSpan = Math.max(1, cell.rowSpan || 1);
+      const rect = cell.getBoundingClientRect();
+      const left = rect.left - tableRect.left;
+      const right = rect.right - tableRect.left;
+
+      boundaries[columnIndex] = left;
+      boundaries[columnIndex + colSpan] = right;
+      width = Math.max(width, columnIndex + colSpan);
+
+      if (colSpan > 1) {
+        spanningCells.push({
+          start: columnIndex,
+          span: colSpan,
+          left,
+          right,
+        });
+      }
+
+      for (let offset = 0; offset < colSpan; offset += 1) {
+        activeRowSpans[columnIndex + offset] = Math.max(activeRowSpans[columnIndex + offset] ?? 0, rowSpan);
+      }
+
+      columnIndex += colSpan;
+    }
+
+    for (let index = 0; index < activeRowSpans.length; index += 1) {
+      if ((activeRowSpans[index] ?? 0) > 0) {
+        activeRowSpans[index] = (activeRowSpans[index] ?? 0) - 1;
+      }
+    }
   }
-  return boundaries;
+
+  const resolvedBoundaries = boundaries.slice(0, width + 1);
+  resolvedBoundaries[0] ??= 0;
+  resolvedBoundaries[width] ??= tableRect.width;
+
+  for (const cell of spanningCells) {
+    const start = cell.start;
+    const end = cell.start + cell.span;
+
+    if (resolvedBoundaries[start] === undefined) {
+      resolvedBoundaries[start] = cell.left;
+    }
+
+    if (resolvedBoundaries[end] === undefined) {
+      resolvedBoundaries[end] = cell.right;
+    }
+
+    let hasGap = false;
+    for (let index = start + 1; index < end; index += 1) {
+      if (resolvedBoundaries[index] === undefined) {
+        hasGap = true;
+        break;
+      }
+    }
+
+    if (!hasGap) continue;
+
+    const segmentWidth = cell.right - cell.left;
+    for (let index = start + 1; index < end; index += 1) {
+      resolvedBoundaries[index] ??= cell.left + (segmentWidth * (index - start)) / cell.span;
+    }
+  }
+
+  for (let index = 1; index < resolvedBoundaries.length; index += 1) {
+    resolvedBoundaries[index] ??= resolvedBoundaries[index - 1] ?? 0;
+  }
+
+  return resolvedBoundaries.map((boundary) => boundary ?? 0);
 }
