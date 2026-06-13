@@ -12,6 +12,7 @@ This package focuses on the S1000D table subset used by `proced.xsd`, while also
 - `S1000DCellSelection` for logical table selections
 - Tiptap extensions via the `prosemirror-html-table-s1000d/tiptap` subpath
 - S1000D-specific clipboard helpers via the `prosemirror-html-table-s1000d/clipboard` subpath
+- HTML renderer MVP via the `prosemirror-html-table-s1000d/renderer` subpath
 
 ## Install
 
@@ -37,6 +38,10 @@ npm install @tiptap/core prosemirror-state prosemirror-view
 - Editing commands, clipboard helpers, and Tiptap integration currently support the default S1000D node names only.
 - The Tiptap DOM is an editor-internal structure and is not the same thing as a final HTML renderer for S1000D/CALS tables.
 - Browsers normalize nested table-section DOM. In current Tiptap output, section-bearing `tgroup` content such as `thead` and `tbody` can be hoisted out of the `tgroup` wrapper by the browser parser, so section-heavy editor DOM should be treated as experimental until the rendering model is redesigned.
+- XML export and HTML rendering are separate output paths.
+- Final HTML rendering should use `prosemirror-html-table-s1000d/renderer`, not Tiptap `renderHTML`.
+- The renderer does not depend on Tiptap and currently targets an HTML table MVP only.
+- `entryBlock` remains a lightweight content model, not the full S1000D content model.
 
 ## Schema
 
@@ -116,6 +121,24 @@ import {
 
 const plugin = createS1000DTableEditingPlugin(defaultS1000DTableTiptapOptions);
 ```
+
+## HTML Rendering
+
+Use the renderer subpath when you need final HTML output instead of editor DOM:
+
+```ts
+import { renderS1000DTableToHtml } from 'prosemirror-html-table-s1000d/renderer';
+
+const html = renderS1000DTableToHtml(tableNode);
+```
+
+Renderer notes:
+
+- editor DOM and final HTML are different outputs
+- the renderer does not reuse Tiptap `renderHTML`
+- the renderer currently focuses on HTML table MVP output
+- graphic-only tables are not yet supported by the renderer
+- the renderer is not used for XML round-trip
 
 ## Clipboard Behavior
 

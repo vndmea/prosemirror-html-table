@@ -70,11 +70,13 @@ export function getKnownColspecAttrs(profile: S1000DTableProfile | undefined): r
   return normalizeS1000DTableProfile(profile) === 'extended' ? colspecAttrs : procedColspecAttrs;
 }
 
-export function getKnownSpanspecAttrs(): readonly string[] {
+export function getKnownSpanspecAttrs(_profile?: S1000DTableProfile | undefined): readonly string[] {
+  void _profile;
   return spanspecAttrs;
 }
 
-export function getKnownSectionAttrs(): readonly string[] {
+export function getKnownSectionAttrs(_profile?: S1000DTableProfile | undefined): readonly string[] {
+  void _profile;
   return procedSectionAttrs;
 }
 
