@@ -7,6 +7,8 @@ import { type ResolvedSpanspec, resolveSpanspecs } from './cals/spanspec.js';
 import { type S1000DEntryRef, type S1000DRowRef, type S1000DTgroupGrid } from './grid.js';
 import { s1000dTableNodeNames } from './names.js';
 import { createEmptyS1000DEntry, normalizeS1000DTgroup } from './normalize.js';
+import { S1000DCellSelection, isS1000DCellSelection } from './selection.js';
+import { S1000DTableMap } from './table-map.js';
 
 export interface S1000DTableCommandOptions {
   tablePos?: number;
@@ -28,6 +30,18 @@ export interface S1000DRowContext extends S1000DTableContext {
 
 export interface S1000DEntryContext extends S1000DRowContext {
   entry: S1000DEntryRef;
+}
+
+interface S1000DCellSelectionInfo {
+  context: S1000DTableContext;
+  grid: S1000DTgroupGrid;
+  anchorEntry: S1000DEntryRef;
+  headEntry: S1000DEntryRef;
+  entries: S1000DEntryRef[];
+  top: number;
+  bottom: number;
+  left: number;
+  right: number;
 }
 
 export function findS1000DTableContext(
@@ -186,6 +200,133 @@ export function deleteS1000DRow(options: S1000DTableCommandOptions = {}): Comman
   };
 }
 
+export function mergeS1000DCells(options: S1000DTableCommandOptions = {}): Command {
+  return (state, dispatch) => {
+    const selectionInfo = getS1000DCellSelectionInfo(state, options);
+    if (!selectionInfo || selectionInfo.entries.length < 2) return false;
+    if (!isRectangularS1000DSelection(selectionInfo)) return false;
+
+    const width = selectionInfo.right - selectionInfo.left + 1;
+    const height = selectionInfo.bottom - selectionInfo.top + 1;
+    const ensureColspecs = width > 1;
+    const tgroup = ensureColspecs
+      ? ensureTgroupColspecs(selectionInfo.context.activeTgroup!, selectionInfo.grid.width)
+      : selectionInfo.context.activeTgroup!;
+    const support = analyzeColumnEditingSupport(
+      tgroup,
+      createS1000DTableAdapter().createGrid(tgroup, selectionInfo.context.activeTgroupIndex),
+    );
+    const nextRowsTgroup = mapTgroupRowsWithGrid(tgroup, selectionInfo.grid, (row, rowRef) => {
+      if (rowRef.section !== selectionInfo.anchorEntry.section) return row;
+      if (rowRef.rowIndex < selectionInfo.top || rowRef.rowIndex > selectionInfo.bottom) return row;
+
+      const rowChildren = getChildren(row);
+      const rowEntries = selectionInfo.entries
+        .filter((entry) => entry.rowIndex === rowRef.rowIndex)
+        .sort((left, right) => right.entryIndex - left.entryIndex);
+      if (rowEntries.length === 0) return row;
+
+      for (const entry of rowEntries) {
+        if (entry === selectionInfo.anchorEntry) {
+          rowChildren[entry.entryIndex] = createMergedS1000DEntry(
+            rowChildren[entry.entryIndex]!,
+            selectionInfo,
+            support,
+            selectionInfo.entries.map((item) => item.node),
+          );
+        } else {
+          rowChildren.splice(entry.entryIndex, 1);
+        }
+      }
+
+      return row.copy(Fragment.fromArray(rowChildren));
+    });
+    const normalizedTgroup = normalizeS1000DTgroup(nextRowsTgroup);
+    const nextTable = replaceActiveTgroup(
+      selectionInfo.context.table,
+      normalizedTgroup,
+      selectionInfo.context.activeTgroupIndex,
+    );
+
+    return replaceTableAndSelectEntry(
+      state,
+      dispatch,
+      selectionInfo.context,
+      nextTable,
+      selectionInfo.anchorEntry.section,
+      selectionInfo.anchorEntry.rowIndexInSection,
+      selectionInfo.anchorEntry.columnIndex,
+    );
+  };
+}
+
+export function splitS1000DCell(options: S1000DTableCommandOptions = {}): Command {
+  return (state, dispatch) => {
+    const context = findS1000DEntryContext(state, options);
+    if (!context?.activeTgroup) return false;
+    if (context.entry.colSpan === 1 && context.entry.rowSpan === 1) return false;
+
+    const ensureColspecs = context.entry.colSpan > 1;
+    const tgroup = ensureColspecs
+      ? ensureTgroupColspecs(context.activeTgroup, createS1000DTableAdapter().createGrid(context.activeTgroup, context.activeTgroupIndex).width)
+      : context.activeTgroup;
+    const grid = createS1000DTableAdapter().createGrid(context.activeTgroup, context.activeTgroupIndex);
+    const support = analyzeColumnEditingSupport(
+      tgroup,
+      createS1000DTableAdapter().createGrid(tgroup, context.activeTgroupIndex),
+    );
+    const nextRowsTgroup = mapTgroupRowsWithGrid(tgroup, grid, (row, rowRef) => {
+      if (rowRef.section !== context.entry.section) return row;
+      if (rowRef.rowIndex < context.entry.rowIndex || rowRef.rowIndex >= context.entry.rowIndex + context.entry.rowSpan) {
+        return row;
+      }
+
+      const rowChildren = getChildren(row);
+      const insertIndex = countAnchoredEntriesBeforeColumn(grid, rowRef.rowIndex, context.entry.columnIndex);
+      const newEntries = Array.from({ length: context.entry.colSpan }, (_value, columnOffset) => {
+        const columnIndex = context.entry.columnIndex + columnOffset;
+        if (rowRef.rowIndex === context.entry.rowIndex && columnOffset === 0) {
+          return clearEntrySpanAttrs(
+            rowChildren[context.entry.entryIndex]!,
+            columnIndex,
+            support,
+          );
+        }
+
+        return createEmptyS1000DEntry(row.type.schema, createSingleColumnAttrs(columnIndex, support));
+      });
+
+      if (rowRef.rowIndex === context.entry.rowIndex) {
+        rowChildren.splice(context.entry.entryIndex, 1, ...newEntries);
+      } else {
+        rowChildren.splice(insertIndex, 0, ...newEntries);
+      }
+
+      return row.copy(Fragment.fromArray(rowChildren));
+    });
+    const normalizedTgroup = normalizeS1000DTgroup(nextRowsTgroup);
+    const nextTable = replaceActiveTgroup(context.table, normalizedTgroup, context.activeTgroupIndex);
+
+    return replaceTableAndSelectEntry(
+      state,
+      dispatch,
+      context,
+      nextTable,
+      context.entry.section,
+      context.entry.rowIndexInSection,
+      context.entry.columnIndex,
+    );
+  };
+}
+
+export function mergeOrSplitS1000DCell(options: S1000DTableCommandOptions = {}): Command {
+  return (state, dispatch) => {
+    const merged = mergeS1000DCells(options)(state, dispatch);
+    if (merged) return true;
+    return splitS1000DCell(options)(state, dispatch);
+  };
+}
+
 export function moveS1000DRowUp(options: S1000DTableCommandOptions = {}): Command {
   return moveS1000DRow('up', options);
 }
@@ -202,18 +343,15 @@ function moveS1000DRow(
     const context = findS1000DRowContext(state, options);
     if (!context?.activeTgroup) return false;
 
-    const sectionChildren = getChildren(context.section);
-    const targetRowIndexInSection = direction === 'up'
-      ? context.rowRef.rowIndexInSection - 1
-      : context.rowRef.rowIndexInSection + 1;
-    if (targetRowIndexInSection < 0 || targetRowIndexInSection >= sectionChildren.length) {
+    const grid = createS1000DTableAdapter().createGrid(context.activeTgroup, context.activeTgroupIndex);
+    const targetRowIndex = direction === 'up'
+      ? context.rowRef.rowIndex - 1
+      : context.rowRef.rowIndex + 1;
+    if (targetRowIndex < 0 || targetRowIndex >= grid.rows.length) {
       return false;
     }
 
-    const grid = createS1000DTableAdapter().createGrid(context.activeTgroup, context.activeTgroupIndex);
-    const targetRowRef = grid.rows.find(
-      (row) => row.section === context.rowRef.section && row.rowIndexInSection === targetRowIndexInSection,
-    );
+    const targetRowRef = grid.rows[targetRowIndex];
     if (!targetRowRef) {
       return false;
     }
@@ -221,13 +359,45 @@ function moveS1000DRow(
       return false;
     }
 
-    const nextRows = sectionChildren.slice();
-    const movedRow = nextRows[context.rowRef.rowIndexInSection]!;
-    nextRows.splice(context.rowRef.rowIndexInSection, 1);
-    nextRows.splice(targetRowIndexInSection, 0, movedRow);
+    let nextTgroup: ProseMirrorNode;
+    if (targetRowRef.section === context.rowRef.section) {
+      const sectionChildren = getChildren(context.section);
+      const nextRows = sectionChildren.slice();
+      const movedRow = nextRows[context.rowRef.rowIndexInSection]!;
+      nextRows.splice(context.rowRef.rowIndexInSection, 1);
+      nextRows.splice(targetRowRef.rowIndexInSection, 0, movedRow);
 
-    const nextSection = context.section.copy(Fragment.fromArray(nextRows));
-    const nextTgroup = replaceChildAt(context.activeTgroup, context.sectionChildIndex, nextSection);
+      const nextSection = context.section.copy(Fragment.fromArray(nextRows));
+      nextTgroup = replaceChildAt(context.activeTgroup, context.sectionChildIndex, nextSection);
+    } else {
+      const targetSectionChildIndex = findSectionChildIndex(context.activeTgroup, targetRowRef.section);
+      const targetSection = targetSectionChildIndex >= 0 ? context.activeTgroup.child(targetSectionChildIndex) : null;
+      if (!targetSection) {
+        return false;
+      }
+
+      const sourceRows = getChildren(context.section);
+      const targetRows = getChildren(targetSection);
+      const sourceRow = sourceRows[context.rowRef.rowIndexInSection];
+      const targetRow = targetRows[targetRowRef.rowIndexInSection];
+      if (!sourceRow || !targetRow) {
+        return false;
+      }
+
+      sourceRows[context.rowRef.rowIndexInSection] = targetRow;
+      targetRows[targetRowRef.rowIndexInSection] = sourceRow;
+
+      nextTgroup = replaceChildAt(
+        context.activeTgroup,
+        context.sectionChildIndex,
+        context.section.copy(Fragment.fromArray(sourceRows)),
+      );
+      nextTgroup = replaceChildAt(
+        nextTgroup,
+        targetSectionChildIndex,
+        targetSection.copy(Fragment.fromArray(targetRows)),
+      );
+    }
     const normalizedTgroup = normalizeS1000DTgroup(nextTgroup);
     const nextTable = replaceActiveTgroup(context.table, normalizedTgroup, context.activeTgroupIndex);
 
@@ -236,8 +406,8 @@ function moveS1000DRow(
       dispatch,
       context,
       nextTable,
-      context.rowRef.section,
-      targetRowIndexInSection,
+      targetRowRef.section,
+      targetRowRef.rowIndexInSection,
     );
   };
 }
@@ -374,17 +544,37 @@ function moveS1000DColumn(
       return false;
     }
 
-    const nextRowsTgroup = mapTgroupRowsWithGrid(context.activeTgroup, grid, (row, rowRef) => {
+    const nextColspecTgroup = columnEditing.colspecs.length > 0
+      ? swapTgroupColspecs(context.activeTgroup, sourceColumn, targetColumn, columnEditing.colspecs)
+      : context.activeTgroup;
+    const nextSpanspecTgroup = columnEditing.spanspecs.length > 0
+      ? realignTgroupSpanspecsToCurrentColumns(nextColspecTgroup, columnEditing)
+      : nextColspecTgroup;
+    const nextSupport = analyzeColumnEditingSupport(
+      nextSpanspecTgroup,
+      createS1000DTableAdapter().createGrid(nextSpanspecTgroup, context.activeTgroupIndex),
+    );
+    if (!nextSupport.supported) {
+      return false;
+    }
+
+    const nextRowsTgroup = mapTgroupRowsWithGrid(nextSpanspecTgroup, grid, (row, rowRef) => {
       const rowEntries = grid.entries
         .filter((entry) => entry.rowIndex === rowRef.rowIndex)
         .map((entry) => ({
           entry,
-          node: row.child(entry.entryIndex),
-          nextColumnIndex: swapColumnIndex(entry.columnIndex, sourceColumn, targetColumn),
+          nextRange: resolveMovedColumnRange(entry, sourceColumn, targetColumn),
+          node: rewriteEntryForMovedColumn(
+            row.child(entry.entryIndex),
+            entry,
+            sourceColumn,
+            targetColumn,
+            nextSupport,
+          ),
         }))
         .sort((left, right) => {
-          if (left.nextColumnIndex !== right.nextColumnIndex) {
-            return left.nextColumnIndex - right.nextColumnIndex;
+          if (left.nextRange.startColumn !== right.nextRange.startColumn) {
+            return left.nextRange.startColumn - right.nextRange.startColumn;
           }
           return left.entry.entryIndex - right.entry.entryIndex;
         })
@@ -392,10 +582,7 @@ function moveS1000DColumn(
 
       return row.copy(Fragment.fromArray(rowEntries));
     });
-    const nextTgroup = columnEditing.colspecs.length > 0
-      ? swapTgroupColspecs(nextRowsTgroup, sourceColumn, targetColumn, columnEditing.colspecs)
-      : nextRowsTgroup;
-    const normalizedTgroup = normalizeS1000DTgroup(nextTgroup);
+    const normalizedTgroup = normalizeS1000DTgroup(nextRowsTgroup);
     const nextTable = replaceActiveTgroup(context.table, normalizedTgroup, context.activeTgroupIndex);
 
     return replaceTableAndSelectEntry(
@@ -595,10 +782,13 @@ function replaceTable(
 ): boolean {
   if (dispatch) {
     const transaction = state.tr.replaceWith(context.tablePos, context.tablePos + context.table.nodeSize, table);
-    const preferredEntryPos = findFirstEntryPosition(transaction.doc);
-    const nextSelection = preferredEntryPos !== undefined
-      ? createSelectionAtEntry(transaction.doc, preferredEntryPos)
-      : TextSelection.near(transaction.doc.resolve(Math.min(Math.max(1, context.tablePos + 1), transaction.doc.content.size)));
+    const nextSelection = preserveS1000DCellSelectionOnTableReplace(state.selection, transaction.doc, context, table)
+      ?? (() => {
+        const preferredEntryPos = findFirstEntryPosition(transaction.doc);
+        return preferredEntryPos !== undefined
+          ? createSelectionAtEntry(transaction.doc, preferredEntryPos)
+          : TextSelection.near(transaction.doc.resolve(Math.min(Math.max(1, context.tablePos + 1), transaction.doc.content.size)));
+      })();
     dispatch(transaction.setSelection(nextSelection).scrollIntoView());
   }
 
@@ -777,10 +967,76 @@ function createFallbackSelection(doc: ProseMirrorNode, tablePos: number): Select
   return TextSelection.near(doc.resolve(nextSelectionPos));
 }
 
+function getS1000DCellSelectionInfo(
+  state: EditorState,
+  options: S1000DTableCommandOptions,
+): S1000DCellSelectionInfo | undefined {
+  const context = findS1000DTableContext(state, options);
+  if (!context?.activeTgroup || context.activeTgroupIndex < 0) return undefined;
+
+  const grid = createS1000DTableAdapter().createGrid(context.activeTgroup, context.activeTgroupIndex);
+  if (grid.entries.length === 0) return undefined;
+
+  let anchorEntry = findS1000DEntryContext(state, options)?.entry;
+  let headEntry = anchorEntry;
+
+  if (isS1000DCellSelection(state.selection)) {
+    anchorEntry = findEntryByPosition(context, grid, state.selection.anchorEntryPos) ?? anchorEntry;
+    headEntry = findEntryByPosition(context, grid, state.selection.headEntryPos) ?? anchorEntry;
+  }
+
+  if (!anchorEntry || !headEntry) return undefined;
+
+  const top = Math.min(anchorEntry.rowIndex, headEntry.rowIndex);
+  const bottom = Math.max(anchorEntry.rowIndex + anchorEntry.rowSpan - 1, headEntry.rowIndex + headEntry.rowSpan - 1);
+  const left = Math.min(anchorEntry.columnIndex, headEntry.columnIndex);
+  const right = Math.max(anchorEntry.columnIndex + anchorEntry.colSpan - 1, headEntry.columnIndex + headEntry.colSpan - 1);
+  const entries = uniqueEntriesInRect(grid, top, bottom, left, right);
+
+  return {
+    context,
+    grid,
+    anchorEntry,
+    headEntry,
+    entries,
+    top,
+    bottom,
+    left,
+    right,
+  };
+}
+
 interface ColumnEditingSupport {
   supported: boolean;
   colspecs: ResolvedColspec[];
   spanspecs: ResolvedSpanspec[];
+}
+
+function isRectangularS1000DSelection(selectionInfo: S1000DCellSelectionInfo): boolean {
+  const selectedEntries = new Set(selectionInfo.entries);
+
+  for (const entry of selectionInfo.entries) {
+    if (entry.section !== selectionInfo.anchorEntry.section) {
+      return false;
+    }
+    if (
+      entry.rowIndex < selectionInfo.top
+      || entry.rowIndex + entry.rowSpan - 1 > selectionInfo.bottom
+      || entry.columnIndex < selectionInfo.left
+      || entry.columnIndex + entry.colSpan - 1 > selectionInfo.right
+    ) {
+      return false;
+    }
+  }
+
+  for (let rowIndex = selectionInfo.top; rowIndex <= selectionInfo.bottom; rowIndex += 1) {
+    for (let columnIndex = selectionInfo.left; columnIndex <= selectionInfo.right; columnIndex += 1) {
+      const entry = selectionInfo.grid.slots[rowIndex]?.[columnIndex]?.entry;
+      if (!entry || !selectedEntries.has(entry)) return false;
+    }
+  }
+
+  return true;
 }
 
 function analyzeColumnEditingSupport(
@@ -818,6 +1074,31 @@ function countAnchoredEntriesBeforeColumn(
   return grid.entries.filter((entry) => entry.rowIndex === rowIndex && entry.columnIndex < targetColumn).length;
 }
 
+function uniqueEntriesInRect(
+  grid: S1000DTgroupGrid,
+  top: number,
+  bottom: number,
+  left: number,
+  right: number,
+): S1000DEntryRef[] {
+  const entries: S1000DEntryRef[] = [];
+  const seen = new Set<S1000DEntryRef>();
+
+  for (let rowIndex = top; rowIndex <= bottom; rowIndex += 1) {
+    for (let columnIndex = left; columnIndex <= right; columnIndex += 1) {
+      const entry = grid.slots[rowIndex]?.[columnIndex]?.entry;
+      if (entry && !seen.has(entry)) {
+        seen.add(entry);
+        entries.push(entry);
+      }
+    }
+  }
+
+  return entries.sort((leftEntry, rightEntry) => (
+    (leftEntry.rowIndex - rightEntry.rowIndex) || (leftEntry.columnIndex - rightEntry.columnIndex)
+  ));
+}
+
 function canOperateOnStandaloneS1000DRow(grid: S1000DTgroupGrid, rowIndex: number): boolean {
   const rowSlots = grid.slots[rowIndex];
   if (!rowSlots || rowSlots.length === 0) return false;
@@ -849,10 +1130,7 @@ function canReorderS1000DColumnPair(
   targetColumn: number,
   support: ColumnEditingSupport,
 ): boolean {
-  if (support.spanspecs.length > 0) {
-    return false;
-  }
-  if (grid.entries.some((entry) => entry.colSpan !== 1)) {
+  if (grid.entries.some((entry) => entry.colSpan > 1) && support.colspecs.length !== grid.width) {
     return false;
   }
   if (support.colspecs.length > 0 && support.colspecs.length !== grid.width) {
@@ -860,16 +1138,27 @@ function canReorderS1000DColumnPair(
   }
 
   for (let rowIndex = 0; rowIndex < grid.height; rowIndex += 1) {
-    const sourceSlot = grid.slots[rowIndex]?.[sourceColumn];
-    const targetSlot = grid.slots[rowIndex]?.[targetColumn];
-    const sourceEntry = sourceSlot?.entry;
-    const targetEntry = targetSlot?.entry;
-    if (!sourceSlot || !targetSlot || !sourceEntry || !targetEntry) {
-      return false;
+    const rowEntries = grid.entries.filter((entry) => (
+      entry.rowIndex <= rowIndex
+        && rowIndex < entry.rowIndex + entry.rowSpan
+    ));
+    const coverage = Array.from({ length: grid.width }, () => false);
+
+    for (const entry of rowEntries) {
+      const { startColumn, endColumn } = resolveMovedColumnRange(entry, sourceColumn, targetColumn);
+      if (startColumn < 0 || endColumn >= grid.width) {
+        return false;
+      }
+
+      for (let columnIndex = startColumn; columnIndex <= endColumn; columnIndex += 1) {
+        if (coverage[columnIndex]) {
+          return false;
+        }
+        coverage[columnIndex] = true;
+      }
     }
-    if (sourceEntry.rowSpan < 1 || targetEntry.rowSpan < 1) {
-      return false;
-    }
+
+    if (coverage.some((filled) => !filled)) return false;
   }
 
   return true;
@@ -883,6 +1172,70 @@ function swapColumnIndex(columnIndex: number, sourceColumn: number, targetColumn
     return sourceColumn;
   }
   return columnIndex;
+}
+
+function resolveMovedColumnRange(
+  entry: S1000DEntryRef,
+  sourceColumn: number,
+  targetColumn: number,
+): { startColumn: number; endColumn: number } {
+  if (entry.colSpan <= 1) {
+    const nextColumn = swapColumnIndex(entry.columnIndex, sourceColumn, targetColumn);
+    return {
+      startColumn: nextColumn,
+      endColumn: nextColumn,
+    };
+  }
+
+  return {
+    startColumn: entry.columnIndex,
+    endColumn: entry.columnIndex + entry.colSpan - 1,
+  };
+}
+
+function rewriteEntryForMovedColumn(
+  entryNode: ProseMirrorNode,
+  entry: S1000DEntryRef,
+  sourceColumn: number,
+  targetColumn: number,
+  support: ColumnEditingSupport,
+): ProseMirrorNode {
+  const { startColumn, endColumn } = resolveMovedColumnRange(entry, sourceColumn, targetColumn);
+  if (startColumn === endColumn) {
+    return entryNode.type.create(
+      {
+        ...entryNode.attrs,
+        ...createSingleColumnAttrs(startColumn, support),
+      },
+      entryNode.content,
+      entryNode.marks,
+    );
+  }
+
+  if (entryNode.attrs.spanname) {
+    return entryNode.type.create(
+      {
+        ...entryNode.attrs,
+        colname: null,
+        namest: null,
+        nameend: null,
+      },
+      entryNode.content,
+      entryNode.marks,
+    );
+  }
+
+  return entryNode.type.create(
+    {
+      ...entryNode.attrs,
+      colname: null,
+      namest: resolveColnameByIndex(support.colspecs, startColumn),
+      nameend: resolveColnameByIndex(support.colspecs, endColumn),
+      spanname: null,
+    },
+    entryNode.content,
+    entryNode.marks,
+  );
 }
 
 function findBestEntryForSelection(
@@ -909,6 +1262,44 @@ function findBestEntryForSelection(
     ?? anchoredEntries[anchoredEntries.length - 1];
 }
 
+function preserveS1000DCellSelectionOnTableReplace(
+  selection: Selection,
+  doc: ProseMirrorNode,
+  context: S1000DTableContext,
+  nextTable: ProseMirrorNode,
+): Selection | undefined {
+  if (!isS1000DCellSelection(selection) || context.activeTgroupIndex < 0) {
+    return undefined;
+  }
+
+  const previousTgroup = context.activeTgroup;
+  const nextTgroup = createS1000DTableAdapter().getTgroups(nextTable)[context.activeTgroupIndex];
+  if (!previousTgroup || !nextTgroup) return undefined;
+
+  const previousGrid = createS1000DTableAdapter().createGrid(previousTgroup, context.activeTgroupIndex);
+  const nextGrid = createS1000DTableAdapter().createGrid(nextTgroup, context.activeTgroupIndex);
+  if (!hasEquivalentS1000DGridShape(previousGrid, nextGrid)) {
+    return undefined;
+  }
+
+  const anchorEntry = findEntryByPosition(context, previousGrid, selection.anchorEntryPos);
+  const headEntry = findEntryByPosition(context, previousGrid, selection.headEntryPos);
+  if (!anchorEntry || !headEntry) return undefined;
+
+  const nextAnchorEntry = nextGrid.slots[anchorEntry.rowIndex]?.[anchorEntry.columnIndex]?.entry;
+  const nextHeadEntry = nextGrid.slots[headEntry.rowIndex]?.[headEntry.columnIndex]?.entry;
+  if (!nextAnchorEntry || !nextHeadEntry) return undefined;
+
+  const nextContext: S1000DTableContext = { ...context, table: nextTable, activeTgroup: nextTgroup };
+  const nextAnchorEntryPos = findEntryPosition(nextContext, nextAnchorEntry);
+  const nextHeadEntryPos = findEntryPosition(nextContext, nextHeadEntry);
+  if (nextAnchorEntryPos === undefined || nextHeadEntryPos === undefined) {
+    return undefined;
+  }
+
+  return S1000DCellSelection.create(doc, nextAnchorEntryPos, nextHeadEntryPos);
+}
+
 function expandEntryForInsertedColumn(
   entry: ProseMirrorNode,
   insertColumn: number,
@@ -920,6 +1311,22 @@ function expandEntryForInsertedColumn(
     nameend: resolveColnameByIndex(colspecs, nextEndColumn),
     spanname: null,
   });
+}
+
+function clearEntrySpanAttrs(
+  entry: ProseMirrorNode,
+  columnIndex: number,
+  support: ColumnEditingSupport,
+): ProseMirrorNode {
+  return entry.type.create(
+    {
+      ...entry.attrs,
+      ...createSingleColumnAttrs(columnIndex, support),
+      morerows: null,
+    },
+    entry.content,
+    entry.marks,
+  );
 }
 
 function shrinkEntryForDeletedColumn(
@@ -1083,6 +1490,35 @@ function updateTgroupSpanspecsForDeletedColumn(
   return tgroup.copy(Fragment.fromArray(children));
 }
 
+function realignTgroupSpanspecsToCurrentColumns(
+  tgroup: ProseMirrorNode,
+  support: ColumnEditingSupport,
+): ProseMirrorNode {
+  const nextColspecs = resolveColspecs(tgroup);
+  const children = getChildren(tgroup).map((child) => {
+    if (child.type.name !== s1000dTableNodeNames.spanspec) {
+      return child;
+    }
+
+    const spanspec = support.spanspecs.find((item) => item.node === child);
+    if (!spanspec) {
+      return child;
+    }
+
+    return child.type.create(
+      {
+        ...child.attrs,
+        namest: resolveColnameByIndex(nextColspecs, spanspec.from),
+        nameend: resolveColnameByIndex(nextColspecs, spanspec.to),
+      },
+      child.content,
+      child.marks,
+    );
+  });
+
+  return tgroup.copy(Fragment.fromArray(children));
+}
+
 function resolveEntryColumnRange(
   entry: ProseMirrorNode,
   support: ColumnEditingSupport,
@@ -1142,6 +1578,174 @@ function collapseEntryToSingleColumn(
     entry.content,
     entry.marks,
   );
+}
+
+function createMergedS1000DEntry(
+  anchorEntry: ProseMirrorNode,
+  selectionInfo: S1000DCellSelectionInfo,
+  support: ColumnEditingSupport,
+  entryNodes: readonly ProseMirrorNode[],
+): ProseMirrorNode {
+  const width = selectionInfo.right - selectionInfo.left + 1;
+  const height = selectionInfo.bottom - selectionInfo.top + 1;
+
+  return anchorEntry.type.create(
+    {
+      ...anchorEntry.attrs,
+      ...(width > 1
+        ? {
+          colname: null,
+          namest: resolveColnameByIndex(support.colspecs, selectionInfo.left),
+          nameend: resolveColnameByIndex(support.colspecs, selectionInfo.right),
+          spanname: null,
+        }
+        : createSingleColumnAttrs(selectionInfo.left, support)),
+      morerows: height > 1 ? String(height - 1) : null,
+    },
+    mergeS1000DEntryContent(entryNodes),
+    anchorEntry.marks,
+  );
+}
+
+function createSingleColumnAttrs(
+  columnIndex: number,
+  support: ColumnEditingSupport,
+): Record<string, unknown> {
+  return {
+    colname: resolveColnameByIndex(support.colspecs, columnIndex),
+    namest: null,
+    nameend: null,
+    spanname: null,
+  };
+}
+
+function mergeS1000DEntryContent(entries: readonly ProseMirrorNode[]): Fragment {
+  const nodes: ProseMirrorNode[] = [];
+
+  for (const entry of entries) {
+    entry.forEach((child) => nodes.push(child));
+  }
+
+  return Fragment.fromArray(nodes);
+}
+
+function ensureTgroupColspecs(tgroup: ProseMirrorNode, width: number): ProseMirrorNode {
+  const existing = resolveColspecs(tgroup);
+  if (existing.length >= width) {
+    return tgroup;
+  }
+
+  const children = getChildren(tgroup);
+  const insertionPoint = children.findIndex((child) => !isColspecNode(child));
+  const nextChildren = children.slice();
+  const colspecType = tgroup.type.schema.nodes[s1000dTableNodeNames.colspec];
+  if (!colspecType) {
+    throw new Error(`Missing node type in schema: ${s1000dTableNodeNames.colspec}`);
+  }
+
+  const usedNames = new Set(existing.map((colspec) => colspec.colname));
+  for (let index = existing.length; index < width; index += 1) {
+    let colname = `c${index + 1}`;
+    let suffix = 1;
+    while (usedNames.has(colname)) {
+      colname = `c${index + 1}_${suffix}`;
+      suffix += 1;
+    }
+    usedNames.add(colname);
+    nextChildren.splice(
+      Math.max(0, insertionPoint < 0 ? nextChildren.length : insertionPoint + (index - existing.length)),
+      0,
+      colspecType.create({ colname, colnum: String(index + 1) }),
+    );
+  }
+
+  return tgroup.copy(Fragment.fromArray(resequenceColspecChildren(nextChildren)));
+}
+
+function hasEquivalentS1000DGridShape(
+  previousGrid: S1000DTgroupGrid,
+  nextGrid: S1000DTgroupGrid,
+): boolean {
+  if (
+    previousGrid.width !== nextGrid.width
+    || previousGrid.height !== nextGrid.height
+    || previousGrid.entries.length !== nextGrid.entries.length
+    || previousGrid.rows.length !== nextGrid.rows.length
+  ) {
+    return false;
+  }
+
+  return previousGrid.entries.every((entry, index) => {
+    const nextEntry = nextGrid.entries[index];
+    return Boolean(
+      nextEntry
+      && nextEntry.section === entry.section
+      && nextEntry.rowIndex === entry.rowIndex
+      && nextEntry.rowIndexInSection === entry.rowIndexInSection
+      && nextEntry.columnIndex === entry.columnIndex
+      && nextEntry.entryIndex === entry.entryIndex
+      && nextEntry.rowSpan === entry.rowSpan
+      && nextEntry.colSpan === entry.colSpan,
+    );
+  });
+}
+
+function findEntryByPosition(
+  context: S1000DTableContext,
+  grid: S1000DTgroupGrid,
+  entryPos: number,
+): S1000DEntryRef | undefined {
+  const tgroupPos = findTgroupPosition(context.table, context.tablePos, context.activeTgroupIndex);
+  if (tgroupPos === undefined) return undefined;
+
+  const tableMap = S1000DTableMap.get(context.table, context.activeTgroupIndex);
+  const relativePos = entryPos - tgroupPos;
+  const mapIndex = tableMap.map.findIndex((pos) => pos === relativePos);
+  if (mapIndex < 0 || tableMap.width < 1) {
+    return undefined;
+  }
+
+  const rowIndex = Math.floor(mapIndex / tableMap.width);
+  const columnIndex = mapIndex % tableMap.width;
+  return grid.slots[rowIndex]?.[columnIndex]?.entry;
+}
+
+function findEntryPosition(
+  context: S1000DTableContext,
+  entry: S1000DEntryRef,
+): number | undefined {
+  const tgroupPos = findTgroupPosition(context.table, context.tablePos, context.activeTgroupIndex);
+  if (tgroupPos === undefined) return undefined;
+
+  const tableMap = S1000DTableMap.get(context.table, context.activeTgroupIndex);
+  const mapEntry = tableMap.grid.entries.find((item) => (
+    item.section === entry.section
+      && item.rowIndex === entry.rowIndex
+      && item.rowIndexInSection === entry.rowIndexInSection
+      && item.columnIndex === entry.columnIndex
+      && item.entryIndex === entry.entryIndex
+  ));
+  const relativePos = mapEntry ? tableMap.entryPositions.get(mapEntry) : undefined;
+  return relativePos === undefined ? undefined : tgroupPos + relativePos;
+}
+
+function findTgroupPosition(
+  table: ProseMirrorNode,
+  tablePos: number,
+  tgroupIndex: number,
+): number | undefined {
+  let found: number | undefined;
+  let seenTgroupIndex = -1;
+
+  table.forEach((child, offset) => {
+    if (found !== undefined || child.type.name !== s1000dTableNodeNames.tgroup) return;
+    seenTgroupIndex += 1;
+    if (seenTgroupIndex === tgroupIndex) {
+      found = tablePos + 1 + offset;
+    }
+  });
+
+  return found;
 }
 
 function resolveSingleColumnFromRange(

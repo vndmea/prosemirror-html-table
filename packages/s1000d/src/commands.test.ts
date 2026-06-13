@@ -3,6 +3,7 @@ import { EditorState, NodeSelection, TextSelection } from 'prosemirror-state';
 import { describe, expect, it } from 'vitest';
 
 import {
+  S1000DCellSelection,
   S1000DTableMap,
   addS1000DColumnAfter,
   addS1000DColumnBefore,
@@ -18,6 +19,8 @@ import {
   findS1000DTableContext,
   getActiveS1000DTgroupGrid,
   getS1000DEntryAt,
+  mergeOrSplitS1000DCell,
+  mergeS1000DCells,
   moveS1000DColumnLeft,
   moveS1000DColumnRight,
   moveS1000DRowDown,
@@ -25,6 +28,7 @@ import {
   normalizeS1000DTgroup,
   parseS1000DTableXml,
   rejectGraphicOnlyS1000DTable,
+  splitS1000DCell,
 } from './index.js';
 import { createS1000DTableNodeSpecs } from './schema.js';
 import { extendedSchema, schema } from './tests/test-schema.js';
@@ -394,6 +398,196 @@ describe('S1000D table commands and adapters', () => {
     expect(moveS1000DColumnLeft()(state)).toBe(false);
   });
 
+  it('merges a rectangular S1000D cell selection', () => {
+    const table = parseS1000DTableXml(
+      '<table id="tab-1"><tgroup cols="2"><tbody><row id="row-1"><entry>A</entry><entry>B</entry></row><row id="row-2"><entry>C</entry><entry>D</entry></row></tbody></tgroup></table>',
+      extendedSchema,
+      { profile: 'extended' },
+    );
+    const doc = extendedSchema.nodes.doc!.create(null, [table]);
+    const entryPositions = findNodePositions(doc, 's1000dEntry');
+    const state = EditorState.create({
+      doc,
+      selection: S1000DCellSelection.create(doc, entryPositions[0]!, entryPositions[3]!),
+    });
+
+    let nextState = state;
+    const result = mergeS1000DCells()(state, (transaction) => {
+      nextState = nextState.apply(transaction);
+    });
+
+    expect(result).toBe(true);
+    const nextTable = findS1000DTableContext(nextState)?.table;
+    const nextEntry = getTgroupBody(nextTable?.child(0))?.child(0)?.child(0);
+    expect(nextEntry?.attrs.namest).toBe('c1');
+    expect(nextEntry?.attrs.nameend).toBe('c2');
+    expect(nextEntry?.attrs.morerows).toBe('1');
+    expect(nextEntry?.textContent).toBe('ABCD');
+    expect(findS1000DEntryContext(nextState)?.entry.columnIndex).toBe(0);
+  });
+
+  it('does not merge a selection across sections', () => {
+    const table = parseS1000DTableXml(
+      '<table id="tab-1"><tgroup cols="2"><thead><row id="head-row"><entry>H1</entry><entry>H2</entry></row></thead><tbody><row id="body-row"><entry>A1</entry><entry>A2</entry></row></tbody></tgroup></table>',
+      extendedSchema,
+      { profile: 'extended' },
+    );
+    const doc = extendedSchema.nodes.doc!.create(null, [table]);
+    const entryPositions = findNodePositions(doc, 's1000dEntry');
+    const state = EditorState.create({
+      doc,
+      selection: S1000DCellSelection.create(doc, entryPositions[0]!, entryPositions[3]!),
+    });
+
+    expect(mergeS1000DCells()(state)).toBe(false);
+  });
+
+  it('splits a merged S1000D cell back into a rectangular grid', () => {
+    const table = parseS1000DTableXml(
+      '<table id="tab-1"><tgroup cols="2"><colspec colname="c1" colnum="1"/><colspec colname="c2" colnum="2"/><tbody><row id="row-1"><entry namest="c1" nameend="c2" morerows="1">A</entry></row><row id="row-2"></row></tbody></tgroup></table>',
+      extendedSchema,
+      { profile: 'extended' },
+    );
+    const doc = extendedSchema.nodes.doc!.create(null, [table]);
+    const state = EditorState.create({
+      doc,
+      selection: TextSelection.create(doc, findTextPosition(doc, 'A')),
+    });
+
+    let nextState = state;
+    const result = splitS1000DCell()(state, (transaction) => {
+      nextState = nextState.apply(transaction);
+    });
+
+    expect(result).toBe(true);
+    const nextTable = findS1000DTableContext(nextState)?.table;
+    const nextTbody = nextTable?.child(0)?.child(2);
+    expect(nextTbody?.child(0)?.childCount).toBe(2);
+    expect(nextTbody?.child(1)?.childCount).toBe(2);
+    expect(nextTbody?.child(0)?.child(0)?.attrs.colname).toBe('c1');
+    expect(nextTbody?.child(0)?.child(0)?.attrs.namest).toBeNull();
+    expect(nextTbody?.child(0)?.child(0)?.attrs.morerows).toBeNull();
+    expect(findS1000DEntryContext(nextState)?.entry.columnIndex).toBe(0);
+    expect(findS1000DEntryContext(nextState)?.entry.node.textContent).toBe('A');
+  });
+
+  it('merges first and splits on repeated mergeOrSplit', () => {
+    const table = parseS1000DTableXml(
+      '<table id="tab-1"><tgroup cols="2"><tbody><row id="row-1"><entry>A</entry><entry>B</entry></row><row id="row-2"><entry>C</entry><entry>D</entry></row></tbody></tgroup></table>',
+      extendedSchema,
+      { profile: 'extended' },
+    );
+    const doc = extendedSchema.nodes.doc!.create(null, [table]);
+    const entryPositions = findNodePositions(doc, 's1000dEntry');
+    const selectedState = EditorState.create({
+      doc,
+      selection: S1000DCellSelection.create(doc, entryPositions[0]!, entryPositions[3]!),
+    });
+
+    let mergedState = selectedState;
+    const merged = mergeOrSplitS1000DCell()(selectedState, (transaction) => {
+      mergedState = mergedState.apply(transaction);
+    });
+    expect(merged).toBe(true);
+    expect(getTgroupBody(findS1000DTableContext(mergedState)?.table.child(0))?.child(0)?.child(0)?.attrs.nameend).toBe('c2');
+
+    let splitState = mergedState;
+    const split = mergeOrSplitS1000DCell()(mergedState, (transaction) => {
+      splitState = splitState.apply(transaction);
+    });
+    expect(split).toBe(true);
+    const splitBody = getTgroupBody(findS1000DTableContext(splitState)?.table.child(0));
+    expect(splitBody?.child(0)?.childCount).toBe(2);
+    expect(splitBody?.child(1)?.childCount).toBe(2);
+  });
+
+  it('moves columns across a direct namest/nameend span and keeps the span stable', () => {
+    const table = parseS1000DTableXml(
+      '<table id="tab-1"><tgroup cols="3"><colspec colname="c1" colnum="1"/><colspec colname="c2" colnum="2"/><colspec colname="c3" colnum="3"/><tbody><row id="row-1"><entry namest="c1" nameend="c2">A</entry><entry colname="c3">B</entry></row><row id="row-2"><entry colname="c1">C</entry><entry colname="c2">D</entry><entry colname="c3">E</entry></row></tbody></tgroup></table>',
+      extendedSchema,
+      { profile: 'extended' },
+    );
+    const doc = extendedSchema.nodes.doc!.create(null, [table]);
+    const state = EditorState.create({
+      doc,
+      selection: TextSelection.create(doc, findTextPosition(doc, 'C')),
+    });
+
+    let nextState = state;
+    const result = moveS1000DColumnRight()(state, (transaction) => {
+      nextState = nextState.apply(transaction);
+    });
+
+    expect(result).toBe(true);
+    const nextTable = findS1000DTableContext(nextState)?.table;
+    const nextTgroup = nextTable?.child(0);
+    const nextTbody = getTgroupBody(nextTgroup);
+    const firstEntry = nextTbody?.child(0)?.child(0);
+    expect(nextTbody?.child(0)?.textContent).toBe('AB');
+    expect(nextTbody?.child(1)?.textContent).toBe('DCE');
+    expect(firstEntry?.attrs.namest).toBe('c2');
+    expect(firstEntry?.attrs.nameend).toBe('c1');
+    expect(findS1000DEntryContext(nextState)?.entry.columnIndex).toBe(1);
+    expect(findS1000DEntryContext(nextState)?.entry.node.textContent).toBe('C');
+  });
+
+  it('moves columns across a spanspec-backed span and keeps the spanname binding', () => {
+    const table = parseS1000DTableXml(
+      '<table id="tab-1"><tgroup cols="3"><colspec colname="c1" colnum="1"/><colspec colname="c2" colnum="2"/><colspec colname="c3" colnum="3"/><spanspec spanname="wide" namest="c1" nameend="c2"/><tbody><row id="row-1"><entry spanname="wide">A</entry><entry colname="c3">B</entry></row><row id="row-2"><entry colname="c1">C</entry><entry colname="c2">D</entry><entry colname="c3">E</entry></row></tbody></tgroup></table>',
+      extendedSchema,
+      { profile: 'extended' },
+    );
+    const doc = extendedSchema.nodes.doc!.create(null, [table]);
+    const state = EditorState.create({
+      doc,
+      selection: TextSelection.create(doc, findTextPosition(doc, 'D')),
+    });
+
+    let nextState = state;
+    const result = moveS1000DColumnLeft()(state, (transaction) => {
+      nextState = nextState.apply(transaction);
+    });
+
+    expect(result).toBe(true);
+    const nextTable = findS1000DTableContext(nextState)?.table;
+    const nextTgroup = nextTable?.child(0);
+    const nextTbody = getTgroupBody(nextTgroup);
+    expect(nextTbody?.child(1)?.textContent).toBe('DCE');
+    expect(nextTgroup?.child(3)?.attrs.namest).toBe('c2');
+    expect(nextTgroup?.child(3)?.attrs.nameend).toBe('c1');
+    expect(nextTbody?.child(0)?.child(0)?.attrs.spanname).toBe('wide');
+    expect(findS1000DEntryContext(nextState)?.entry.columnIndex).toBe(0);
+    expect(findS1000DEntryContext(nextState)?.entry.node.textContent).toBe('D');
+  });
+
+  it('moves rows across sections when both rows are standalone', () => {
+    const table = parseS1000DTableXml(
+      '<table id="tab-1"><tgroup cols="2"><thead><row id="head-row"><entry>H1</entry><entry>H2</entry></row></thead><tbody><row id="body-row"><entry>A1</entry><entry>A2</entry></row><row id="body-row-2"><entry>B1</entry><entry>B2</entry></row></tbody></tgroup></table>',
+      extendedSchema,
+      { profile: 'extended' },
+    );
+    const doc = extendedSchema.nodes.doc!.create(null, [table]);
+    const state = EditorState.create({
+      doc,
+      selection: TextSelection.create(doc, findTextPosition(doc, 'A1')),
+    });
+
+    let nextState = state;
+    const result = moveS1000DRowUp()(state, (transaction) => {
+      nextState = nextState.apply(transaction);
+    });
+
+    expect(result).toBe(true);
+    const nextTable = findS1000DTableContext(nextState)?.table;
+    const nextTgroup = nextTable?.child(0);
+    const nextThead = nextTgroup?.child(nextTgroup.childCount - 2);
+    const nextTbody = nextTgroup?.child(nextTgroup.childCount - 1);
+    expect(nextThead?.child(0)?.textContent).toBe('A1A2');
+    expect(nextTbody?.child(0)?.textContent).toBe('H1H2');
+    expect(findS1000DRowContext(nextState)?.rowRef.section).toBe('thead');
+    expect(findS1000DRowContext(nextState)?.row.textContent).toBe('A1A2');
+  });
+
   it('moves columns when morerows is involved but entries remain single-column', () => {
     const table = parseS1000DTableXml(
       '<table id="tab-1"><tgroup cols="3"><tbody><row id="row-1"><entry morerows="1">A</entry><entry>B</entry><entry>C</entry></row><row id="row-2"><entry>D</entry><entry>E</entry></row></tbody></tgroup></table>',
@@ -622,4 +816,29 @@ function findTextPosition(doc: import('prosemirror-model').Node, text: string): 
   }
 
   return found;
+}
+
+function findNodePositions(doc: import('prosemirror-model').Node, nodeName: string): number[] {
+  const positions: number[] = [];
+
+  doc.descendants((node, pos) => {
+    if (node.type.name === nodeName) {
+      positions.push(pos);
+    }
+  });
+
+  return positions;
+}
+
+function getTgroupBody(tgroup: import('prosemirror-model').Node | undefined) {
+  if (!tgroup) return undefined;
+
+  for (let index = 0; index < tgroup.childCount; index += 1) {
+    const child = tgroup.child(index);
+    if (child.type.name === 's1000dTbody') {
+      return child;
+    }
+  }
+
+  return undefined;
 }

@@ -14,11 +14,14 @@ export {
   getActiveS1000DTgroup,
   getActiveS1000DTgroupGrid,
   isGraphicOnlyS1000DTable,
+  mergeOrSplitS1000DCell,
+  mergeS1000DCells,
   moveS1000DColumnLeft,
   moveS1000DColumnRight,
   moveS1000DRowDown,
   moveS1000DRowUp,
   rejectGraphicOnlyS1000DTable,
+  splitS1000DCell,
 } from './commands.js';
 export type {
   S1000DEntryContext,
@@ -40,6 +43,8 @@ export { parseS1000DTableXml, serializeS1000DTableXml } from './xml/index.js';
 export { createS1000DTableExtensions } from './tiptap.js';
 export { normalizeS1000DTableProfile } from './profile.js';
 export type { S1000DTableProfile } from './profile.js';
+export { S1000DCellSelection, isS1000DCellSelection } from './selection.js';
+export type { S1000DCellSelectionJSON } from './selection.js';
 export { createEmptyS1000DEntry, createEmptyS1000DEntryContent, normalizeS1000DTable, normalizeS1000DTgroup } from './normalize.js';
 export { S1000DTableMap, createS1000DTableMap } from './table-map.js';
 export type { S1000DTableRect } from './table-map.js';

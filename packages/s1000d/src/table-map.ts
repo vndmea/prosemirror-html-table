@@ -213,9 +213,13 @@ export function createS1000DTableMap(tgroup: ProseMirrorNode, tgroupIndex: numbe
 
 function findTgroupByIndex(table: ProseMirrorNode, tgroupIndex: number): ProseMirrorNode | undefined {
   let matched: ProseMirrorNode | undefined;
-  table.forEach((child, _offset, index) => {
-    if (matched || child.type.name !== s1000dTableNodeNames.tgroup || index !== tgroupIndex) return;
-    matched = child;
+  let seenTgroupIndex = -1;
+  table.forEach((child) => {
+    if (matched || child.type.name !== s1000dTableNodeNames.tgroup) return;
+    seenTgroupIndex += 1;
+    if (seenTgroupIndex === tgroupIndex) {
+      matched = child;
+    }
   });
   return matched;
 }
