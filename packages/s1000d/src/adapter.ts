@@ -13,7 +13,11 @@ export interface S1000DTableAdapter {
   isRow: (node: ProseMirrorNode) => boolean;
   isEntry: (node: ProseMirrorNode) => boolean;
   getTgroups: (table: ProseMirrorNode) => ProseMirrorNode[];
-  getActiveTgroup: (table: ProseMirrorNode, selection?: Selection | null) => ProseMirrorNode | null;
+  getActiveTgroup: (
+    table: ProseMirrorNode,
+    tablePosOrSelection?: number | Selection | null,
+    selection?: Selection | null,
+  ) => ProseMirrorNode | null;
   isGraphicOnlyTable: (table: ProseMirrorNode) => boolean;
   createGrid: (tgroup: ProseMirrorNode, tgroupIndex?: number) => S1000DTgroupGrid;
   createMap: (table: ProseMirrorNode, tgroupIndex?: number) => S1000DTableMap;
@@ -53,22 +57,43 @@ function getTgroups(table: ProseMirrorNode): ProseMirrorNode[] {
   return tgroups;
 }
 
-function getActiveTgroup(table: ProseMirrorNode, selection?: Selection | null): ProseMirrorNode | null {
+function getActiveTgroup(
+  table: ProseMirrorNode,
+  tablePosOrSelection?: number | Selection | null,
+  maybeSelection?: Selection | null,
+): ProseMirrorNode | null {
   const tgroups = getTgroups(table);
   if (tgroups.length === 0) return null;
+  const selection = typeof tablePosOrSelection === 'number'
+    ? (maybeSelection ?? null)
+    : (tablePosOrSelection ?? maybeSelection ?? null);
   if (!selection) return tgroups[0] ?? null;
+  const tablePos = typeof tablePosOrSelection === 'number'
+    ? tablePosOrSelection
+    : findTablePosFromSelection(table, selection);
+  if (typeof tablePos !== 'number') return tgroups[0] ?? null;
 
   let matched: ProseMirrorNode | null = null;
   table.forEach((child, offset) => {
     if (matched || child.type.name !== s1000dTableNodeNames.tgroup) return;
-    const childStart = offset + 1;
-    const childEnd = childStart + child.nodeSize - 1;
+    const childStart = tablePos + offset + 1;
+    const childEnd = childStart + child.nodeSize;
     if (selection.from >= childStart && selection.to <= childEnd) {
       matched = child;
     }
   });
 
   return matched ?? tgroups[0] ?? null;
+}
+
+function findTablePosFromSelection(table: ProseMirrorNode, selection: Selection): number | undefined {
+  for (let depth = selection.$from.depth; depth > 0; depth -= 1) {
+    if (selection.$from.node(depth) === table) {
+      return selection.$from.before(depth);
+    }
+  }
+
+  return undefined;
 }
 
 function isGraphicOnlyTable(table: ProseMirrorNode): boolean {

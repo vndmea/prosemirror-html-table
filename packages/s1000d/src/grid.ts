@@ -53,10 +53,12 @@ export interface S1000DTableGrid {
 
 export function createS1000DTableGrid(table: ProseMirrorNode): S1000DTableGrid {
   const tgroups: S1000DTgroupGrid[] = [];
+  let tgroupIndex = 0;
 
-  table.forEach((child, _offset, index) => {
+  table.forEach((child) => {
     if (child.type.name !== s1000dTableNodeNames.tgroup) return;
-    tgroups.push(createS1000DTgroupGrid(child, index));
+    tgroups.push(createS1000DTgroupGrid(child, tgroupIndex));
+    tgroupIndex += 1;
   });
 
   return { tgroups };

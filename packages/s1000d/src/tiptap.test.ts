@@ -5,11 +5,13 @@ import { describe, expect, it } from 'vitest';
 
 import {
   S1000DCellSelection,
+  createS1000DTableNodeSpecs,
+} from './index.js';
+import {
   createS1000DTableEditingPlugin,
   createS1000DTableExtensions,
-  createS1000DTableNodeSpecs,
   defaultS1000DTableTiptapOptions,
-} from './index.js';
+} from './tiptap.js';
 
 const schema = new Schema({
   nodes: {
@@ -42,6 +44,45 @@ describe('S1000D tiptap integration', () => {
       's1000dEntry',
       's1000dEntryBlock',
       's1000dGraphic',
+    ]);
+  });
+
+  it('rejects custom names for the tiptap integration boundary', () => {
+    expect(() => createS1000DTableExtensions({
+      profile: 'extended',
+      names: { table: 'customTable' },
+    } as never)).toThrow(/custom node names/i);
+  });
+
+  it('keeps the current editor DOM structure explicit for nested table sections', () => {
+    const extensions = createS1000DTableExtensions({ profile: 'extended' });
+    const tgroup = extensions.find((extension) => extension.name === 's1000dTgroup');
+    const tbody = extensions.find((extension) => extension.name === 's1000dTbody');
+    const thead = extensions.find((extension) => extension.name === 's1000dThead');
+    const renderContext = {
+      name: 'test',
+      options: defaultS1000DTableTiptapOptions,
+      storage: {},
+      parent: undefined,
+      editor: undefined,
+    };
+    const render = (extension: (typeof extensions)[number] | undefined) =>
+      extension?.config.renderHTML?.call(renderContext as never, { HTMLAttributes: {} } as never);
+
+    expect(render(tgroup)).toEqual([
+      'tbody',
+      { 'data-s1000d': 'tgroup' },
+      0,
+    ]);
+    expect(render(tbody)).toEqual([
+      'tbody',
+      { 'data-s1000d': 'tbody' },
+      0,
+    ]);
+    expect(render(thead)).toEqual([
+      'thead',
+      { 'data-s1000d': 'thead' },
+      0,
     ]);
   });
 

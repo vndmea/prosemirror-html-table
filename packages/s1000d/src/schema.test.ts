@@ -50,4 +50,38 @@ describe('S1000D table schema', () => {
       procedSchema.nodes.s1000dGraphic!.create({ infoEntityIdent: 'ICN-001' }),
     ])).toThrow();
   });
+
+  it('supports custom schema node names as an experimental schema-only option', () => {
+    const customSchema = new Schema({
+      nodes: {
+        doc: { content: 'block+' },
+        text: { group: 'inline' },
+        paragraph: {
+          group: 'block',
+          content: 'inline*',
+          toDOM: () => ['p', 0],
+        },
+        ...createS1000DTableNodeSpecs({
+          names: {
+            table: 'customTable',
+            title: 'customTitle',
+            tgroup: 'customTgroup',
+            colspec: 'customColspec',
+            spanspec: 'customSpanspec',
+            thead: 'customThead',
+            tbody: 'customTbody',
+            tfoot: 'customTfoot',
+            row: 'customRow',
+            entry: 'customEntry',
+            entryBlock: 'customEntryBlock',
+            graphic: 'customGraphic',
+          },
+        }),
+      },
+    });
+
+    expect(customSchema.nodes.customTable).toBeDefined();
+    expect(customSchema.nodes.customEntry).toBeDefined();
+    expect(customSchema.nodes.customGraphic).toBeDefined();
+  });
 });

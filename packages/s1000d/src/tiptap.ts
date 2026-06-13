@@ -52,7 +52,7 @@ export interface S1000DTableTiptapOptions {
   selectedCellClassName: string;
 }
 
-export interface CreateS1000DTableExtensionsOptions extends S1000DTableSchemaOptions {
+export interface CreateS1000DTableExtensionsOptions extends Omit<S1000DTableSchemaOptions, 'names'> {
   table?: Partial<S1000DTableTiptapOptions>;
 }
 
@@ -98,6 +98,7 @@ declare module '@tiptap/core' {
 const s1000dTableEditingKey = new PluginKey('s1000dTableEditing');
 
 export function createS1000DTableExtensions(options: CreateS1000DTableExtensionsOptions = {}) {
+  assertNoCustomNames(options);
   const config = normalizeS1000DTableSchemaOptions(options);
   const { names, profile } = config;
   const tableExtension = createTableExtension(config, options.table);
@@ -123,6 +124,17 @@ export function createS1000DTableExtensions(options: CreateS1000DTableExtensions
 }
 
 export const S1000DTableExtensions = createS1000DTableExtensions();
+
+function assertNoCustomNames(options: CreateS1000DTableExtensionsOptions): void {
+  const runtimeNames = (options as CreateS1000DTableExtensionsOptions & {
+    names?: Partial<S1000DTableNodeNames>;
+  }).names;
+  if (runtimeNames && Object.keys(runtimeNames).length > 0) {
+    throw new Error(
+      'Custom node names are experimental at the schema layer and are not supported by the S1000D Tiptap integration.',
+    );
+  }
+}
 
 function createTableExtension(
   options: ReturnType<typeof normalizeS1000DTableSchemaOptions>,

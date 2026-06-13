@@ -35,6 +35,16 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "require": "./dist/index.cjs"
+    },
+    "./clipboard": {
+      "types": "./dist/clipboard.d.ts",
+      "import": "./dist/clipboard.js",
+      "require": "./dist/clipboard.cjs"
+    },
+    "./tiptap": {
+      "types": "./dist/tiptap.d.ts",
+      "import": "./dist/tiptap.js",
+      "require": "./dist/tiptap.cjs"
     }
   },
   "scripts": {
@@ -46,6 +56,14 @@
     "prosemirror-model": "^1.0.0",
     "prosemirror-state": "^1.0.0",
     "prosemirror-view": "^1.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@tiptap/core": {
+      "optional": true
+    },
+    "prosemirror-view": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@tiptap/core": "^3.0.0",

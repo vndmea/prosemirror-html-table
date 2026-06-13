@@ -69,12 +69,12 @@ describe('S1000DCellSelection helpers', () => {
     const doc = docSchema.nodes.doc!.create(null, [table]);
     const entryPositions = findNodePositions(doc, 's1000dEntry');
     const official = S1000DCellSelection.fromJSON(doc, {
-      anchor: entryPositions[0],
-      head: entryPositions[3],
+      anchor: entryPositions[0]!,
+      head: entryPositions[3]!,
     });
     const legacy = S1000DCellSelection.fromJSON(doc, {
-      anchorEntryPos: entryPositions[1],
-      headEntryPos: entryPositions[2],
+      anchorEntryPos: entryPositions[1]!,
+      headEntryPos: entryPositions[2]!,
     });
 
     expect(official.toJSON()).toEqual({

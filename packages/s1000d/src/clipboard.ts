@@ -344,7 +344,7 @@ function findTableContext(
   if (!found) return undefined;
 
   const adapter = createS1000DTableAdapter();
-  const activeTgroup = adapter.getActiveTgroup(found.table, state.selection);
+  const activeTgroup = adapter.getActiveTgroup(found.table, found.tablePos, state.selection);
   const activeTgroupIndex = activeTgroup
     ? adapter.getTgroups(found.table).findIndex((item) => item === activeTgroup)
     : -1;
@@ -784,15 +784,43 @@ function clipClipboardRows(
 }
 
 function encodeBase64UrlUtf8(value: string): string {
+  const encoded = new TextEncoder().encode(value);
+  return toBase64Url(encodeBase64Binary(encoded));
+}
+
+function decodeBase64UrlUtf8(value: string): string {
+  const decoded = decodeBase64Binary(fromBase64Url(value));
+  return new TextDecoder().decode(decoded);
+}
+
+function encodeBase64Binary(value: Uint8Array): string {
+  const binary = Array.from(value, (item) => String.fromCharCode(item)).join('');
+  if (typeof globalThis.btoa === 'function') {
+    return globalThis.btoa(binary);
+  }
   if (typeof globalThis.Buffer !== 'undefined') {
-    return globalThis.Buffer.from(value, 'utf8').toString('base64url');
+    return globalThis.Buffer.from(value).toString('base64');
   }
   throw new Error('No base64 encoder available for clipboard payload serialization.');
 }
 
-function decodeBase64UrlUtf8(value: string): string {
+function decodeBase64Binary(value: string): Uint8Array {
+  if (typeof globalThis.atob === 'function') {
+    const binary = globalThis.atob(value);
+    return Uint8Array.from(binary, (item) => item.charCodeAt(0));
+  }
   if (typeof globalThis.Buffer !== 'undefined') {
-    return globalThis.Buffer.from(value, 'base64url').toString('utf8');
+    return Uint8Array.from(globalThis.Buffer.from(value, 'base64'));
   }
   throw new Error('No base64 decoder available for clipboard payload parsing.');
+}
+
+function toBase64Url(value: string): string {
+  return value.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+}
+
+function fromBase64Url(value: string): string {
+  const normalized = value.replace(/-/g, '+').replace(/_/g, '/');
+  const padding = normalized.length % 4;
+  return padding === 0 ? normalized : `${normalized}${'='.repeat(4 - padding)}`;
 }

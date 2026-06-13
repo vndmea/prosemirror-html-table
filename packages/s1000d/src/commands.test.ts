@@ -36,17 +36,15 @@ import { extendedSchema, schema } from './tests/test-schema.js';
 describe('S1000D table commands and adapters', () => {
   it('finds the active tgroup and grid for the current selection', () => {
     const table = parseS1000DTableXml(
-      '<table id="tab-1"><tgroup cols="1"><tbody><row id="row-1"><entry>A</entry></row></tbody></tgroup><tgroup cols="2"><tbody><row id="row-2"><entry>B</entry><entry>C</entry></row></tbody></tgroup></table>',
+      '<table id="tab-1"><title>Fault table</title><tgroup cols="1"><tbody><row id="row-1"><entry>A</entry></row></tbody></tgroup><tgroup cols="2"><tbody><row id="row-2"><entry>B</entry><entry>C</entry></row></tbody></tgroup></table>',
       schema,
     );
-    const doc = createDocSchema().nodes.doc!.create(null, [table]);
-    const secondTgroupPos = 1 + table.child(0)!.nodeSize;
-    const secondTgroup = table.child(1)!;
-    const secondRowStart = secondTgroupPos + 1 + 1 + 1;
-    const secondEntryPos = secondRowStart + 1;
+    const docSchema = createDocSchema();
+    const paragraph = docSchema.nodes.paragraph!.create(null, docSchema.text('Before'));
+    const doc = docSchema.nodes.doc!.create(null, [paragraph, table]);
     const state = EditorState.create({
       doc,
-      selection: TextSelection.create(doc, secondEntryPos + 1),
+      selection: TextSelection.create(doc, findTextPosition(doc, 'C')),
     });
 
     const context = findS1000DTableContext(state);
@@ -89,13 +87,14 @@ describe('S1000D table commands and adapters', () => {
 
   it('creates table-level grids for all tgroups', () => {
     const table = parseS1000DTableXml(
-      '<table id="tab-1"><tgroup cols="1"><tbody><row id="row-1"><entry>A</entry></row></tbody></tgroup><tgroup cols="1"><tbody><row id="row-2"><entry>B</entry></row></tbody></tgroup></table>',
+      '<table id="tab-1"><title>Fault table</title><tgroup cols="1"><tbody><row id="row-1"><entry>A</entry></row></tbody></tgroup><tgroup cols="1"><tbody><row id="row-2"><entry>B</entry></row></tbody></tgroup></table>',
       schema,
     );
 
     const grid = createS1000DTableGrid(table);
 
     expect(grid.tgroups).toHaveLength(2);
+    expect(grid.tgroups.map((item) => item.tgroupIndex)).toEqual([0, 1]);
     expect(grid.tgroups.map((item) => item.width)).toEqual([1, 1]);
   });
 

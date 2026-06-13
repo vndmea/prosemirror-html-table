@@ -10,8 +10,8 @@ This package focuses on the S1000D table subset used by `proced.xsd`, while also
 - XML import/export for S1000D table fragments
 - Grid, map, normalization, validation, and editing commands
 - `S1000DCellSelection` for logical table selections
-- Tiptap extensions and editing plugin
-- S1000D-specific clipboard copy/paste for table cell ranges
+- Tiptap extensions via the `prosemirror-html-table-s1000d/tiptap` subpath
+- S1000D-specific clipboard helpers via the `prosemirror-html-table-s1000d/clipboard` subpath
 
 ## Install
 
@@ -19,11 +19,23 @@ This package focuses on the S1000D table subset used by `proced.xsd`, while also
 npm install prosemirror-html-table-s1000d prosemirror-model
 ```
 
+For clipboard helpers, also install:
+
+```bash
+npm install prosemirror-state
+```
+
 For Tiptap integration, also install:
 
 ```bash
 npm install @tiptap/core prosemirror-state prosemirror-view
 ```
+
+## Support Boundary
+
+- `createS1000DTableNodeSpecs({ names })` is experimental and only applies to schema generation.
+- Editing commands, clipboard helpers, and Tiptap integration currently support the default S1000D node names only.
+- The Tiptap DOM is an editor-internal structure and is not the same thing as a final HTML renderer for S1000D/CALS tables.
 
 ## Schema
 
@@ -84,7 +96,7 @@ Available command helpers include:
 
 ```ts
 import { Editor } from '@tiptap/core';
-import { createS1000DTableExtensions } from 'prosemirror-html-table-s1000d';
+import { createS1000DTableExtensions } from 'prosemirror-html-table-s1000d/tiptap';
 
 const editor = new Editor({
   extensions: [
@@ -99,12 +111,14 @@ You can also use the lower-level plugin directly:
 import {
   createS1000DTableEditingPlugin,
   defaultS1000DTableTiptapOptions,
-} from 'prosemirror-html-table-s1000d';
+} from 'prosemirror-html-table-s1000d/tiptap';
 
 const plugin = createS1000DTableEditingPlugin(defaultS1000DTableTiptapOptions);
 ```
 
 ## Clipboard Behavior
+
+Low-level clipboard helpers are exposed from `prosemirror-html-table-s1000d/clipboard`.
 
 The S1000D clipboard layer supports:
 

@@ -54,7 +54,7 @@ export function findS1000DTableContext(
   if (!found) return null;
 
   const adapter = createS1000DTableAdapter();
-  const activeTgroup = adapter.getActiveTgroup(found.table, state.selection);
+  const activeTgroup = adapter.getActiveTgroup(found.table, found.tablePos, state.selection);
   const tgroups = adapter.getTgroups(found.table);
   const activeTgroupIndex = activeTgroup ? tgroups.findIndex((item) => item === activeTgroup) : -1;
 
@@ -604,8 +604,9 @@ export function isGraphicOnlyS1000DTable(table: ProseMirrorNode): boolean {
 export function getActiveS1000DTgroup(
   table: ProseMirrorNode,
   selection?: Selection | null,
+  tablePos?: number,
 ): ProseMirrorNode | null {
-  return createS1000DTableAdapter().getActiveTgroup(table, selection);
+  return createS1000DTableAdapter().getActiveTgroup(table, tablePos, selection);
 }
 
 interface LocatedTable {

@@ -6,6 +6,8 @@
     "paths": {
       "prosemirror-html-table": ["packages/core/src/index.ts"],
       "prosemirror-html-table-s1000d": ["packages/s1000d/src/index.ts"],
+      "prosemirror-html-table-s1000d/clipboard": ["packages/s1000d/src/clipboard.ts"],
+      "prosemirror-html-table-s1000d/tiptap": ["packages/s1000d/src/tiptap.ts"],
       "tiptap-html-table": ["packages/tiptap/src/index.ts"]
     }
   },
