@@ -32,6 +32,12 @@ import {
   serializeS1000DCellSelectionToText,
 } from './clipboard.js';
 import { s1000dTableNodeNames, type S1000DTableNodeNames } from './names.js';
+import {
+  findFirstS1000DDescendantPosition,
+  findS1000DEntryPosition,
+  findS1000DNodePositions,
+  requireS1000DTgroupPosition,
+} from './position.js';
 import { normalizeS1000DTableProfile, type S1000DTableProfile } from './profile.js';
 import { S1000DCellSelection, isS1000DCellSelection } from './selection.js';
 import {
@@ -471,7 +477,7 @@ function drawCellSelection(state: EditorState, className: string): DecorationSet
 
   const decorations: Decoration[] = [];
   for (const entry of selectionInfo.entries) {
-    const pos = findEntryPosition(selectionInfo.table, selectionInfo.tablePos, selectionInfo.activeTgroupIndex, entry);
+    const pos = findS1000DEntryPosition(selectionInfo, entry);
     if (typeof pos !== 'number') continue;
     decorations.push(Decoration.node(pos, pos + entry.node.nodeSize, { class: className }));
   }
@@ -557,7 +563,7 @@ function normalizeSelection(
   }
 
   if (selection instanceof NodeSelection && selection.node.type.name === s1000dTableNodeNames.row) {
-    const firstEntryPos = findFirstDescendantPosition(selection.node, s1000dTableNodeNames.entry, selection.from);
+    const firstEntryPos = findFirstS1000DDescendantPosition(selection.node, s1000dTableNodeNames.entry, selection.from);
     if (typeof firstEntryPos === 'number') {
       return state.tr.setSelection(S1000DCellSelection.rowSelection(state.doc.resolve(firstEntryPos + 1)));
     }
@@ -568,7 +574,7 @@ function normalizeSelection(
     && selection.node.type.name === s1000dTableNodeNames.table
     && !allowTableNodeSelection
   ) {
-    const positions = findNodePositions(selection.node, s1000dTableNodeNames.entry).map((pos) => selection.from + 1 + pos);
+    const positions = findS1000DNodePositions(selection.node, s1000dTableNodeNames.entry).map((pos) => selection.from + 1 + pos);
     if (positions.length > 0) {
       return state.tr.setSelection(S1000DCellSelection.create(state.doc, positions[0]!, positions[positions.length - 1]!));
     }
@@ -603,12 +609,13 @@ function goToAdjacentCell(
   if (!context?.activeTgroup || !entryContext) return false;
 
   const map = findActiveTableMap(context.table, context.activeTgroupIndex);
-  const entryPos = findEntryPosition(context.table, context.tablePos, context.activeTgroupIndex, entryContext.entry);
+  const entryPos = findS1000DEntryPosition(context, entryContext.entry);
   if (typeof entryPos !== 'number') return false;
-  const nextPos = map.nextCell(entryPos - findTgroupAbsolutePos(context.table, context.tablePos, context.activeTgroupIndex), 'horiz', dir);
+  const tgroupPos = requireS1000DTgroupPosition(context.table, context.tablePos, context.activeTgroupIndex);
+  const nextPos = map.nextCell(entryPos - tgroupPos, 'horiz', dir);
   if (nextPos == null) return false;
   if (!dispatch) return true;
-  dispatch(state.tr.setSelection(TextSelection.near(state.doc.resolve(findTgroupAbsolutePos(context.table, context.tablePos, context.activeTgroupIndex) + nextPos + 1))).scrollIntoView());
+  dispatch(state.tr.setSelection(TextSelection.near(state.doc.resolve(tgroupPos + nextPos + 1))).scrollIntoView());
   return true;
 }
 
@@ -618,7 +625,7 @@ function selectCurrentCell(
 ): boolean {
   const context = findS1000DEntryContext(state);
   if (!context) return false;
-  const entryPos = findEntryPosition(context.table, context.tablePos, context.activeTgroupIndex, context.entry);
+  const entryPos = findS1000DEntryPosition(context, context.entry);
   if (typeof entryPos !== 'number') return false;
   if (!dispatch) return true;
   dispatch(state.tr.setSelection(S1000DCellSelection.create(state.doc, entryPos)).scrollIntoView());
@@ -632,7 +639,7 @@ function selectCurrentAxis(
 ): boolean {
   const context = findS1000DEntryContext(state);
   if (!context) return false;
-  const entryPos = findEntryPosition(context.table, context.tablePos, context.activeTgroupIndex, context.entry);
+  const entryPos = findS1000DEntryPosition(context, context.entry);
   if (typeof entryPos !== 'number') return false;
   const selection = axis === 'row'
     ? S1000DCellSelection.rowSelection(state.doc.resolve(entryPos + 1))
@@ -667,7 +674,7 @@ function extendCellSelection(
     : createSelectionFromCursor(view.state);
   if (!currentSelection) return false;
 
-  const tgroupPos = findTgroupAbsolutePos(context.table, context.tablePos, context.activeTgroupIndex);
+  const tgroupPos = requireS1000DTgroupPosition(context.table, context.tablePos, context.activeTgroupIndex);
   const nextHeadPos = map.nextCell(currentSelection.headEntryPos - tgroupPos, axis, dir);
   if (nextHeadPos == null) return false;
   view.dispatch(
@@ -679,7 +686,7 @@ function extendCellSelection(
 function createSelectionFromCursor(state: EditorState): S1000DCellSelection | null {
   const context = findS1000DEntryContext(state);
   if (!context) return null;
-  const entryPos = findEntryPosition(context.table, context.tablePos, context.activeTgroupIndex, context.entry);
+  const entryPos = findS1000DEntryPosition(context, context.entry);
   return typeof entryPos === 'number' ? S1000DCellSelection.create(state.doc, entryPos) : null;
 }
 
@@ -784,57 +791,6 @@ function getKnownAttrNames(
   }
 }
 
-function findNodePositions(node: ProseMirrorNode, nodeName: string): number[] {
-  const positions: number[] = [];
-  node.descendants((descendant, pos) => {
-    if (descendant.type.name === nodeName) {
-      positions.push(pos);
-    }
-    return true;
-  });
-  return positions;
-}
-
-function findFirstDescendantPosition(node: ProseMirrorNode, nodeName: string, offset: number): number | undefined {
-  const positions = findNodePositions(node, nodeName);
-  return positions.length > 0 ? offset + 1 + positions[0]! : undefined;
-}
-
 function findActiveTableMap(table: ProseMirrorNode, tgroupIndex: number) {
   return S1000DTableMap.get(table, tgroupIndex);
-}
-
-function findTgroupAbsolutePos(table: ProseMirrorNode, tablePos: number, tgroupIndex: number): number {
-  let found = -1;
-  let seen = -1;
-  table.forEach((child, offset) => {
-    if (found >= 0 || child.type.name !== s1000dTableNodeNames.tgroup) return;
-    seen += 1;
-    if (seen === tgroupIndex) {
-      found = tablePos + 1 + offset;
-    }
-  });
-  if (found < 0) {
-    throw new RangeError(`Unable to resolve tgroup position: ${tgroupIndex}`);
-  }
-  return found;
-}
-
-function findEntryPosition(
-  table: ProseMirrorNode,
-  tablePos: number,
-  tgroupIndex: number,
-  entry: import('./grid.js').S1000DEntryRef,
-): number | undefined {
-  const tgroupPos = findTgroupAbsolutePos(table, tablePos, tgroupIndex);
-  const map = S1000DTableMap.get(table, tgroupIndex);
-  const matched = map.grid.entries.find((item) => (
-    item.section === entry.section
-      && item.rowIndex === entry.rowIndex
-      && item.rowIndexInSection === entry.rowIndexInSection
-      && item.columnIndex === entry.columnIndex
-      && item.entryIndex === entry.entryIndex
-  ));
-  const relativePos = matched ? map.entryPositions.get(matched) : undefined;
-  return relativePos === undefined ? undefined : tgroupPos + relativePos;
 }

@@ -2,21 +2,29 @@ import { Fragment, type Node as ProseMirrorNode, type Schema } from 'prosemirror
 import { NodeSelection, TextSelection, type EditorState, type Selection, type Transaction } from 'prosemirror-state';
 
 import { createS1000DTableAdapter } from './adapter.js';
+import {
+  findS1000DAncestorNode,
+  resolveRequiredS1000DTableContext,
+  type S1000DActiveTableContext,
+  type S1000DTableLookupOptions,
+} from './context.js';
+import {
+  refreshActiveS1000DTableContext,
+  replaceS1000DEntries,
+} from './mutation.js';
 import { createEmptyS1000DEntryContent } from './normalize.js';
 import { s1000dTableNodeNames } from './names.js';
+import {
+  findS1000DEntryByPosition,
+  findS1000DEntryPosition,
+} from './position.js';
 import { S1000DCellSelection, isS1000DCellSelection } from './selection.js';
-import { S1000DTableMap } from './table-map.js';
 import type { S1000DEntryRef, S1000DTgroupGrid } from './grid.js';
 
 const CLIPBOARD_PAYLOAD_ATTR = 'data-s1000d-clipboard';
 const LOCATION_ATTRS = new Set(['colname', 'namest', 'nameend', 'spanname', 'morerows', 'id']);
 
-interface S1000DTableContext {
-  table: ProseMirrorNode;
-  tablePos: number;
-  activeTgroup: ProseMirrorNode;
-  activeTgroupIndex: number;
-}
+type S1000DTableContext = S1000DActiveTableContext;
 
 interface S1000DCellContext extends S1000DTableContext {
   grid: S1000DTgroupGrid;
@@ -60,9 +68,7 @@ export interface ParsedS1000DTableClipboard {
   table?: ProseMirrorNode;
 }
 
-export interface S1000DTableClipboardOptions {
-  tablePos?: number;
-}
+export interface S1000DTableClipboardOptions extends S1000DTableLookupOptions {}
 
 export function serializeS1000DCellSelectionToHtml(
   state: EditorState,
@@ -188,7 +194,7 @@ export function applyS1000DClipboardToSelection(
   }
 
   if (replacements.size === 0) return false;
-  const nextTable = replaceEntries(tableContext, replacements);
+  const nextTable = replaceS1000DEntries(tableContext, replacements);
   if (!dispatch) return true;
 
   const tr = state.tr.replaceWith(
@@ -196,7 +202,7 @@ export function applyS1000DClipboardToSelection(
     tableContext.tablePos + tableContext.table.nodeSize,
     nextTable,
   );
-  const nextContext = refreshTableContext(tr.doc, tableContext);
+  const nextContext = refreshActiveS1000DTableContext(tr.doc, tableContext);
   const nextGrid = createS1000DTableAdapter().createGrid(nextContext.activeTgroup, nextContext.activeTgroupIndex);
   const lastRow = Math.min(nextGrid.height - 1, startRow + Math.max(rows.length, 1) - 1);
   const lastColumn = Math.min(nextGrid.width - 1, startColumn + Math.max(rows[0]?.length ?? 1, 1) - 1);
@@ -204,8 +210,8 @@ export function applyS1000DClipboardToSelection(
   const headEntry = nextGrid.slots[lastRow]?.[lastColumn]?.entry ?? anchorEntry;
 
   if (anchorEntry) {
-    const anchorPos = findEntryPosition(nextContext, anchorEntry);
-    const headPos = headEntry ? findEntryPosition(nextContext, headEntry) : anchorPos;
+    const anchorPos = findS1000DEntryPosition(nextContext, anchorEntry);
+    const headPos = headEntry ? findS1000DEntryPosition(nextContext, headEntry) : anchorPos;
     if (typeof anchorPos === 'number' && typeof headPos === 'number') {
       tr.setSelection(
         rows.length > 1 || (rows[0]?.length ?? 0) > 1
@@ -236,7 +242,7 @@ export function clearS1000DSelectedCells(
   }
 
   if (replacements.size === 0) return false;
-  const nextTable = replaceEntries(cellContext, replacements);
+  const nextTable = replaceS1000DEntries(cellContext, replacements);
   if (!dispatch) return true;
 
   dispatch(
@@ -306,10 +312,10 @@ function getSelectionInfo(
   if (grid.entries.length === 0) return undefined;
 
   const anchorEntry = isS1000DCellSelection(state.selection)
-    ? findEntryByPosition(context, grid, state.selection.anchorEntryPos)
+    ? findS1000DEntryByPosition(context, grid, state.selection.anchorEntryPos)
     : findCurrentEntry(grid, state.selection);
   const headEntry = isS1000DCellSelection(state.selection)
-    ? findEntryByPosition(context, grid, state.selection.headEntryPos) ?? anchorEntry
+    ? findS1000DEntryByPosition(context, grid, state.selection.headEntryPos) ?? anchorEntry
     : anchorEntry;
 
   if (!anchorEntry || !headEntry) return undefined;
@@ -338,24 +344,7 @@ function findTableContext(
   state: EditorState,
   options: S1000DTableClipboardOptions,
 ): S1000DTableContext | undefined {
-  const found = typeof options.tablePos === 'number'
-    ? findTableAtPosition(state.doc, options.tablePos)
-    : findTableAroundSelection(state.selection);
-  if (!found) return undefined;
-
-  const adapter = createS1000DTableAdapter();
-  const activeTgroup = adapter.getActiveTgroup(found.table, found.tablePos, state.selection);
-  const activeTgroupIndex = activeTgroup
-    ? adapter.getTgroups(found.table).findIndex((item) => item === activeTgroup)
-    : -1;
-  if (!activeTgroup || activeTgroupIndex < 0) return undefined;
-
-  return {
-    table: found.table,
-    tablePos: found.tablePos,
-    activeTgroup,
-    activeTgroupIndex,
-  };
+  return resolveRequiredS1000DTableContext(state, options) ?? undefined;
 }
 
 function findCellContext(
@@ -369,102 +358,18 @@ function findCellContext(
   return entry ? { ...context, grid, entry } : undefined;
 }
 
-function findTableAroundSelection(selection: Selection): { table: ProseMirrorNode; tablePos: number } | undefined {
-  for (let depth = selection.$from.depth; depth >= 0; depth -= 1) {
-    const node = selection.$from.node(depth);
-    if (node.type.name === s1000dTableNodeNames.table) {
-      return {
-        table: node,
-        tablePos: depth === 0 ? 0 : selection.$from.before(depth),
-      };
-    }
-  }
-  return undefined;
-}
-
-function findTableAtPosition(
-  doc: ProseMirrorNode,
-  tablePos: number,
-): { table: ProseMirrorNode; tablePos: number } | undefined {
-  const table = doc.nodeAt(tablePos);
-  if (!table || table.type.name !== s1000dTableNodeNames.table) return undefined;
-  return { table, tablePos };
-}
-
 function findCurrentEntry(grid: S1000DTgroupGrid, selection: Selection): S1000DEntryRef | undefined {
-  const ancestorEntry = findAncestorNode(selection, s1000dTableNodeNames.entry);
+  const ancestorEntry = findS1000DAncestorNode(selection, s1000dTableNodeNames.entry);
   if (ancestorEntry) {
     return grid.entries.find((entry) => entry.node === ancestorEntry);
   }
 
-  const ancestorRow = findAncestorNode(selection, s1000dTableNodeNames.row);
+  const ancestorRow = findS1000DAncestorNode(selection, s1000dTableNodeNames.row);
   if (ancestorRow) {
     return grid.entries.find((entry) => grid.rows[entry.rowIndex]?.node === ancestorRow);
   }
 
   return grid.entries[0];
-}
-
-function findAncestorNode(selection: Selection, typeName: string): ProseMirrorNode | undefined {
-  for (let depth = selection.$from.depth; depth >= 0; depth -= 1) {
-    const node = selection.$from.node(depth);
-    if (node.type.name === typeName) {
-      return node;
-    }
-  }
-  return undefined;
-}
-
-function findEntryByPosition(
-  context: S1000DTableContext,
-  grid: S1000DTgroupGrid,
-  entryPos: number,
-): S1000DEntryRef | undefined {
-  const tgroupPos = findTgroupPosition(context.table, context.tablePos, context.activeTgroupIndex);
-  if (tgroupPos === undefined) return undefined;
-  const map = S1000DTableMap.get(context.table, context.activeTgroupIndex);
-  const relativePos = entryPos - tgroupPos;
-  const mapIndex = map.map.findIndex((pos) => pos === relativePos);
-  if (mapIndex < 0 || map.width < 1) return undefined;
-  const rowIndex = Math.floor(mapIndex / map.width);
-  const columnIndex = mapIndex % map.width;
-  return grid.slots[rowIndex]?.[columnIndex]?.entry;
-}
-
-function findEntryPosition(
-  context: S1000DTableContext,
-  entry: S1000DEntryRef,
-): number | undefined {
-  const tgroupPos = findTgroupPosition(context.table, context.tablePos, context.activeTgroupIndex);
-  if (tgroupPos === undefined) return undefined;
-
-  const map = S1000DTableMap.get(context.table, context.activeTgroupIndex);
-  const matched = map.grid.entries.find((item) => (
-    item.section === entry.section
-      && item.rowIndex === entry.rowIndex
-      && item.rowIndexInSection === entry.rowIndexInSection
-      && item.columnIndex === entry.columnIndex
-      && item.entryIndex === entry.entryIndex
-  ));
-  const relativePos = matched ? map.entryPositions.get(matched) : undefined;
-  return relativePos === undefined ? undefined : tgroupPos + relativePos;
-}
-
-function findTgroupPosition(
-  table: ProseMirrorNode,
-  tablePos: number,
-  tgroupIndex: number,
-): number | undefined {
-  let found: number | undefined;
-  let seen = -1;
-  table.forEach((child, offset) => {
-    if (found !== undefined || child.type.name !== s1000dTableNodeNames.tgroup) return;
-    seen += 1;
-    if (seen === tgroupIndex) {
-      found = tablePos + 1 + offset;
-    }
-  });
-  return found;
 }
 
 function getClipboardRowsFromSelection(selectionInfo: S1000DSelectionInfo): ParsedS1000DClipboardCell[][] {
@@ -526,57 +431,6 @@ function rewriteEntryFromClipboardCell(
   );
 }
 
-function replaceEntries(
-  context: S1000DTableContext,
-  replacements: Map<S1000DEntryRef, ProseMirrorNode>,
-): ProseMirrorNode {
-  const tableChildren = getChildren(context.table);
-  const tgroupChildIndex = findTgroupChildIndex(context.table, context.activeTgroupIndex);
-  const tgroupChildren = getChildren(context.activeTgroup);
-  const replacementEntries = [...replacements.entries()];
-  let globalRowIndex = 0;
-
-  for (let sectionIndex = 0; sectionIndex < tgroupChildren.length; sectionIndex += 1) {
-    const section = tgroupChildren[sectionIndex]!;
-    if (!isSectionNode(section)) continue;
-
-    const rowChildren = getChildren(section).map((row, rowIndexInSection) => {
-      const nextCells = getChildren(row).map((entryNode, entryIndex) => {
-        const matched = replacementEntries.find(([item]) => (
-          item.rowIndex === globalRowIndex
-            && item.rowIndexInSection === rowIndexInSection
-            && item.entryIndex === entryIndex
-            && item.node === entryNode
-        ));
-        return matched ? matched[1] : entryNode;
-      });
-      globalRowIndex += 1;
-      return row.copy(Fragment.fromArray(nextCells));
-    });
-
-    tgroupChildren[sectionIndex] = section.copy(Fragment.fromArray(rowChildren));
-  }
-
-  tableChildren[tgroupChildIndex] = context.activeTgroup.copy(Fragment.fromArray(tgroupChildren));
-  return context.table.copy(Fragment.fromArray(tableChildren));
-}
-
-function findTgroupChildIndex(table: ProseMirrorNode, tgroupIndex: number): number {
-  let matched = -1;
-  let seen = -1;
-  table.forEach((child, _offset, index) => {
-    if (matched >= 0 || child.type.name !== s1000dTableNodeNames.tgroup) return;
-    seen += 1;
-    if (seen === tgroupIndex) {
-      matched = index;
-    }
-  });
-  if (matched < 0) {
-    throw new RangeError(`No tgroup child index found for ${tgroupIndex}`);
-  }
-  return matched;
-}
-
 function uniqueEntriesInRect(
   grid: S1000DTgroupGrid,
   top: number,
@@ -595,35 +449,6 @@ function uniqueEntriesInRect(
     }
   }
   return entries;
-}
-
-function refreshTableContext(doc: ProseMirrorNode, context: S1000DTableContext): S1000DTableContext {
-  const table = doc.nodeAt(context.tablePos);
-  if (!table || table.type.name !== s1000dTableNodeNames.table) {
-    throw new Error('Unable to refresh S1000D clipboard context after table replacement.');
-  }
-  const activeTgroup = createS1000DTableAdapter().getTgroups(table)[context.activeTgroupIndex];
-  if (!activeTgroup) {
-    throw new Error('Unable to refresh active S1000D tgroup after table replacement.');
-  }
-  return {
-    table,
-    tablePos: context.tablePos,
-    activeTgroup,
-    activeTgroupIndex: context.activeTgroupIndex,
-  };
-}
-
-function isSectionNode(node: ProseMirrorNode): boolean {
-  return node.type.name === s1000dTableNodeNames.thead
-    || node.type.name === s1000dTableNodeNames.tbody
-    || node.type.name === s1000dTableNodeNames.tfoot;
-}
-
-function getChildren(node: ProseMirrorNode): ProseMirrorNode[] {
-  const children: ProseMirrorNode[] = [];
-  node.forEach((child) => children.push(child));
-  return children;
 }
 
 function serializeClipboardRows(rows: ParsedS1000DClipboardCell[][]): SerializedClipboardCell[][] {
