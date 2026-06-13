@@ -36,7 +36,8 @@
     "lint": "eslint .",
     "pack:core": "npm pack -w prosemirror-html-table --dry-run",
     "pack:tiptap": "npm pack -w tiptap-html-table --dry-run",
-    "pack:check": "npm run build:packages && npm run pack:core && npm run pack:tiptap",
+    "pack:s1000d": "npm pack -w prosemirror-html-table-s1000d --dry-run",
+    "pack:check": "npm run build:packages && npm run pack:core && npm run pack:tiptap && npm run pack:s1000d",
     "release:version": "changeset version",
     "release:publish": "npm run build:packages && changeset publish"
   },

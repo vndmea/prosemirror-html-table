@@ -54,6 +54,7 @@
   },
   "scripts": {
     "build": "tsup",
+    "prepack": "npm run build",
     "typecheck": "tsc --noEmit"
   },
   "peerDependencies": {
