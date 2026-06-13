@@ -1,9 +1,11 @@
 import type { EditorView } from '@tiptap/pm/view';
 
+import { htmlTableDomAdapter } from './html-table-dom-adapter.js';
 import type { HtmlTableTiptapOptions } from './options.js';
 import { getHtmlTableInteractionState, type HtmlTableInteractionState, htmlTableInteractionPluginKey } from './html-table-interaction.js';
+import { getRenderedTableContext } from './table-interaction/dom-adapter.js';
 import { TableResizeLifecycle, applyTableColumnPreviewWidths } from './table-interaction/resize-lifecycle.js';
-import { measureHtmlTableGeometry, getRenderedHtmlTableContext } from './table-dom.js';
+import { measureHtmlTableGeometry } from './table-dom.js';
 import {
   createColumnResizeTransaction,
   getTableColumnWidths,
@@ -235,7 +237,7 @@ export class HtmlTableResizeController {
     const activeResize = this.activeResize;
     if (!activeResize) return;
 
-    const context = getRenderedHtmlTableContext(this.view, activeResize.tablePos);
+    const context = getRenderedTableContext(this.view, activeResize.tablePos, htmlTableDomAdapter);
     if (!context) return;
 
     const nextWidths = activeResize.startWidths.slice();
@@ -261,7 +263,7 @@ export class HtmlTableResizeController {
     const activeResize = this.activeResize;
     if (!activeResize) return;
 
-    const context = getRenderedHtmlTableContext(this.view, activeResize.tablePos);
+    const context = getRenderedTableContext(this.view, activeResize.tablePos, htmlTableDomAdapter);
     const table = this.view.state.doc.nodeAt(activeResize.tablePos);
     if (!context || !table || table.type.name !== 'htmlTable') {
       this.clearActiveResize(true, true);
@@ -283,7 +285,7 @@ export class HtmlTableResizeController {
 
   private clearActiveResize(restoreWidths: boolean, clearInteractionState = false): void {
     if (restoreWidths && this.activeResize) {
-      const context = getRenderedHtmlTableContext(this.view, this.activeResize.tablePos);
+      const context = getRenderedTableContext(this.view, this.activeResize.tablePos, htmlTableDomAdapter);
       if (context) {
         applyTableColumnPreviewWidths(context.dom, this.activeResize.startWidths, this.options.cellMinWidth);
       }

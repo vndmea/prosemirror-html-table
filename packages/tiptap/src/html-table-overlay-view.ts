@@ -2,6 +2,7 @@ import { PluginKey } from '@tiptap/pm/state';
 import type { EditorView } from '@tiptap/pm/view';
 import { CellSelection } from 'prosemirror-html-table';
 
+import { htmlTableDomAdapter } from './html-table-dom-adapter.js';
 import type { HtmlTableTiptapOptions } from './options.js';
 import {
   getHtmlTableContextMenuState,
@@ -34,7 +35,8 @@ import {
 } from './html-table-overlay-geometry.js';
 import { getHtmlTableOverlayMount, HtmlTableOverlayHost } from './html-table-overlay-host.js';
 import { HtmlTableResizeController } from './html-table-resize-controller.js';
-import { getRenderedHtmlTableContext, measureHtmlTableGeometry } from './table-dom.js';
+import { getRenderedTableContext } from './table-interaction/dom-adapter.js';
+import { measureHtmlTableGeometry } from './table-dom.js';
 import { getTableSelectionInfo } from './table-utils.js';
 
 const ROW_HANDLE_OFFSET = 10;
@@ -176,7 +178,7 @@ export class HtmlTableOverlayView {
       return;
     }
 
-    const context = getRenderedHtmlTableContext(this.view, activeTable.tablePos);
+    const context = getRenderedTableContext(this.view, activeTable.tablePos, htmlTableDomAdapter);
     if (!context) {
       this.detach();
       return;
