@@ -36,6 +36,7 @@ npm install @tiptap/core prosemirror-state prosemirror-view
 - `createS1000DTableNodeSpecs({ names })` is experimental and only applies to schema generation.
 - Editing commands, clipboard helpers, and Tiptap integration currently support the default S1000D node names only.
 - The Tiptap DOM is an editor-internal structure and is not the same thing as a final HTML renderer for S1000D/CALS tables.
+- Browsers normalize nested table-section DOM. In current Tiptap output, section-bearing `tgroup` content such as `thead` and `tbody` can be hoisted out of the `tgroup` wrapper by the browser parser, so section-heavy editor DOM should be treated as experimental until the rendering model is redesigned.
 
 ## Schema
 
