@@ -1,5 +1,7 @@
 # Vue 3 + Tiptap v3 HTML Table Demo
 
+English | [简体中文](README.zh-CN.md)
+
 This example demonstrates `tiptap-html-table` in a Vue 3 + Tiptap v3 application.
 
 ## Playground

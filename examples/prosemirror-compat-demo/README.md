@@ -1,5 +1,7 @@
 # Pure ProseMirror Compat Demo
 
+English | [简体中文](README.zh-CN.md)
+
 Minimal ProseMirror demo for the core `prosemirror-html-table` package.
 
 ```bash

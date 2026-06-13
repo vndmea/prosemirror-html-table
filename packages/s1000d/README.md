@@ -1,5 +1,7 @@
 # prosemirror-html-table-s1000d
 
+English | [简体中文](README.zh-CN.md)
+
 S1000D/CALS table support for `prosemirror-html-table`.
 
 This package focuses on the S1000D table subset used by `proced.xsd`, while also providing an `extended` profile for broader CALS/S1000D table structures such as `spanspec`, `tfoot`, and graphic-only tables.
@@ -46,6 +48,7 @@ See also:
 - `examples/s1000d-react-demo`
   - visual React demo for loading S1000D XML, editing the table, exporting XML, rendering final HTML, and running E2E
   - start with `npm run dev:demo:s1000d`
+  - or start the workspace directly with `npm run dev --workspace s1000d-react-demo`
   - test with `npm run test:e2e:s1000d`
   - included in the full repository E2E run: `npm run test:e2e`
 
@@ -211,6 +214,7 @@ Tiptap notes:
 ## Demo And E2E
 
 - run the S1000D visual demo with `npm run dev:demo:s1000d`
+- or run its workspace directly with `npm run dev --workspace s1000d-react-demo`
 - run only the S1000D Playwright suite with `npm run test:e2e:s1000d`
 - run the full repository Playwright suite with `npm run test:e2e`
 - run only the original Vue/Tiptap Playwright suite with `npm run test:e2e:tiptap`

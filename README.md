@@ -40,6 +40,7 @@ npm install
 npm run dev --workspace vue3-tiptap-table-demo
 npm run dev --workspace prosemirror-compat-demo
 npm run dev:demo:s1000d
+npm run dev --workspace s1000d-react-demo
 ```
 
 The Vue playground is the full Tiptap integration surface: it includes a full HTML table with `caption`, `colgroup`, `thead`, `tbody`, and `tfoot`, plus row/column handles, nested context menus, resize and extend controls, selection overlays, and a compact toolbar for table-level commands.
@@ -69,6 +70,7 @@ The S1000D React demo is the visual package-level verification surface: it loads
 - `examples/s1000d-react-demo`
   - visual React demo
   - local run: `npm run dev:demo:s1000d`
+  - workspace run: `npm run dev --workspace s1000d-react-demo`
   - E2E: `npm run test:e2e:s1000d`
   - included in full E2E: `npm run test:e2e`
 
@@ -418,6 +420,13 @@ Run the pure ProseMirror compat demo:
 
 ```bash
 npm run dev --workspace prosemirror-compat-demo
+```
+
+Run the S1000D React demo:
+
+```bash
+npm run dev:demo:s1000d
+npm run dev --workspace s1000d-react-demo
 ```
 
 Run only the original Vue/Tiptap E2E suite:

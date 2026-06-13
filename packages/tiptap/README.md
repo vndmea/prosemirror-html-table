@@ -1,5 +1,7 @@
 # tiptap-html-table
 
+English | [简体中文](README.zh-CN.md)
+
 Tiptap v3 extensions for editing full HTML table structures.
 
 ## Install

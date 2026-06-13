@@ -1,5 +1,7 @@
 # prosemirror-html-table
 
+English | [简体中文](README.zh-CN.md)
+
 Section-aware ProseMirror table primitives for full HTML table structures.
 
 ## Install

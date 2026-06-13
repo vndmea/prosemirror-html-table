@@ -25,7 +25,16 @@ packages/tiptap  基于 core 包构建的 Tiptap v3 节点扩展和命令封装
 
 ## Playground
 
-仓库提供了一个基于 Vue 3 + Tiptap v3 的 playground，位置在 `examples/vue3-tiptap-table`。
+仓库当前提供了三个本地 demo / playground：
+
+- `examples/vue3-tiptap-table`
+  - 基于 Vue 3 + Tiptap v3 的完整 HTML table playground
+
+- `examples/prosemirror-compat-demo`
+  - 纯 ProseMirror 兼容性 demo
+
+- `examples/s1000d-react-demo`
+  - 基于 React + Tiptap 的 S1000D 可视化 demo
 
 在线体验：
 
@@ -36,9 +45,43 @@ packages/tiptap  基于 core 包构建的 Tiptap v3 节点扩展和命令封装
 ```bash
 npm install
 npm run dev --workspace vue3-tiptap-table-demo
+npm run dev --workspace prosemirror-compat-demo
+npm run dev:demo:s1000d
+npm run dev --workspace s1000d-react-demo
 ```
 
-playground 内置了一个完整 HTML 表格示例，包含 `caption`、`colgroup`、`thead`、`tbody` 和 `tfoot`，同时提供行列手柄、多级上下文菜单、resize 与扩展控件、selection overlay，以及一个聚焦表级操作的精简工具栏。
+Vue playground 内置了一个完整 HTML 表格示例，包含 `caption`、`colgroup`、`thead`、`tbody` 和 `tfoot`，同时提供行列手柄、多级上下文菜单、resize 与扩展控件、selection overlay，以及一个聚焦表级操作的精简工具栏。
+
+纯 ProseMirror demo 是最小兼容性验证面，用来验证 `tableEditing()`、`CellSelection.content()`、`officialCompat`、JSON 输出和 HTML 序列化。
+
+S1000D React demo 是面向包能力的可视化验证面，用来加载 S1000D XML、编辑表格、运行 S1000D commands、导出 XML、渲染最终 HTML，并验证 clipboard MVP。
+
+## E2E 测试套件
+
+- `npm run test:e2e`
+  - 运行完整端到端测试
+  - 先跑 Vue/Tiptap demo
+  - 再跑 S1000D React demo
+
+- `npm run test:e2e:tiptap`
+  - 只运行原有 Vue/Tiptap demo 的 E2E
+
+- `npm run test:e2e:s1000d`
+  - 只运行 S1000D React demo 的 E2E
+
+## S1000D demo 面
+
+- `examples/s1000d-snippets`
+  - 仅包含 API snippets
+  - 用于 typecheck 覆盖和复制示例
+  - 不是浏览器可视化 demo
+
+- `examples/s1000d-react-demo`
+  - S1000D React 可视化 demo
+  - 本地运行：`npm run dev:demo:s1000d`
+  - workspace 运行：`npm run dev --workspace s1000d-react-demo`
+  - 专属 E2E：`npm run test:e2e:s1000d`
+  - 完整 E2E 也会覆盖：`npm run test:e2e`
 
 ## Install
 
@@ -276,6 +319,7 @@ npm install
 npm run lint
 npm run typecheck
 npm test
+npm run test:e2e
 npm run build
 ```
 
@@ -283,6 +327,31 @@ npm run build
 
 ```bash
 npm run dev --workspace vue3-tiptap-table-demo
+```
+
+运行纯 ProseMirror compat demo：
+
+```bash
+npm run dev --workspace prosemirror-compat-demo
+```
+
+运行 S1000D React demo：
+
+```bash
+npm run dev:demo:s1000d
+npm run dev --workspace s1000d-react-demo
+```
+
+只运行原有 Vue/Tiptap E2E：
+
+```bash
+npm run test:e2e:tiptap
+```
+
+只运行 S1000D React demo E2E：
+
+```bash
+npm run test:e2e:s1000d
 ```
 
 ## License

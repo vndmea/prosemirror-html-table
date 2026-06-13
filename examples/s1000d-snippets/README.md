@@ -1,5 +1,7 @@
 # S1000D Snippets
 
+English | [简体中文](README.zh-CN.md)
+
 This directory contains small API-oriented S1000D usage snippets.
 
 These files are intended for:
