@@ -168,7 +168,9 @@ export function applyS1000DClipboardToSelection(
     return true;
   }
 
-  const selectionInfo = getSelectionInfo(state, options);
+  const selectionInfo = isS1000DCellSelection(state.selection)
+    ? getSelectionInfo(state, options)
+    : undefined;
   const cellContext = selectionInfo ?? findCellContext(state, options);
   if (!cellContext || clipboard.rows.length === 0) return false;
   if (!isSimpleClipboard(clipboard) || !isSimpleTarget(cellContext.grid, selectionInfo)) {

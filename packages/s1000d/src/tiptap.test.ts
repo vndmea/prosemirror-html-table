@@ -1,5 +1,5 @@
 import { Fragment, Schema, type Node as ProseMirrorNode } from 'prosemirror-model';
-import { EditorState } from 'prosemirror-state';
+import { EditorState, TextSelection } from 'prosemirror-state';
 import type { EditorView } from 'prosemirror-view';
 import { describe, expect, it } from 'vitest';
 
@@ -125,6 +125,37 @@ describe('S1000D tiptap integration', () => {
     expect(getEntryTexts(view.state.doc)).toEqual(['X', 'Y', 'Z', 'W']);
   });
 
+  it('pastes into the entry that contains the current text cursor', () => {
+    const plugin = createS1000DTableEditingPlugin(defaultS1000DTableTiptapOptions);
+    const sourceState = createStateWithSelection(['A', 'B', 'C', 'D'], [0, 1]);
+    const copyView = createView(sourceState);
+    const copyEvent = createClipboardEvent();
+
+    const copied = plugin.props.handleDOMEvents?.copy?.call(plugin, copyView, copyEvent as unknown as ClipboardEvent);
+    expect(copied).toBe(true);
+
+    const targetState = createStateWithTextCursor(['A', 'B', 'C', 'D'], 2);
+    const targetView = createView(targetState);
+    const pasteEvent = createClipboardEvent({
+      html: copyEvent.clipboardData.getData('text/html'),
+      plain: copyEvent.clipboardData.getData('text/plain'),
+    });
+
+    const handled = plugin.props.handleDOMEvents?.paste?.call(plugin, targetView, pasteEvent as unknown as ClipboardEvent);
+
+    expect(handled).toBe(true);
+    expect(pasteEvent.prevented).toBe(true);
+    expect(getEntryTexts(targetView.state.doc)).toEqual(['A', 'B', 'A', 'B']);
+    expect(targetView.state.selection).toBeInstanceOf(S1000DCellSelection);
+    if (targetView.state.selection instanceof S1000DCellSelection) {
+      const entryPositions = findNodePositions(targetView.state.doc, 's1000dEntry');
+      expect([targetView.state.selection.anchorEntryPos, targetView.state.selection.headEntryPos]).toEqual([
+        entryPositions[2]!,
+        entryPositions[3]!,
+      ]);
+    }
+  });
+
   it('deletes the whole table on Delete when every cell is selected', () => {
     const plugin = createS1000DTableEditingPlugin(defaultS1000DTableTiptapOptions);
     const state = createStateWithSelection(['A', 'B', 'C', 'D'], [0, 3]);
@@ -136,6 +167,67 @@ describe('S1000D tiptap integration', () => {
     expect(handled).toBe(true);
     expect(event.prevented).toBe(true);
     expect(view.state.doc.child(0).type.name).toBe('paragraph');
+  });
+
+  it('collapses cell selections back to a text cursor on Escape', () => {
+    const plugin = createS1000DTableEditingPlugin(defaultS1000DTableTiptapOptions);
+    const state = createStateWithSelection(['A', 'B', 'C', 'D'], [0, 1]);
+    const view = createView(state);
+    const event = createKeyboardEvent('Escape');
+
+    const handled = plugin.props.handleKeyDown?.call(plugin, view, event as unknown as KeyboardEvent);
+
+    expect(handled).toBe(true);
+    expect(event.prevented).toBe(true);
+    expect(view.state.selection).toBeInstanceOf(TextSelection);
+  });
+
+  it('extends an existing S1000D cell selection with Shift-ArrowRight', () => {
+    const plugin = createS1000DTableEditingPlugin(defaultS1000DTableTiptapOptions);
+    const state = createStateWithSelection(['A', 'B', 'C', 'D'], [0, 0]);
+    const view = createView(state);
+    const entryPositions = findNodePositions(state.doc, 's1000dEntry');
+    const event = createKeyboardEvent('ArrowRight', { shiftKey: true });
+
+    const handled = plugin.props.handleKeyDown?.call(plugin, view, event as unknown as KeyboardEvent);
+
+    expect(handled).toBe(true);
+    expect(event.prevented).toBe(true);
+    expect(view.state.selection).toBeInstanceOf(S1000DCellSelection);
+    if (view.state.selection instanceof S1000DCellSelection) {
+      expect([view.state.selection.anchorEntryPos, view.state.selection.headEntryPos]).toEqual([
+        entryPositions[0],
+        entryPositions[1],
+      ]);
+    }
+  });
+
+  it('grows a rectangular S1000D cell range with Shift-ArrowRight then Shift-ArrowDown', () => {
+    const plugin = createS1000DTableEditingPlugin(defaultS1000DTableTiptapOptions);
+    const state = createStateWithTextCursor(['A', 'B', 'C', 'D'], 0);
+    const view = createView(state);
+    const entryPositions = findNodePositions(state.doc, 's1000dEntry');
+
+    const firstHandled = plugin.props.handleKeyDown?.call(
+      plugin,
+      view,
+      createKeyboardEvent('ArrowRight', { shiftKey: true }) as unknown as KeyboardEvent,
+    );
+    const secondHandled = plugin.props.handleKeyDown?.call(
+      plugin,
+      view,
+      createKeyboardEvent('ArrowDown', { shiftKey: true }) as unknown as KeyboardEvent,
+    );
+
+    expect(firstHandled).toBe(true);
+    expect(secondHandled).toBe(true);
+    expect(view.state.selection).toBeInstanceOf(S1000DCellSelection);
+    if (view.state.selection instanceof S1000DCellSelection) {
+      expect([view.state.selection.anchorEntryPos, view.state.selection.headEntryPos]).toEqual([
+        entryPositions[0],
+        entryPositions[3],
+      ]);
+    }
   });
 
   it('resolves rendered table context with active tgroup metadata', () => {
@@ -216,6 +308,18 @@ function createStateWithSelection(texts: string[], selection: [number, number]):
     schema,
     doc,
     selection: S1000DCellSelection.create(doc, entryPositions[selection[0]]!, entryPositions[selection[1]]!),
+  });
+}
+
+function createStateWithTextCursor(texts: string[], entryIndex: number): EditorState {
+  const table = withEntryTexts(createTableNode(), texts);
+  const doc = schema.nodes.doc!.create(null, [table]);
+  const entryPositions = findNodePositions(doc, 's1000dEntry');
+
+  return EditorState.create({
+    schema,
+    doc,
+    selection: TextSelection.near(doc.resolve(entryPositions[entryIndex]! + 1)),
   });
 }
 
@@ -323,9 +427,24 @@ function createClipboardEvent(
   };
 }
 
-function createKeyboardEvent(key: string): { key: string; prevented: boolean; preventDefault: () => void } {
+function createKeyboardEvent(
+  key: string,
+  options: Partial<Pick<KeyboardEvent, 'shiftKey' | 'ctrlKey' | 'metaKey' | 'altKey'>> = {},
+): {
+  key: string;
+  shiftKey: boolean;
+  ctrlKey: boolean;
+  metaKey: boolean;
+  altKey: boolean;
+  prevented: boolean;
+  preventDefault: () => void;
+} {
   return {
     key,
+    shiftKey: options.shiftKey ?? false,
+    ctrlKey: options.ctrlKey ?? false,
+    metaKey: options.metaKey ?? false,
+    altKey: options.altKey ?? false,
     prevented: false,
     preventDefault() {
       this.prevented = true;

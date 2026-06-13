@@ -190,6 +190,26 @@ function createTableExtension(
           return this.editor.commands.goToNextS1000DTableCell();
         },
         'Shift-Tab': () => (this.options.enableTabNavigation ? this.editor.commands.goToPreviousS1000DTableCell() : false),
+        'Shift-ArrowLeft': () => (
+          this.options.enableShiftArrowSelection
+            ? extendCellSelection(this.editor.view, 'horiz', -1)
+            : false
+        ),
+        'Shift-ArrowRight': () => (
+          this.options.enableShiftArrowSelection
+            ? extendCellSelection(this.editor.view, 'horiz', 1)
+            : false
+        ),
+        'Shift-ArrowUp': () => (
+          this.options.enableShiftArrowSelection
+            ? extendCellSelection(this.editor.view, 'vert', -1)
+            : false
+        ),
+        'Shift-ArrowDown': () => (
+          this.options.enableShiftArrowSelection
+            ? extendCellSelection(this.editor.view, 'vert', 1)
+            : false
+        ),
       };
     },
 
@@ -539,6 +559,14 @@ function handleKeyDown(
   event: KeyboardEvent,
   options: S1000DTableTiptapOptions,
 ): boolean {
+  if (event.key === 'Escape' && isS1000DCellSelection(view.state.selection)) {
+    const collapsed = collapseS1000DCellSelection(view);
+    if (collapsed) {
+      event.preventDefault();
+    }
+    return collapsed;
+  }
+
   if ((event.key === 'Backspace' || event.key === 'Delete') && isS1000DCellSelection(view.state.selection)) {
     if (isWholeS1000DTableSelection(view.state) && options.deleteTableOnAllCellsSelected) {
       const deleted = deleteCurrentTable(view.state, view.dispatch);
@@ -565,6 +593,18 @@ function handleKeyDown(
   }
 
   return false;
+}
+
+function collapseS1000DCellSelection(view: EditorView): boolean {
+  const selection = view.state.selection;
+  if (!isS1000DCellSelection(selection)) {
+    return false;
+  }
+
+  view.dispatch(
+    view.state.tr.setSelection(TextSelection.near(view.state.doc.resolve(selection.headEntryPos + 1))).scrollIntoView(),
+  );
+  return true;
 }
 
 function normalizeSelection(

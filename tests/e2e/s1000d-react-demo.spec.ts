@@ -128,7 +128,7 @@ test.describe('S1000D React demo', () => {
 
     const table = page.getByTestId('editor').getByTestId('s1000d-table');
     await table.hover();
-    await page.getByTestId('s1000d-row-handle').first().click();
+    await page.getByTestId('s1000d-row-handle').nth(1).click();
 
     await page.getByTestId('export-xml').click();
     const beforeXml = await page.getByTestId('xml-output').textContent();
@@ -142,27 +142,23 @@ test.describe('S1000D React demo', () => {
     expect(afterXml?.match(/<row\b/g)?.length ?? 0).toBe(beforeRows - 1);
   });
 
-  test('cell context menu can merge and split a dragged cell range', async ({ page }) => {
+  test('cell context menu can merge and split a keyboard-selected cell range', async ({ page }) => {
     await page.goto('/');
-    await page.getByTestId('load-proced').click();
+    await page.getByTestId('load-extended').click();
 
     const table = page.getByTestId('editor').getByTestId('s1000d-table');
     const bodyRows = table.locator('tbody[data-s1000d="tbody"] tr');
-    const firstCell = bodyRows.first().locator('td').first();
-    const secondCell = bodyRows.first().locator('td').nth(1);
-    const firstBox = await firstCell.boundingBox();
-    const secondBox = await secondCell.boundingBox();
-    expect(firstBox).toBeTruthy();
-    expect(secondBox).toBeTruthy();
-
-    await table.hover();
-    await page.mouse.move(firstBox!.x + (firstBox!.width / 2), firstBox!.y + (firstBox!.height / 2));
-    await page.mouse.down();
-    await page.mouse.move(secondBox!.x + (secondBox!.width / 2), secondBox!.y + (secondBox!.height / 2), { steps: 5 });
-    await page.mouse.up();
+    await bodyRows.nth(0).locator('td').nth(1).click();
+    await page.getByTestId('add-row-after').click();
+    await bodyRows.nth(0).locator('td').nth(1).click();
+    await page.keyboard.press('Shift+ArrowRight');
+    await page.keyboard.press('Shift+ArrowDown');
 
     await expect(page.getByTestId('selection-scope-label')).toHaveText('Selection actions');
+    await expect(page.getByTestId('selection-output')).toContainText('Rows 3-4');
+    await expect(page.getByTestId('selection-output')).toContainText('Columns 1-2');
     await page.getByTestId('selection-actions-trigger').click();
+    await expect(page.getByTestId('selection-menu-item-merge-cells')).toBeEnabled();
     await page.getByTestId('selection-menu-item-merge-cells').click();
     await page.getByTestId('render-html').click();
     await expect(page.getByTestId('html-output')).toContainText('colspan=');
@@ -179,7 +175,7 @@ test.describe('S1000D React demo', () => {
 
     const table = page.getByTestId('editor').getByTestId('s1000d-table');
     await table.hover();
-    await page.getByTestId('s1000d-row-handle').first().click();
+    await page.getByTestId('s1000d-row-handle').nth(1).click();
     await page.getByTestId('export-xml').click();
     const beforeXml = await page.getByTestId('xml-output').textContent();
     const beforeRows = beforeXml?.match(/<row\b/g)?.length ?? 0;

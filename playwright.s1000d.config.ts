@@ -31,9 +31,9 @@ export default defineConfig({
   webServer: {
     command: `npm run dev -w s1000d-react-demo -- --port ${E2E_PORT} --strictPort`,
     url: E2E_BASE_URL,
-    // Always boot the dedicated S1000D demo server.
-    // Reusing an arbitrary local Vite server can silently point E2E at the Vue demo instead.
-    reuseExistingServer: false,
+    // Reuse an already-running dedicated S1000D demo locally to avoid port collisions,
+    // but keep CI isolated by forcing Playwright to boot its own server there.
+    reuseExistingServer: !process.env.CI,
     timeout: 120_000,
   },
 });

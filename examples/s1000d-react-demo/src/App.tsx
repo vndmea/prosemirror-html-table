@@ -9,7 +9,6 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { NodeSelection, type EditorState } from 'prosemirror-state';
 
 import {
-  S1000DCellSelection,
   isS1000DCellSelection,
   serializeS1000DTableXml,
   validateS1000DTable,
@@ -209,7 +208,6 @@ export function App() {
   useEffect(() => {
     if (!editor) return;
     loadSample('proced');
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editor]);
 
   function updateAll(state: EditorState | null, nextProfile: S1000DTableProfile) {
@@ -225,12 +223,17 @@ export function App() {
     if (!editor) return;
     const nextProfile = inferProfile(kind);
     const doc = createDocFromS1000DXml(editor.schema, getSampleXml(kind), nextProfile);
-    editor.commands.setContent(doc.toJSON());
     setProfile(nextProfile);
+    editor.view.dispatch(
+      editor.state.tr
+        .replaceWith(0, editor.state.doc.content.size, doc.content)
+        .setMeta('addToHistory', false),
+    );
 
     const state = editor.state;
     const focusTr = focusFirstBodyCell(state);
     if (focusTr) {
+      focusTr.setMeta('addToHistory', false);
       editor.view.dispatch(focusTr);
     }
 
