@@ -1,5 +1,7 @@
 export { createS1000DTableAdapter } from './adapter.js';
 export type { S1000DTableAdapter } from './adapter.js';
+export { createS1000DTableNode } from './builder.js';
+export type { CreateS1000DTableOptions } from './builder.js';
 export {
   addS1000DColumnAfter,
   addS1000DColumnBefore,
@@ -41,6 +43,9 @@ export type {
 export { createS1000DTableNodeSpecs, normalizeS1000DTableSchemaOptions } from './schema.js';
 export { parseS1000DTableXml, serializeS1000DTableXml } from './xml/index.js';
 export { createS1000DTableExtensions } from './tiptap.js';
+export { S1000DTableExtensions, defaultS1000DTableTiptapOptions } from './tiptap.js';
+export { createS1000DTableEditingPlugin } from './tiptap.js';
+export type { CreateS1000DTableExtensionsOptions, S1000DTableTiptapOptions } from './tiptap.js';
 export { normalizeS1000DTableProfile } from './profile.js';
 export type { S1000DTableProfile } from './profile.js';
 export { S1000DCellSelection, isS1000DCellSelection } from './selection.js';
@@ -48,6 +53,16 @@ export type { S1000DCellSelectionJSON } from './selection.js';
 export { createEmptyS1000DEntry, createEmptyS1000DEntryContent, normalizeS1000DTable, normalizeS1000DTgroup } from './normalize.js';
 export { S1000DTableMap, createS1000DTableMap } from './table-map.js';
 export type { S1000DTableRect } from './table-map.js';
+export {
+  applyS1000DClipboardToSelection,
+  clearS1000DSelectedCells,
+  getS1000DSelectionInfo,
+  isWholeS1000DTableSelection,
+  parseS1000DHtmlClipboard,
+  parseS1000DPlainTextClipboard,
+  serializeS1000DCellSelectionToHtml,
+  serializeS1000DCellSelectionToText,
+} from './clipboard.js';
 export { validateS1000DTable } from './validation.js';
 export type {
   S1000DTableValidationIssue,
