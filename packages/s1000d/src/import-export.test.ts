@@ -64,6 +64,29 @@ describe('S1000D table XML import/export', () => {
     );
   });
 
+  it('round-trips nested entry block XML losslessly in extended profile', () => {
+    const xml = `
+      <table id="tab-1">
+        <tgroup cols="1">
+          <tbody>
+            <row id="row-1">
+              <entry>
+                <para><emphasis emphasisType="bold">Bold</emphasis> text <internalRef internalRefId="step-1">Step 1</internalRef></para>
+                <note id="n1"><para>Nested note para</para></note>
+              </entry>
+            </row>
+          </tbody>
+        </tgroup>
+      </table>`;
+
+    const node = parseS1000DTableXml(xml, extendedSchema, { profile: 'extended' });
+    const output = serializeS1000DTableXml(node, { profile: 'extended' });
+
+    expect(canonicalXml(output)).toBe(canonicalXml(
+      '<table id="tab-1"><tgroup cols="1"><tbody><row id="row-1"><entry><para><emphasis emphasisType="bold">Bold</emphasis> text <internalRef internalRefId="step-1">Step 1</internalRef></para><note id="n1"><para>Nested note para</para></note></entry></row></tbody></tgroup></table>',
+    ));
+  });
+
   it('rejects extended-only XML in proced profile', () => {
     expect(() => parseS1000DTableXml(
       '<table id="tab-1"><graphic infoEntityIdent="ICN-001"/></table>',
@@ -79,5 +102,15 @@ describe('S1000D table XML import/export', () => {
       '<table id="tab-1"><tgroup cols="1"><tbody><row id="row-1"><entry><warning>Warn</warning></entry></row></tbody></tgroup></table>',
       schema,
     )).toThrow(/warning/);
+
+    expect(() => parseS1000DTableXml(
+      '<table id="tab-1" tabstyle="fault"><tgroup cols="1"><tbody><row id="row-1"><entry>A</entry></row></tbody></tgroup></table>',
+      schema,
+    )).toThrow(/table@tabstyle/);
+
+    expect(() => parseS1000DTableXml(
+      '<table id="tab-1"><tgroup cols="1"><tbody><row id="row-1"><entry spanname="wide">A</entry></row></tbody></tgroup></table>',
+      schema,
+    )).toThrow(/entry@spanname/);
   });
 });

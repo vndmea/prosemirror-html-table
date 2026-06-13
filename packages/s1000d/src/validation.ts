@@ -1,5 +1,13 @@
 import type { Node as ProseMirrorNode } from 'prosemirror-model';
-import { allowsGraphicOnlyTable, allowsSpanspec, allowsTfoot, normalizeS1000DTableProfile, type S1000DTableProfile } from './profile.js';
+import {
+  allowsGraphicOnlyTable,
+  allowsSpanspec,
+  allowsTfoot,
+  isKnownButDisallowedAttr,
+  normalizeS1000DTableProfile,
+  supportsEntryBlockName,
+  type S1000DTableProfile,
+} from './profile.js';
 import { s1000dTableNodeNames } from './names.js';
 import { findColspecIndex, resolveColspecs } from './cals/colspec.js';
 import { findSpanspec, resolveSpanspecs } from './cals/spanspec.js';
@@ -52,6 +60,7 @@ function validateTableNode(
   issues: S1000DTableValidationIssue[],
   profile: S1000DTableProfile,
 ): void {
+  validateDisallowedAttrs(table, 'table', path, issues, profile);
   if (typeof table.attrs.id !== 'string' || table.attrs.id.length === 0) {
     issues.push({ path, message: 'table@id is required' });
   }
@@ -69,6 +78,7 @@ function validateTgroup(
   issues: S1000DTableValidationIssue[],
   profile: S1000DTableProfile,
 ): void {
+  validateDisallowedAttrs(tgroup, 'tgroup', path, issues, profile);
   const cols = resolveTgroupColumnCount(tgroup);
   if (cols < 1) issues.push({ path, message: 'tgroup@cols must be a positive integer' });
 
@@ -98,12 +108,15 @@ function validateTgroup(
   }
 
   tgroup.forEach((child, index) => {
+    if (child.type.name === s1000dTableNodeNames.colspec) {
+      validateDisallowedAttrs(child, 'colspec', `${path}/colspec[${index}]`, issues, profile);
+    }
     if (child.type.name === s1000dTableNodeNames.tfoot && !allowsTfoot(profile)) {
       issues.push({ path: `${path}/tfoot[${index}]`, message: 'tfoot is not allowed in proced profile' });
     }
   });
 
-  validateEntries(tgroup, path, issues, cols);
+  validateEntries(tgroup, path, issues, cols, profile);
 }
 
 function validateEntries(
@@ -111,20 +124,30 @@ function validateEntries(
   path: string,
   issues: S1000DTableValidationIssue[],
   cols: number,
+  profile: S1000DTableProfile,
 ): void {
   const colspecs = resolveColspecs(tgroup);
   const { spanspecs } = resolveSpanspecs(tgroup);
 
   tgroup.descendants((node, _pos, parent, index) => {
     if (node.type.name === s1000dTableNodeNames.row) {
+      validateDisallowedAttrs(node, 'row', `${path}/row[${index}]`, issues, profile);
       if (typeof node.attrs.id !== 'string' || node.attrs.id.length === 0) {
         issues.push({ path: `${path}/row[${index}]`, message: 'row@id is required' });
       }
       validateRowEntries(node, tgroup, `${path}/row[${index}]`, issues, cols);
       return true;
     }
+    if (node.type.name === s1000dTableNodeNames.entryBlock) {
+      const xmlName = typeof node.attrs.xmlName === 'string' ? node.attrs.xmlName : '';
+      if (!supportsEntryBlockName(profile, xmlName)) {
+        issues.push({ path: `${path}/entryBlock[${index}]`, message: `<${xmlName || 'unknown'}> is not allowed in ${profile} profile` });
+      }
+      return false;
+    }
     if (node.type.name !== s1000dTableNodeNames.entry) return true;
 
+    validateDisallowedAttrs(node, 'entry', `${path}/entry[${index}]`, issues, profile);
     if (node.attrs.colname && findColspecIndex(colspecs, node.attrs.colname) === undefined) {
       issues.push({ path: `${path}/entry[${index}]`, message: `entry references unknown colname "${node.attrs.colname}"` });
     }
@@ -152,7 +175,7 @@ function validateEntries(
       issues.push({ path: `${path}/entry[${index}]`, message: 'cautionRefs must be valid IDREFS' });
     }
 
-    return false;
+    return true;
   });
 }
 
@@ -183,4 +206,42 @@ function validateRowEntries(
 
 function isIdrefs(value: string): boolean {
   return value.trim().split(/\s+/).every((item) => /^[A-Za-z_][\w.-]*$/.test(item));
+}
+
+function validateDisallowedAttrs(
+  node: ProseMirrorNode,
+  elementName: string,
+  path: string,
+  issues: S1000DTableValidationIssue[],
+  profile: S1000DTableProfile,
+): void {
+  for (const [name, value] of Object.entries(node.attrs)) {
+    if (
+      name !== 'rawAttrs'
+      && name !== 'changeAttrs'
+      && name !== 'authorityAttrs'
+      && name !== 'securityAttrs'
+      && value != null
+      && value !== ''
+      && isKnownButDisallowedAttr(profile, elementName, name)
+    ) {
+      issues.push({ path, message: `${elementName}@${name} is not allowed in ${profile} profile` });
+    }
+  }
+
+  const groupedAttrs = [
+    node.attrs.rawAttrs,
+    node.attrs.changeAttrs,
+    node.attrs.authorityAttrs,
+    node.attrs.securityAttrs,
+  ];
+
+  for (const attrs of groupedAttrs) {
+    if (!attrs || typeof attrs !== 'object') continue;
+    for (const name of Object.keys(attrs)) {
+      if (isKnownButDisallowedAttr(profile, elementName, name)) {
+        issues.push({ path, message: `${elementName}@${name} is not allowed in ${profile} profile` });
+      }
+    }
+  }
 }

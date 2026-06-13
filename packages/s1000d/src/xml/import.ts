@@ -15,12 +15,13 @@ import {
   getKnownSpanspecAttrs,
   getKnownTableAttrs,
   getKnownTgroupAttrs,
+  isKnownButDisallowedAttr,
   normalizeS1000DTableProfile,
   supportsEntryBlockName,
   type S1000DTableProfile,
 } from '../profile.js';
 import type { ParseS1000DTableXmlOptions } from '../types.js';
-import { childElements, firstChildElement, getDirectText, parseXmlDocument, type XmlElement } from './dom.js';
+import { childElements, firstChildElement, getDirectText, parseXmlDocument, serializeXmlChildren, type XmlElement } from './dom.js';
 
 export function parseS1000DTableXml(
   xml: string,
@@ -42,6 +43,7 @@ function parseTableElement(
   names: S1000DTableNodeNames,
   profile: S1000DTableProfile,
 ): ProseMirrorNode {
+  assertNoDisallowedAttrs(element, profile);
   const children: ProseMirrorNode[] = [];
   const title = firstChildElement(element, 'title');
   const tgroups = childElements(element, 'tgroup');
@@ -67,17 +69,20 @@ function parseTgroupElement(
   names: S1000DTableNodeNames,
   profile: S1000DTableProfile,
 ): ProseMirrorNode {
+  assertNoDisallowedAttrs(element, profile);
   const children: ProseMirrorNode[] = [];
 
   for (const child of childElements(element)) {
     switch (child.localName) {
       case 'colspec':
+        assertNoDisallowedAttrs(child, profile);
         children.push(createLeaf(schema, names.colspec, collectElementAttrs(child, getKnownColspecAttrs(profile))));
         break;
       case 'spanspec':
         if (!allowsSpanspec(profile)) {
           throw new Error('S1000D table XML import does not allow <spanspec> in proced profile.');
         }
+        assertNoDisallowedAttrs(child, profile);
         children.push(createLeaf(schema, names.spanspec, collectElementAttrs(child, getKnownSpanspecAttrs(profile))));
         break;
       case 'thead':
@@ -107,6 +112,7 @@ function parseSectionElement(
   nodeName: string,
   profile: S1000DTableProfile,
 ): ProseMirrorNode {
+  assertNoDisallowedAttrs(element, profile);
   const children = childElements(element).flatMap((child) => {
     if (child.localName === 'colspec') {
       return [createLeaf(schema, names.colspec, collectElementAttrs(child, getKnownColspecAttrs(profile)))];
@@ -126,6 +132,7 @@ function parseRowElement(
   names: S1000DTableNodeNames,
   profile: S1000DTableProfile,
 ): ProseMirrorNode {
+  assertNoDisallowedAttrs(element, profile);
   const children = childElements(element, 'entry').map((entry) => parseEntryElement(entry, schema, names, profile));
   return createNode(schema, names.row, collectElementAttrs(element, getKnownRowAttrs(profile)), children);
 }
@@ -136,6 +143,7 @@ function parseEntryElement(
   names: S1000DTableNodeNames,
   profile: S1000DTableProfile,
 ): ProseMirrorNode {
+  assertNoDisallowedAttrs(element, profile);
   const children: ProseMirrorNode[] = [];
 
   for (const child of childElements(element)) {
@@ -168,7 +176,11 @@ function createEntryBlock(
     names,
     element.localName,
     element.textContent.trim(),
-    collectElementAttrs(element, entryBlockAttrs),
+    {
+      ...collectElementAttrs(element, entryBlockAttrs),
+      rawXml: serializeXmlChildren(element) || null,
+      rawText: element.textContent.trim() || null,
+    },
   );
 }
 
@@ -192,6 +204,17 @@ function createEntryBlockFromText(
   }
 
   return nodeType.create(null, text ? schema.text(text) : undefined);
+}
+
+function assertNoDisallowedAttrs(
+  element: XmlElement,
+  profile: S1000DTableProfile,
+): void {
+  for (const attr of element.attributes) {
+    if (isKnownButDisallowedAttr(profile, element.localName, attr.name)) {
+      throw new Error(`S1000D table XML import does not allow ${element.localName}@${attr.name} in ${profile} profile.`);
+    }
+  }
 }
 
 function createLeaf(schema: Schema, nodeName: string, attrs: Record<string, unknown>): ProseMirrorNode {

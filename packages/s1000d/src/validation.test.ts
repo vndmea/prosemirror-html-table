@@ -53,7 +53,7 @@ describe('S1000D table validation', () => {
 
   it('flags proced-disallowed nodes when validating an extended document under proced profile', () => {
     const table = parseS1000DTableXml(
-      '<table id="tab-1"><tgroup cols="2"><colspec colname="c1" colnum="1"/><colspec colname="c2" colnum="2"/><spanspec spanname="wide" namest="c1" nameend="c2"/><tfoot><row id="foot-row"><entry>F</entry></row></tfoot><tbody><row id="body-row"><entry spanname="wide">B</entry></row></tbody></tgroup></table>',
+      '<table id="tab-1" tabstyle="fault"><tgroup cols="2" tgstyle="main"><colspec colname="c1" colnum="1"/><colspec colname="c2" colnum="2"/><spanspec spanname="wide" namest="c1" nameend="c2"/><tfoot><row id="foot-row"><entry>F</entry></row></tfoot><tbody><row id="body-row"><entry spanname="wide"><warning>Warn</warning></entry></row></tbody></tgroup></table>',
       extendedSchema,
       { profile: 'extended' },
     );
@@ -62,8 +62,13 @@ describe('S1000D table validation', () => {
 
     expect(result.valid).toBe(false);
     expect(result.issues.map((issue) => issue.message)).toEqual(expect.arrayContaining([
+      'table@tabstyle is not allowed in proced profile',
+      'tgroup@tgstyle is not allowed in proced profile',
+      'colspec@colnum is not allowed in proced profile',
       'spanspec is not allowed in proced profile',
       'tfoot is not allowed in proced profile',
+      'entry@spanname is not allowed in proced profile',
+      '<warning> is not allowed in proced profile',
     ]));
   });
 });

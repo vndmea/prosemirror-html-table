@@ -64,6 +64,10 @@ export function getDirectText(element: XmlElement): string {
     .trim();
 }
 
+export function serializeXmlChildren(element: XmlElement): string {
+  return element.children.map((child) => serializeXmlChild(child)).join('');
+}
+
 function createElement(
   localName: string,
   attributes: Array<{ name: string; value: string }>,
@@ -103,4 +107,23 @@ function decodeXml(value: string): string {
     .replace(/&gt;/g, '>')
     .replace(/&lt;/g, '<')
     .replace(/&amp;/g, '&');
+}
+
+function serializeXmlChild(child: XmlElement | string): string {
+  if (typeof child === 'string') {
+    return child
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+  }
+
+  const attrs = child.attributes
+    .map((attr) => ` ${attr.name}="${attr.value
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')}"`)
+    .join('');
+  const content = serializeXmlChildren(child);
+  return `<${child.localName}${attrs}>${content}</${child.localName}>`;
 }

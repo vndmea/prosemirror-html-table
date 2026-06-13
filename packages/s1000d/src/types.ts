@@ -95,6 +95,8 @@ export type S1000DEntryBlockName = 'para' | 'warning' | 'caution' | 'note' | 'le
 
 export interface S1000DEntryBlockAttrs {
   xmlName: S1000DEntryBlockName;
+  rawXml: string | null;
+  rawText: string | null;
   rawAttrs: S1000DRawAttrs;
 }
 

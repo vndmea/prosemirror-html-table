@@ -109,5 +109,5 @@ export const spanspecAttrs = ['spanname', 'namest', 'nameend', 'colsep', 'rowsep
 export const sectionAttrs = ['valign'] as const;
 export const rowAttrs = ['applicRefId', 'rowsep', 'id'] as const;
 export const entryAttrs = ['applicRefId', 'colname', 'namest', 'nameend', 'spanname', 'morerows', 'colsep', 'rowsep', 'rotate', 'valign', 'align', 'charoff', 'char', 'id', 'warningRefs', 'cautionRefs'] as const;
-export const entryBlockAttrs = ['xmlName'] as const;
+export const entryBlockAttrs = ['xmlName', 'rawXml', 'rawText'] as const;
 export const graphicAttrs = ['infoEntityIdent'] as const;

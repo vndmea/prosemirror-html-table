@@ -76,14 +76,25 @@ function serializeEntry(node: ProseMirrorNode, names: S1000DTableNodeNames, know
     : Array.from({ length: node.childCount }, (_value, index) => {
       const child = node.child(index);
       if (child.type.name === names.entryBlock) {
-        const xmlName = typeof child.attrs.xmlName === 'string' ? child.attrs.xmlName : 'para';
-        return `<${xmlName}${renderXmlAttrs(child.attrs, [])}>${escapeXmlText(child.textContent)}</${xmlName}>`;
+        return serializeEntryBlock(child);
       }
 
       return `<para>${escapeXmlText(child.textContent)}</para>`;
     }).join('');
 
   return `<entry${renderXmlAttrs(node.attrs, knownAttrs)}>${content}</entry>`;
+}
+
+function serializeEntryBlock(node: ProseMirrorNode): string {
+  const xmlName = typeof node.attrs.xmlName === 'string' ? node.attrs.xmlName : 'para';
+  const rawXml = typeof node.attrs.rawXml === 'string' ? node.attrs.rawXml : null;
+  const rawText = typeof node.attrs.rawText === 'string' ? node.attrs.rawText : null;
+
+  if (rawXml !== null && rawText === node.textContent) {
+    return `<${xmlName}${renderXmlAttrs(node.attrs, [])}>${rawXml}</${xmlName}>`;
+  }
+
+  return `<${xmlName}${renderXmlAttrs(node.attrs, [])}>${escapeXmlText(node.textContent)}</${xmlName}>`;
 }
 
 function serializeLeaf(xmlName: string, node: ProseMirrorNode, knownAttrs: readonly string[]): string {
