@@ -12,6 +12,6 @@
       "tiptap-html-table": ["packages/tiptap/src/index.ts"]
     }
   },
-  "include": ["packages/**/*.ts", "tests/**/*.ts", "examples/s1000d/**/*.ts", "*.config.ts"],
+  "include": ["packages/**/*.ts", "tests/**/*.ts", "examples/s1000d-snippets/**/*.ts", "*.config.ts"],
   "exclude": ["packages/*/dist", "node_modules"]
 }

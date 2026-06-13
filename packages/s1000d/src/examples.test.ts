@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 function readExample(relativePath: string): string {
-  return readFileSync(new URL(`../../../examples/s1000d/${relativePath}`, import.meta.url), 'utf8');
+  return readFileSync(new URL(`../../../examples/s1000d-snippets/${relativePath}`, import.meta.url), 'utf8');
 }
 
 describe('S1000D examples', () => {
@@ -24,5 +24,16 @@ describe('S1000D examples', () => {
     expect(rendererBasic).not.toContain('../src/');
     expect(tiptapBasic).not.toContain('../src/');
     expect(clipboardBasic).not.toContain('../src/');
+  });
+
+  it('keeps clipboard and tiptap examples aligned with the documented boundaries', () => {
+    const clipboardBasic = readExample('clipboard-basic.ts');
+    const tiptapBasic = readExample('tiptap-basic.ts');
+
+    expect(clipboardBasic).toContain('S1000DCellSelection.create');
+    expect(clipboardBasic).toContain('serializeS1000DCellSelectionToHtml(state)');
+    expect(clipboardBasic).toContain('parsedRows');
+    expect(tiptapBasic).toContain('Minimal type-level Tiptap setup example.');
+    expect(tiptapBasic).toContain('real DOM/Vite application');
   });
 });

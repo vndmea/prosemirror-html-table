@@ -2,6 +2,7 @@ import { Schema } from 'prosemirror-model';
 import { EditorState } from 'prosemirror-state';
 
 import {
+  S1000DCellSelection,
   createS1000DTableNodeSpecs,
   parseS1000DTableXml,
 } from 'prosemirror-html-table-s1000d';
@@ -34,8 +35,24 @@ if (!doc) {
   throw new Error('Failed to build example document.');
 }
 
-const state = EditorState.create({ schema, doc });
+const entryPositions: number[] = [];
+doc.descendants((node, pos) => {
+  if (node.type.name === 's1000dEntry') {
+    entryPositions.push(pos);
+  }
+  return true;
+});
+
+const state = EditorState.create({
+  schema,
+  doc,
+  selection: S1000DCellSelection.create(doc, entryPositions[0]!),
+});
 const html = serializeS1000DCellSelectionToHtml(state);
 const parsed = html ? parseS1000DHtmlClipboard(html, schema) : null;
 
-console.log({ hasHtml: Boolean(html), parsedRows: parsed?.rows.length ?? 0 });
+console.log({
+  hasHtml: Boolean(html),
+  parsedRows: parsed?.rows.length ?? 0,
+  firstCell: parsed?.rows[0]?.[0]?.text ?? null,
+});

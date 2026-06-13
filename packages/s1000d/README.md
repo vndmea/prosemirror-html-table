@@ -38,27 +38,24 @@ This package focuses on the S1000D table subset used by `proced.xsd`, while also
 
 See also:
 
-- [`examples/s1000d/schema-xml.ts`](../../examples/s1000d/schema-xml.ts)
-- [`examples/s1000d/tiptap-basic.ts`](../../examples/s1000d/tiptap-basic.ts)
-- [`examples/s1000d/clipboard-basic.ts`](../../examples/s1000d/clipboard-basic.ts)
-- [`examples/s1000d/renderer-basic.ts`](../../examples/s1000d/renderer-basic.ts)
+- [`examples/s1000d-snippets/README.md`](../../examples/s1000d-snippets/README.md)
+- [`examples/s1000d-snippets/schema-xml.ts`](../../examples/s1000d-snippets/schema-xml.ts)
+- [`examples/s1000d-snippets/tiptap-basic.ts`](../../examples/s1000d-snippets/tiptap-basic.ts)
+- [`examples/s1000d-snippets/clipboard-basic.ts`](../../examples/s1000d-snippets/clipboard-basic.ts)
+- [`examples/s1000d-snippets/renderer-basic.ts`](../../examples/s1000d-snippets/renderer-basic.ts)
 
 ## Install
 
 ```bash
-npm install prosemirror-html-table-s1000d prosemirror-model
+npm install prosemirror-html-table-s1000d prosemirror-model prosemirror-state
 ```
 
-For clipboard helpers, also install:
-
-```bash
-npm install prosemirror-state
-```
+If you only use schema / XML helpers, `prosemirror-state` will often stay unused at runtime, but it is still a required peer today because the main entry also exports commands and selection helpers.
 
 For Tiptap integration, also install:
 
 ```bash
-npm install @tiptap/core prosemirror-state prosemirror-view
+npm install @tiptap/core prosemirror-view
 ```
 
 ## API Stability
@@ -215,8 +212,11 @@ import {
   parseS1000DHtmlClipboard,
   serializeS1000DCellSelectionToHtml,
 } from 'prosemirror-html-table-s1000d/clipboard';
+import { S1000DCellSelection } from 'prosemirror-html-table-s1000d';
 
-const html = serializeS1000DCellSelectionToHtml(state);
+const selection = S1000DCellSelection.create(state.doc, entryPos);
+const nextState = state.apply(state.tr.setSelection(selection));
+const html = serializeS1000DCellSelectionToHtml(nextState);
 const parsed = html ? parseS1000DHtmlClipboard(html, state.schema) : null;
 ```
 
