@@ -1,5 +1,5 @@
 import { NodeSelection } from '@tiptap/pm/state';
-import type { EditorState } from '@tiptap/pm/state';
+import type { EditorState, Transaction } from '@tiptap/pm/state';
 import type { EditorView } from '@tiptap/pm/view';
 import {
   CellSelection,
@@ -30,6 +30,17 @@ import {
   getHtmlTableSelectionScope,
   type HtmlTableSelectionScope,
 } from './html-table-overlay-geometry.js';
+import {
+  MenuTypeaheadController,
+  canRestoreMenuFocus,
+  getNextMenuActionIndex,
+  isKeyboardClick,
+  isMenuDismissKey,
+  isMenuExitKey,
+  isMenuNavigationKey,
+  isMenuTypeaheadKey,
+  shouldCloseMenuForTarget,
+} from './table-interaction/menu-controller.js';
 import { getRenderedHtmlTableContext } from './table-dom.js';
 import {
   createColumnSelectionTransaction,
@@ -37,7 +48,6 @@ import {
   getTableSelectionInfo,
 } from './table-utils.js';
 
-const CONTEXT_MENU_TYPEAHEAD_RESET_MS = 700;
 const SUBMENU_GAP = 6;
 
 const MENU_SCOPE_LABELS: Record<HtmlTableSelectionScope, string> = {
@@ -304,100 +314,17 @@ export function getHtmlTableContextMenuGroupAccessibleState(
   };
 }
 
-export function shouldCloseHtmlTableContextMenuForTarget(
-  target: EventTarget | null,
-  ...elements: Array<Pick<Element, 'contains'> | null>
-): boolean {
-  return !elements.some((element) => element && containsEventTarget(element, target));
-}
-
-export function isHtmlTableContextMenuDismissKey(key: string): boolean {
-  return key === 'Escape';
-}
-
-export function isHtmlTableContextMenuExitKey(key: string): boolean {
-  return key === 'Tab';
-}
-
-export function isHtmlTableContextMenuNavigationKey(key: string): boolean {
-  return key === 'ArrowDown' || key === 'ArrowUp' || key === 'Home' || key === 'End';
-}
-
-export function isHtmlTableContextMenuTypeaheadKey(event: {
-  key: string;
-  altKey?: boolean;
-  ctrlKey?: boolean;
-  metaKey?: boolean;
-}): boolean {
-  if (event.altKey || event.ctrlKey || event.metaKey) {
-    return false;
-  }
-
-  return event.key.length === 1 && event.key.trim().length > 0;
-}
-
-export function getNextHtmlTableContextMenuActionIndex(
-  currentIndex: number,
-  total: number,
-  key: string,
-): number {
-  if (total <= 0) {
-    return -1;
-  }
-
-  if (key === 'Home') {
-    return 0;
-  }
-
-  if (key === 'End') {
-    return total - 1;
-  }
-
-  if (currentIndex < 0 || currentIndex >= total) {
-    return key === 'ArrowUp' ? total - 1 : 0;
-  }
-
-  if (key === 'ArrowUp') {
-    return (currentIndex - 1 + total) % total;
-  }
-
-  if (key === 'ArrowDown') {
-    return (currentIndex + 1) % total;
-  }
-
-  return currentIndex;
-}
-
-export function getNextHtmlTableContextMenuTypeaheadIndex(
-  labels: string[],
-  currentIndex: number,
-  query: string,
-): number {
-  if (!labels.length || !query.length) {
-    return -1;
-  }
-
-  const normalizedQuery = query.toLowerCase();
-  for (let offset = 1; offset <= labels.length; offset += 1) {
-    const index = (Math.max(currentIndex, -1) + offset) % labels.length;
-    const label = labels[index]?.trim().toLowerCase() ?? '';
-    if (label.startsWith(normalizedQuery)) {
-      return index;
-    }
-  }
-
-  return -1;
-}
-
-export function isHtmlTableKeyboardClick(event: Pick<MouseEvent, 'detail'>): boolean {
-  return event.detail === 0;
-}
-
-export function canRestoreHtmlTableContextMenuFocus(
-  target: HTMLButtonElement | null,
-): target is HTMLButtonElement {
-  return Boolean(target && target.isConnected && !target.hidden && target.tabIndex >= 0);
-}
+export {
+  canRestoreMenuFocus as canRestoreHtmlTableContextMenuFocus,
+  getNextMenuActionIndex as getNextHtmlTableContextMenuActionIndex,
+  getNextMenuTypeaheadIndex as getNextHtmlTableContextMenuTypeaheadIndex,
+  isKeyboardClick as isHtmlTableKeyboardClick,
+  isMenuDismissKey as isHtmlTableContextMenuDismissKey,
+  isMenuExitKey as isHtmlTableContextMenuExitKey,
+  isMenuNavigationKey as isHtmlTableContextMenuNavigationKey,
+  isMenuTypeaheadKey as isHtmlTableContextMenuTypeaheadKey,
+  shouldCloseMenuForTarget as shouldCloseHtmlTableContextMenuForTarget,
+} from './table-interaction/menu-controller.js';
 
 export function getHtmlTableCellContextTriggerRenderState(
   menu: HtmlTableContextMenuState,
@@ -426,11 +353,10 @@ export class HtmlTableMenuController {
   private readonly contextTriggerButton: HTMLButtonElement;
   private readonly cellSelectionHandle: HTMLButtonElement;
   private readonly suppressPointerClick: () => void;
+  private readonly menuTypeahead = new MenuTypeaheadController();
   private lastContextMenuOpen = false;
   private contextMenuFocusTarget: HTMLButtonElement | null = null;
   private restoreContextMenuFocusOnClose = false;
-  private contextMenuTypeaheadQuery = '';
-  private contextMenuTypeaheadResetTimer: ReturnType<typeof setTimeout> | null = null;
   private contextMenuContext: HtmlTableMenuContext | null = null;
   private openContextSubmenuId: string | null = null;
   private focusFirstSubmenuActionOnOpen = false;
@@ -453,7 +379,7 @@ export class HtmlTableMenuController {
   }
 
   destroy(): void {
-    this.resetContextMenuTypeahead();
+    this.menuTypeahead.destroy();
   }
 
   sync(menu: HtmlTableContextMenuState, hostRect: DOMRect, viewportInset: number): void {
@@ -559,7 +485,7 @@ export class HtmlTableMenuController {
   }
 
   handleMenuClick(event: MouseEvent): void {
-    if (!isHtmlTableKeyboardClick(event)) {
+    if (!isKeyboardClick(event)) {
       return;
     }
 
@@ -567,12 +493,12 @@ export class HtmlTableMenuController {
   }
 
   handleMenuKeyDown(event: KeyboardEvent): void {
-    if (isHtmlTableContextMenuExitKey(event.key)) {
+    if (isMenuExitKey(event.key)) {
       this.closeContextMenu(false);
       return;
     }
 
-    if (isHtmlTableContextMenuDismissKey(event.key)) {
+    if (isMenuDismissKey(event.key)) {
       if (this.openContextSubmenuId) {
         event.preventDefault();
         event.stopPropagation();
@@ -590,17 +516,17 @@ export class HtmlTableMenuController {
       return;
     }
 
-    if (isHtmlTableContextMenuNavigationKey(event.key)) {
+    if (isMenuNavigationKey(event.key)) {
       event.preventDefault();
       event.stopPropagation();
 
       const currentIndex = enabledButtons.findIndex((button) => button === this.root.ownerDocument.activeElement);
-      const nextIndex = getNextHtmlTableContextMenuActionIndex(currentIndex, enabledButtons.length, event.key);
+      const nextIndex = getNextMenuActionIndex(currentIndex, enabledButtons.length, event.key);
       enabledButtons[nextIndex]?.focus();
       return;
     }
 
-    if (!isHtmlTableContextMenuTypeaheadKey(event)) {
+    if (!isMenuTypeaheadKey(event)) {
       return;
     }
 
@@ -609,22 +535,11 @@ export class HtmlTableMenuController {
 
     const labels = enabledButtons.map((button) => button.textContent?.trim() ?? '');
     const currentIndex = enabledButtons.findIndex((button) => button === this.root.ownerDocument.activeElement);
-    const nextCharacter = event.key.toLowerCase();
-    const composedQuery = `${this.contextMenuTypeaheadQuery}${nextCharacter}`;
-    let nextIndex = getNextHtmlTableContextMenuTypeaheadIndex(labels, currentIndex, composedQuery);
-    let nextQuery = composedQuery;
-
-    if (nextIndex < 0) {
-      nextIndex = getNextHtmlTableContextMenuTypeaheadIndex(labels, currentIndex, nextCharacter);
-      nextQuery = nextCharacter;
-    }
-
+    const nextIndex = this.menuTypeahead.advance(labels, currentIndex, event.key);
     if (nextIndex < 0) {
       return;
     }
 
-    this.contextMenuTypeaheadQuery = nextQuery;
-    this.scheduleContextMenuTypeaheadReset();
     enabledButtons[nextIndex]?.focus();
   }
 
@@ -634,7 +549,7 @@ export class HtmlTableMenuController {
       return;
     }
 
-    if (!shouldCloseHtmlTableContextMenuForTarget(
+    if (!shouldCloseMenuForTarget(
       event.target,
       this.contextTriggerButton,
       this.cellSelectionHandle,
@@ -649,7 +564,7 @@ export class HtmlTableMenuController {
 
   handleDocumentKeyDown(event: KeyboardEvent): void {
     const interaction = getHtmlTableInteractionState(this.view.state);
-    if (!interaction.contextMenuOpen || !isHtmlTableContextMenuDismissKey(event.key)) {
+    if (!interaction.contextMenuOpen || !isMenuDismissKey(event.key)) {
       return;
     }
 
@@ -1019,23 +934,8 @@ export class HtmlTableMenuController {
     this.restoreContextMenuFocus(menu, null);
   }
 
-  private scheduleContextMenuTypeaheadReset(): void {
-    if (this.contextMenuTypeaheadResetTimer !== null) {
-      clearTimeout(this.contextMenuTypeaheadResetTimer);
-    }
-
-    this.contextMenuTypeaheadResetTimer = setTimeout(() => {
-      this.contextMenuTypeaheadQuery = '';
-      this.contextMenuTypeaheadResetTimer = null;
-    }, CONTEXT_MENU_TYPEAHEAD_RESET_MS);
-  }
-
   private resetContextMenuTypeahead(): void {
-    this.contextMenuTypeaheadQuery = '';
-    if (this.contextMenuTypeaheadResetTimer !== null) {
-      clearTimeout(this.contextMenuTypeaheadResetTimer);
-      this.contextMenuTypeaheadResetTimer = null;
-    }
+    this.menuTypeahead.reset();
   }
 
   private restoreContextMenuFocus(menu: HtmlTableContextMenuState, focusedMenuItemKey: string | null): void {
@@ -1092,7 +992,7 @@ export class HtmlTableMenuController {
       return;
     }
 
-    if (canRestoreHtmlTableContextMenuFocus(this.contextMenuFocusTarget)) {
+    if (canRestoreMenuFocus(this.contextMenuFocusTarget)) {
       this.contextMenuFocusTarget.focus();
     }
 
@@ -1373,7 +1273,7 @@ export class HtmlTableMenuController {
       ? fitTableToWidth({ tablePos, width })
       : distributeColumns({ tablePos, width });
 
-    return command(state, (transaction) => {
+    return command(state, (transaction: Transaction) => {
       this.contextMenuContext = null;
       this.restoreContextMenuFocusOnClose = false;
       this.openContextSubmenuId = null;
@@ -1402,24 +1302,5 @@ export class HtmlTableMenuController {
 
     const fallbackWidth = context.dom.getBoundingClientRect().width;
     return fallbackWidth > 0 ? fallbackWidth : null;
-  }
-}
-
-function containsEventTarget(
-  element: Pick<Element, 'contains'>,
-  target: EventTarget | null,
-): boolean {
-  if (!target) {
-    return false;
-  }
-
-  if (target === (element as unknown as EventTarget)) {
-    return true;
-  }
-
-  try {
-    return element.contains(target as Node);
-  } catch {
-    return false;
   }
 }

@@ -2,6 +2,7 @@ import type { EditorView } from '@tiptap/pm/view';
 
 import type { HtmlTableTiptapOptions } from './options.js';
 import { getHtmlTableInteractionState, type HtmlTableInteractionState, htmlTableInteractionPluginKey } from './html-table-interaction.js';
+import { TableResizeLifecycle, applyTableColumnPreviewWidths } from './table-interaction/resize-lifecycle.js';
 import { measureHtmlTableGeometry, getRenderedHtmlTableContext } from './table-dom.js';
 import {
   createColumnResizeTransaction,
@@ -87,6 +88,7 @@ export class HtmlTableResizeController {
   private readonly handleWidth: number;
   private readonly lastColumnResizable: boolean;
   private readonly resizersParent: HTMLDivElement;
+  private readonly resizeLifecycle: TableResizeLifecycle;
   private resizeHandles: HTMLButtonElement[] = [];
   private activeResize:
     | {
@@ -108,11 +110,17 @@ export class HtmlTableResizeController {
     this.lastColumnResizable = options.lastColumnResizable;
     this.resizersParent = this.root.ownerDocument.createElement('div');
     this.resizersParent.className = 'html-table-overlay__resizers';
+    this.resizeLifecycle = new TableResizeLifecycle(
+      this.root.ownerDocument,
+      this.onDocumentMouseMove,
+      this.onDocumentMouseUp,
+    );
     this.root.append(this.resizersParent);
   }
 
   destroy(): void {
     this.clearActiveResize(false);
+    this.resizeLifecycle.destroy();
     this.resizeHandles = [];
   }
 
@@ -214,8 +222,7 @@ export class HtmlTableResizeController {
       currentWidths: getTableColumnWidths(table, this.options.cellMinWidth),
     };
 
-    this.root.ownerDocument.addEventListener('mousemove', this.onDocumentMouseMove);
-    this.root.ownerDocument.addEventListener('mouseup', this.onDocumentMouseUp);
+    this.resizeLifecycle.start();
     this.dispatchInteractionMeta({
       resizing: {
         tablePos: activeTable.tablePos,
@@ -239,7 +246,7 @@ export class HtmlTableResizeController {
     );
 
     activeResize.currentWidths = nextWidths;
-    this.applyPreviewWidths(context.dom, nextWidths);
+    applyTableColumnPreviewWidths(context.dom, nextWidths, this.options.cellMinWidth);
     const geometry = measureHtmlTableGeometry(context.dom, context.wrapper);
     this.dispatchInteractionMeta({
       geometry,
@@ -278,12 +285,11 @@ export class HtmlTableResizeController {
     if (restoreWidths && this.activeResize) {
       const context = getRenderedHtmlTableContext(this.view, this.activeResize.tablePos);
       if (context) {
-        this.applyPreviewWidths(context.dom, this.activeResize.startWidths);
+        applyTableColumnPreviewWidths(context.dom, this.activeResize.startWidths, this.options.cellMinWidth);
       }
     }
 
-    this.root.ownerDocument.removeEventListener('mousemove', this.onDocumentMouseMove);
-    this.root.ownerDocument.removeEventListener('mouseup', this.onDocumentMouseUp);
+    this.resizeLifecycle.stop();
     this.activeResize = null;
     this.root.classList.remove('html-table-overlay--resizing');
 
@@ -292,22 +298,6 @@ export class HtmlTableResizeController {
         resizing: null,
       });
     }
-  }
-
-  private applyPreviewWidths(table: HTMLTableElement, widths: number[]): void {
-    const totalWidth = widths.reduce((sum, width) => sum + width, 0);
-    table.style.tableLayout = 'fixed';
-    table.style.minWidth = `${Math.max(this.options.cellMinWidth, totalWidth)}px`;
-    table.style.width = `${totalWidth}px`;
-
-    const colElements = Array.from(table.querySelectorAll('col'));
-    colElements.forEach((col, index) => {
-      const width = widths[index];
-      if (!width) return;
-
-      col.setAttribute('width', String(width));
-      (col as HTMLElement).style.width = `${width}px`;
-    });
   }
 
   private dispatchInteractionMeta(meta: {
