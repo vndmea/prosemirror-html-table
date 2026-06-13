@@ -1,4 +1,4 @@
-import { Node, mergeAttributes, type RawCommands } from '@tiptap/core';
+import { Node, mergeAttributes, type NodeViewRendererProps, type RawCommands } from '@tiptap/core';
 import { type Node as ProseMirrorNode } from 'prosemirror-model';
 import { NodeSelection, Plugin, PluginKey, TextSelection, type EditorState, type Transaction } from 'prosemirror-state';
 import { Decoration, DecorationSet, type EditorView } from 'prosemirror-view';
@@ -45,6 +45,17 @@ import {
 } from './schema.js';
 import { S1000DTableMap } from './table-map.js';
 import type { S1000DTableSchemaOptions } from './types.js';
+import { createS1000DTableOverlayPlugin } from './overlay.js';
+export {
+  findS1000DTableAtDOM,
+  getRenderedS1000DTableContext,
+  getSelectedRenderedS1000DTableContext,
+  s1000dTableDomAdapter,
+} from './dom-adapter.js';
+export type { S1000DTableDOMContext, S1000DTableDomAdapter } from './dom-adapter.js';
+  export { S1000DTableNodeView } from './view.js';
+import { S1000DTableNodeView } from './view.js';
+export { createS1000DTableOverlayPlugin } from './overlay.js';
 
 export interface S1000DTableTiptapOptions {
   HTMLAttributes: Record<string, unknown>;
@@ -183,7 +194,11 @@ function createTableExtension(
     },
 
     addProseMirrorPlugins() {
-      return [createS1000DTableEditingPlugin(this.options)];
+      return [createS1000DTableEditingPlugin(this.options), createS1000DTableOverlayPlugin()];
+    },
+
+    addNodeView() {
+      return (props: NodeViewRendererProps) => new S1000DTableNodeView(props, this.options);
     },
 
     parseHTML() {

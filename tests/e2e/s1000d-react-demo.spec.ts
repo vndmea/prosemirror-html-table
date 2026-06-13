@@ -136,4 +136,31 @@ test.describe('S1000D React demo', () => {
     await expect(page.getByTestId('clipboard-text-output')).toContainText('1');
     await expect(page.getByTestId('validation-output')).toContainText('"valid": true');
   });
+
+  test('overlay selection and resize loop writes colwidth back to XML', async ({ page }) => {
+    await page.goto('/');
+    await page.getByTestId('load-proced').click();
+
+    const editor = page.getByTestId('editor');
+    const table = editor.getByTestId('s1000d-table');
+    await table.hover();
+
+    await expect(page.getByTestId('s1000d-overlay')).toBeVisible();
+
+    const rowHandle = page.getByTestId('s1000d-row-handle').first();
+    await rowHandle.click();
+    await expect(page.getByTestId('selection-output')).toContainText('Rows 0-0');
+
+    const resizeHandle = page.getByTestId('s1000d-resize-handle').first();
+    const handleBox = await resizeHandle.boundingBox();
+    expect(handleBox).toBeTruthy();
+
+    await page.mouse.move(handleBox!.x + handleBox!.width / 2, handleBox!.y + handleBox!.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(handleBox!.x + handleBox!.width / 2 + 36, handleBox!.y + handleBox!.height / 2);
+    await page.mouse.up();
+
+    await page.getByTestId('export-xml').click();
+    await expect(page.getByTestId('xml-output')).toContainText('colwidth=');
+  });
 });

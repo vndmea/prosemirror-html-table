@@ -12,6 +12,8 @@ import {
   createS1000DTableExtensions,
   defaultS1000DTableTiptapOptions,
 } from './tiptap.js';
+import { getRenderedS1000DTableContext, s1000dTableDomAdapter } from './dom-adapter.js';
+import { applyS1000DColumnWidthsToTgroup, createS1000DTableOverlayPlugin } from './overlay.js';
 
 const schema = new Schema({
   nodes: {
@@ -45,6 +47,15 @@ describe('S1000D tiptap integration', () => {
       's1000dEntryBlock',
       's1000dGraphic',
     ]);
+  });
+
+  it('adds a node view for the table extension', () => {
+    const extensions = createS1000DTableExtensions({ profile: 'extended' });
+    const table = extensions.find((extension) => extension.name === 's1000dTable');
+
+    expect(typeof table?.config.addNodeView).toBe('function');
+    expect(s1000dTableDomAdapter.nodeName).toBe('s1000dTable');
+    expect(typeof createS1000DTableOverlayPlugin).toBe('function');
   });
 
   it('rejects custom names for the tiptap integration boundary', () => {
@@ -124,6 +135,60 @@ describe('S1000D tiptap integration', () => {
     expect(handled).toBe(true);
     expect(event.prevented).toBe(true);
     expect(view.state.doc.child(0).type.name).toBe('paragraph');
+  });
+
+  it('resolves rendered table context with active tgroup metadata', () => {
+    const state = createStateWithSelection(['A', 'B', 'C', 'D'], [0, 0]);
+    const table = state.doc.child(0)!;
+    const tableElement = createStubElement('table');
+    const wrapperElement = createStubElement('div', {
+      matches: (selector) => selector.includes('s1000d-table-wrapper'),
+      querySelector: () => tableElement,
+    });
+    const view = {
+      state,
+      nodeDOM: (pos: number) => (pos === 0 ? wrapperElement : null),
+    } as unknown as EditorView;
+
+    const context = getRenderedS1000DTableContext(view, 0);
+
+    expect(context).toMatchObject({
+      tablePos: 0,
+      table,
+      dom: tableElement,
+      wrapper: wrapperElement,
+      activeTgroupIndex: 0,
+    });
+    expect(context?.activeTgroup?.type.name).toBe('s1000dTgroup');
+  });
+
+  it('writes resize widths back into colspec attrs', () => {
+    const table = schema.nodes.s1000dTable!.create(null, [
+      schema.nodes.s1000dTgroup!.create(
+        { cols: '2' },
+        [
+          schema.nodes.s1000dColspec!.create({ colname: 'c1' }),
+          schema.nodes.s1000dColspec!.create({ colname: 'c2', colwidth: '2*' }),
+          schema.nodes.s1000dTbody!.create(null, [
+            schema.nodes.s1000dRow!.create(null, [
+              schema.nodes.s1000dEntry!.create(null, [
+                schema.nodes.s1000dEntryBlock!.create({ xmlName: 'para' }, schema.text('A')),
+              ]),
+              schema.nodes.s1000dEntry!.create(null, [
+                schema.nodes.s1000dEntryBlock!.create({ xmlName: 'para' }, schema.text('B')),
+              ]),
+            ]),
+          ]),
+        ],
+      ),
+    ]);
+    const tgroup = table.child(0)!;
+
+    const nextTgroup = applyS1000DColumnWidthsToTgroup(tgroup, [160, 240]);
+
+    expect(nextTgroup.child(0)?.attrs.colwidth).toBe('160px');
+    expect(nextTgroup.child(1)?.attrs.colwidth).toBe('240px');
+    expect(nextTgroup.attrs.cols).toBe('2');
   });
 });
 
@@ -251,4 +316,23 @@ function createKeyboardEvent(key: string): { key: string; prevented: boolean; pr
       this.prevented = true;
     },
   };
+}
+
+function createStubElement(
+  tagName: string,
+  overrides: Partial<{
+    matches: (selector: string) => boolean;
+    querySelector: (selector: string) => unknown;
+    closest: (selector: string) => unknown;
+  }> = {},
+) {
+  const upper = tagName.toUpperCase();
+  return {
+    nodeType: 1,
+    tagName: upper,
+    nodeName: upper,
+    matches: overrides.matches ?? ((selector: string) => selector === tagName || selector === tagName.toUpperCase()),
+    querySelector: overrides.querySelector ?? (() => null),
+    closest: overrides.closest ?? (() => null),
+  } as unknown as HTMLElement;
 }
