@@ -1,10 +1,10 @@
 import { Fragment, type Node as ProseMirrorNode } from 'prosemirror-model';
-import { Plugin, PluginKey } from 'prosemirror-state';
+import { NodeSelection, Plugin, PluginKey } from 'prosemirror-state';
 import type { EditorView } from 'prosemirror-view';
 
 import { createS1000DTableAdapter } from './adapter.js';
 import { resolveColspecs } from './cals/index.js';
-import { getS1000DSelectionInfo } from './clipboard.js';
+import { getS1000DSelectionInfo, isWholeS1000DTableSelection } from './clipboard.js';
 import { findS1000DTableAtDOM, getRenderedS1000DTableContext, getSelectedRenderedS1000DTableContext, type S1000DTableDOMContext } from './dom-adapter.js';
 import { replaceActiveS1000DTgroup, replaceS1000DTable } from './mutation.js';
 import { s1000dTableNodeNames } from './names.js';
@@ -103,6 +103,7 @@ class S1000DTableOverlayView {
   private readonly rowHandlesParent: HTMLDivElement;
   private readonly columnHandlesParent: HTMLDivElement;
   private readonly resizersParent: HTMLDivElement;
+  private readonly tableHandle: HTMLButtonElement;
   private readonly rowBand: HTMLDivElement;
   private readonly columnBand: HTMLDivElement;
   private readonly cellFill: HTMLDivElement;
@@ -114,7 +115,7 @@ class S1000DTableOverlayView {
   private hoveredTablePos: number | null = null;
   private hoveredRowIndex: number | null = null;
   private hoveredColumnIndex: number | null = null;
-  private hoverMode: 'cell' | 'row-handle' | 'column-handle' | null = null;
+  private hoverMode: 'cell' | 'row-handle' | 'column-handle' | 'table-handle' | null = null;
   private pendingCellDrag:
     | {
         tablePos: number;
@@ -171,6 +172,7 @@ class S1000DTableOverlayView {
     this.rowHandlesParent = createLayer(this.root.ownerDocument, 's1000d-table-overlay__rows');
     this.columnHandlesParent = createLayer(this.root.ownerDocument, 's1000d-table-overlay__columns');
     this.resizersParent = createLayer(this.root.ownerDocument, 's1000d-table-overlay__resizers');
+    this.tableHandle = this.createTableHandle();
     this.rowBand = createBand(this.root.ownerDocument);
     this.rowBand.dataset.testid = 's1000d-selection-row-band';
     this.columnBand = createBand(this.root.ownerDocument);
@@ -231,6 +233,7 @@ class S1000DTableOverlayView {
       this.columnBand,
       this.cellFill,
       this.cellOutline,
+      this.tableHandle,
       this.rowHandlesParent,
       this.columnHandlesParent,
       this.resizersParent,
@@ -288,11 +291,13 @@ class S1000DTableOverlayView {
     const selectionInfo =
       getS1000DSelectionInfo(this.view.state, { tablePos: context.tablePos })
       ?? getS1000DSelectionInfo(this.view.state);
+    const tableSelection = isTableSelectionForContext(this.view, context.tablePos);
     const rowSelection = isS1000DCellSelection(this.view.state.selection) && this.view.state.selection.isRowSelection();
     const columnSelection = isS1000DCellSelection(this.view.state.selection) && this.view.state.selection.isColSelection();
 
     this.renderSelection(geometry, positionState, selectionInfo, rowSelection, columnSelection);
     this.renderHoverFeedback(context, geometry, positionState, selectionInfo);
+    this.renderTableHandle(context, positionState, tableSelection);
     this.renderRowHandles(context, geometry, positionState, selectionInfo, rowSelection);
     this.renderColumnHandles(context, geometry, positionState, selectionInfo, columnSelection);
     this.renderResizeHandles(context, geometry, positionState);
@@ -414,6 +419,26 @@ class S1000DTableOverlayView {
     }
   }
 
+  private renderTableHandle(
+    context: S1000DTableDOMContext,
+    positionState: TableOverlayPositionState,
+    tableSelection: boolean,
+  ): void {
+    this.tableHandle.hidden = false;
+    this.tableHandle.dataset.tablePos = String(context.tablePos);
+    this.tableHandle.classList.toggle('is-selected', tableSelection);
+    this.tableHandle.classList.toggle(
+      'is-hovered',
+      this.hoveredTablePos === context.tablePos && this.hoverMode === 'table-handle',
+    );
+    Object.assign(this.tableHandle.style, {
+      left: `${positionState.rowHandleLeft}px`,
+      top: `${positionState.columnHandleTop}px`,
+      width: `${HANDLE_SIZE}px`,
+      height: `${HANDLE_SIZE}px`,
+    });
+  }
+
   private renderRowHandles(
     context: S1000DTableDOMContext,
     geometry: TableGeometry,
@@ -526,6 +551,35 @@ class S1000DTableOverlayView {
     }
   }
 
+  private createTableHandle(): HTMLButtonElement {
+    const handle = this.root.ownerDocument.createElement('button');
+    handle.type = 'button';
+    handle.tabIndex = -1;
+    handle.dataset.testid = 's1000d-table-handle';
+    handle.setAttribute('aria-label', 'Select table');
+    Object.assign(handle.style, {
+      position: 'absolute',
+      minWidth: '0',
+      padding: '0',
+      border: '1px solid rgba(37, 99, 235, 0.22)',
+      borderRadius: '4px',
+      background: '#ffffff',
+      boxShadow: '0 2px 8px rgba(15, 23, 42, 0.08)',
+      color: '#1d4ed8',
+      fontSize: '10px',
+      fontWeight: '700',
+      lineHeight: '1',
+      transform: 'translate(-50%, -50%)',
+      pointerEvents: 'auto',
+      cursor: 'pointer',
+    });
+    handle.textContent = '□';
+    handle.addEventListener('mousedown', (event) => this.handleTableMouseDown(event));
+    handle.addEventListener('mouseenter', () => this.handleTableHover(handle));
+    handle.addEventListener('mouseleave', (event) => this.handleAxisLeave(event));
+    return handle;
+  }
+
   private createAxisHandle(axis: 'row' | 'column'): HTMLButtonElement {
     const handle = this.root.ownerDocument.createElement('button');
     handle.type = 'button';
@@ -600,6 +654,37 @@ class S1000DTableOverlayView {
     event.stopPropagation();
     this.view.dispatch(this.view.state.tr.setSelection(selection).scrollIntoView());
     this.view.focus();
+  }
+
+  private handleTableMouseDown(event: MouseEvent): void {
+    const handle = event.currentTarget as HTMLButtonElement | null;
+    const tablePos = Number(handle?.dataset.tablePos);
+    if (!handle || !Number.isInteger(tablePos)) {
+      return;
+    }
+
+    const context = getRenderedS1000DTableContext(this.view, tablePos);
+    if (!context) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+    this.view.dispatch(this.view.state.tr.setSelection(NodeSelection.create(this.view.state.doc, context.tablePos)).scrollIntoView());
+    this.view.focus();
+  }
+
+  private handleTableHover(handle: HTMLButtonElement): void {
+    const tablePos = Number(handle.dataset.tablePos);
+    if (!Number.isInteger(tablePos)) {
+      return;
+    }
+
+    this.hoveredTablePos = tablePos;
+    this.hoveredRowIndex = null;
+    this.hoveredColumnIndex = null;
+    this.hoverMode = 'table-handle';
+    this.render();
   }
 
   private handleAxisHover(handle: HTMLButtonElement, axis: 'row' | 'column'): void {
@@ -732,6 +817,12 @@ class S1000DTableOverlayView {
     const hoveredColumnHandle = eventElement?.closest('[data-testid="s1000d-column-handle"]') as HTMLButtonElement | null;
     if (hoveredColumnHandle) {
       this.handleAxisHover(hoveredColumnHandle, 'column');
+      return;
+    }
+
+    const hoveredTableHandle = eventElement?.closest('[data-testid="s1000d-table-handle"]') as HTMLButtonElement | null;
+    if (hoveredTableHandle) {
+      this.handleTableHover(hoveredTableHandle);
       return;
     }
 
@@ -931,6 +1022,7 @@ class S1000DTableOverlayView {
 
   private detach(): void {
     this.root.hidden = true;
+    this.tableHandle.hidden = true;
     this.rowBand.hidden = true;
     this.columnBand.hidden = true;
     this.cellFill.hidden = true;
@@ -1135,6 +1227,14 @@ function getVisibleCellRect(
     width: columnRect.width,
     height: rowRect.height,
   };
+}
+
+function isTableSelectionForContext(view: EditorView, tablePos: number): boolean {
+  const selection = view.state.selection;
+  return (
+    (selection instanceof NodeSelection && selection.from === tablePos && selection.node.type.name === s1000dTableNodeNames.table)
+    || isWholeS1000DTableSelection(view.state, { tablePos })
+  );
 }
 
 function findAxisAnchorEntry(

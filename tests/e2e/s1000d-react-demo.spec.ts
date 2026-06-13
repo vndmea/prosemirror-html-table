@@ -98,6 +98,22 @@ test.describe('S1000D React demo', () => {
     expect((xml?.match(/<row\b/g) ?? []).length).toBeGreaterThanOrEqual(4);
   });
 
+  test('table handle selects the whole table and keeps table actions available', async ({ page }) => {
+    await page.goto('/');
+    await page.getByTestId('load-proced').click();
+
+    const table = page.getByTestId('editor').getByTestId('s1000d-table');
+    await table.hover();
+    await page.getByTestId('s1000d-table-handle').click();
+
+    await expect(page.getByTestId('selection-scope-label')).toHaveText('Table actions');
+    await expect(page.getByTestId('selection-output')).toContainText('Whole table: true');
+    await page.getByTestId('selection-actions-trigger').click();
+    await expect(page.getByTestId('selection-menu-item-export-xml')).toBeVisible();
+    await page.getByTestId('selection-menu-item-render-html').click();
+    await expect(page.getByTestId('html-output')).toContainText('<table');
+  });
+
   test('selection context menu supports keyboard navigation and dismissal', async ({ page }) => {
     await page.goto('/');
     await page.getByTestId('load-proced').click();
@@ -198,6 +214,43 @@ test.describe('S1000D React demo', () => {
     expect(redoXml?.match(/<row\b/g)?.length ?? 0).toBe(beforeRows + 1);
   });
 
+  test('tab and shift-tab navigate between neighboring cells', async ({ page }) => {
+    await page.goto('/');
+    await page.getByTestId('load-proced').click();
+
+    const table = page.getByTestId('editor').getByTestId('s1000d-table');
+    const firstBodyCell = table.locator('tbody[data-s1000d="tbody"] tr').first().locator('td').first();
+    await firstBodyCell.click();
+
+    await page.keyboard.press('Tab');
+    await expect(page.getByTestId('selection-output')).toContainText('Columns 1-1');
+
+    await page.keyboard.press('Shift+Tab');
+    await expect(page.getByTestId('selection-output')).toContainText('Columns 0-0');
+  });
+
+  test('delete clears a selected cell range and escape collapses the cell selection', async ({ page }) => {
+    await page.goto('/');
+    await page.getByTestId('load-proced').click();
+
+    const table = page.getByTestId('editor').getByTestId('s1000d-table');
+    const bodyRow = table.locator('tbody[data-s1000d="tbody"] tr').first();
+    await bodyRow.locator('td').first().click();
+    await page.keyboard.press('Shift+ArrowRight');
+    await expect(page.getByTestId('selection-output')).toContainText('Entries 2');
+
+    await page.keyboard.press('Delete');
+    await page.getByTestId('export-xml').click();
+    const xml = await page.getByTestId('xml-output').textContent();
+    expect(xml).not.toContain('Check system status');
+    expect(xml).not.toContain('1</entry>');
+
+    await bodyRow.locator('td').first().click();
+    await page.keyboard.press('Shift+ArrowRight');
+    await page.keyboard.press('Escape');
+    await expect(page.getByTestId('selection-output')).toContainText('Cell selection: false');
+  });
+
   test('move commands keep the table valid', async ({ page }) => {
     await page.goto('/');
     await page.getByTestId('load-proced').click();
@@ -268,6 +321,83 @@ test.describe('S1000D React demo', () => {
 
     await expect(page.getByTestId('clipboard-text-output')).toContainText('1');
     await expect(page.getByTestId('validation-output')).toContainText('"valid": true');
+  });
+
+  test('clipboard copy exposes TSV and html table payloads for a 2x2 range', async ({ page }) => {
+    await page.goto('/');
+    await page.getByTestId('load-extended').click();
+
+    const table = page.getByTestId('editor').getByTestId('s1000d-table');
+    const bodyRows = table.locator('tbody[data-s1000d="tbody"] tr');
+    const firstCell = bodyRows.first().locator('td').first();
+    const secondRowSecondCell = bodyRows.nth(1).locator('td').nth(1);
+    const firstBox = await firstCell.boundingBox();
+    const lastBox = await secondRowSecondCell.boundingBox();
+    expect(firstBox).toBeTruthy();
+    expect(lastBox).toBeTruthy();
+
+    await table.hover();
+    await page.mouse.move(firstBox!.x + (firstBox!.width / 2), firstBox!.y + (firstBox!.height / 2));
+    await page.mouse.down();
+    await page.mouse.move(lastBox!.x + (lastBox!.width / 2), lastBox!.y + (lastBox!.height / 2), { steps: 6 });
+    await page.mouse.up();
+
+    await page.getByTestId('copy-selection').click();
+    await expect(page.getByTestId('clipboard-text-output')).toContainText('\t');
+    await expect(page.getByTestId('clipboard-text-output')).toContainText('\n');
+    await expect(page.getByTestId('clipboard-html-output')).toContainText('<table');
+    await expect(page.getByTestId('clipboard-html-output')).toContainText('<tbody>');
+  });
+
+  test('clipboard html paste restores a copied range and keeps xml valid', async ({ page }) => {
+    await page.goto('/');
+    await page.getByTestId('load-proced').click();
+
+    const table = page.getByTestId('editor').getByTestId('s1000d-table');
+    const bodyRows = table.locator('tbody[data-s1000d="tbody"] tr');
+
+    const sourceFirstCell = bodyRows.first().locator('td').first();
+    const sourceSecondCell = bodyRows.first().locator('td').nth(1);
+    const targetFirstCell = bodyRows.nth(1).locator('td').first();
+    const targetSecondCell = bodyRows.nth(1).locator('td').nth(1);
+
+    const sourceFirstBox = await sourceFirstCell.boundingBox();
+    const sourceSecondBox = await sourceSecondCell.boundingBox();
+    const targetFirstBox = await targetFirstCell.boundingBox();
+    const targetSecondBox = await targetSecondCell.boundingBox();
+    expect(sourceFirstBox).toBeTruthy();
+    expect(sourceSecondBox).toBeTruthy();
+    expect(targetFirstBox).toBeTruthy();
+    expect(targetSecondBox).toBeTruthy();
+
+    await table.hover();
+    await page.mouse.move(sourceFirstBox!.x + (sourceFirstBox!.width / 2), sourceFirstBox!.y + (sourceFirstBox!.height / 2));
+    await page.mouse.down();
+    await page.mouse.move(sourceSecondBox!.x + (sourceSecondBox!.width / 2), sourceSecondBox!.y + (sourceSecondBox!.height / 2), { steps: 4 });
+    await page.mouse.up();
+    await expect(page.getByTestId('selection-output')).toContainText('Entries 2');
+    await page.getByTestId('copy-selection').click();
+
+    await page.mouse.move(targetFirstBox!.x + (targetFirstBox!.width / 2), targetFirstBox!.y + (targetFirstBox!.height / 2));
+    await page.mouse.down();
+    await page.mouse.move(targetSecondBox!.x + (targetSecondBox!.width / 2), targetSecondBox!.y + (targetSecondBox!.height / 2), { steps: 4 });
+    await page.mouse.up();
+    await expect(page.getByTestId('selection-output')).toContainText('Rows 2-2');
+    await expect(page.getByTestId('selection-output')).toContainText('Columns 0-1');
+
+    await page.getByTestId('clear-selection').click();
+    await page.getByTestId('export-xml').click();
+    const clearedXml = await page.getByTestId('xml-output').textContent();
+    expect(clearedXml).not.toContain('Record result');
+
+    await page.getByTestId('paste-html').click();
+    await page.getByTestId('validate').click();
+    await expect(page.getByTestId('validation-output')).toContainText('"valid": true');
+
+    await page.getByTestId('export-xml').click();
+    const xml = await page.getByTestId('xml-output').textContent();
+    expect(xml?.match(/Check system status/g)?.length ?? 0).toBeGreaterThanOrEqual(2);
+    expect(xml?.match(/<para>1<\/para>/g)?.length ?? 0).toBeGreaterThanOrEqual(2);
   });
 
   test('overlay selection and resize loop writes colwidth back to XML', async ({ page }) => {

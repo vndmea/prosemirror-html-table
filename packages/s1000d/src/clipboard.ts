@@ -247,9 +247,29 @@ export function clearS1000DSelectedCells(
   const nextTable = replaceS1000DEntries(cellContext, replacements);
   if (!dispatch) return true;
 
-  dispatch(
-    state.tr.replaceWith(cellContext.tablePos, cellContext.tablePos + cellContext.table.nodeSize, nextTable).scrollIntoView(),
-  );
+  const tr = state.tr.replaceWith(cellContext.tablePos, cellContext.tablePos + cellContext.table.nodeSize, nextTable);
+  const nextContext = refreshActiveS1000DTableContext(tr.doc, cellContext);
+  const nextGrid = createS1000DTableAdapter().createGrid(nextContext.activeTgroup, nextContext.activeTgroupIndex);
+  const startRow = selectionInfo?.top ?? cellContext.entry.rowIndex ?? 0;
+  const endRow = selectionInfo?.bottom ?? startRow;
+  const startColumn = selectionInfo?.left ?? cellContext.entry.columnIndex ?? 0;
+  const endColumn = selectionInfo?.right ?? startColumn;
+  const anchorEntry = nextGrid.slots[startRow]?.[startColumn]?.entry;
+  const headEntry = nextGrid.slots[endRow]?.[endColumn]?.entry ?? anchorEntry;
+
+  if (anchorEntry) {
+    const anchorPos = findS1000DEntryPosition(nextContext, anchorEntry);
+    const headPos = headEntry ? findS1000DEntryPosition(nextContext, headEntry) : anchorPos;
+    if (typeof anchorPos === 'number' && typeof headPos === 'number') {
+      tr.setSelection(
+        selectionInfo
+          ? S1000DCellSelection.create(tr.doc, anchorPos, headPos)
+          : TextSelection.near(tr.doc.resolve(anchorPos + 1)),
+      );
+    }
+  }
+
+  dispatch(tr.scrollIntoView());
   return true;
 }
 

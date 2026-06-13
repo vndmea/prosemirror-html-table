@@ -19,6 +19,7 @@ import {
   clearS1000DSelectedCells,
   getS1000DSelectionInfo,
   isWholeS1000DTableSelection,
+  parseS1000DHtmlClipboard,
   parseS1000DPlainTextClipboard,
   serializeS1000DCellSelectionToHtml,
   serializeS1000DCellSelectionToText,
@@ -313,6 +314,15 @@ export function App() {
     updateAll(editor.state, profile);
   }
 
+  function pasteCopiedHtml() {
+    if (!editor || !clipboardOutput.html) return;
+    const clipboard = parseS1000DHtmlClipboard(clipboardOutput.html, editor.schema);
+    if (!clipboard) return;
+    applyS1000DClipboardToSelection(editor.state, editor.view.dispatch, clipboard);
+    editor.commands.focus();
+    updateAll(editor.state, profile);
+  }
+
   function clearSelectedCells() {
     if (!editor) return;
     clearS1000DSelectedCells(editor.state, editor.view.dispatch);
@@ -514,6 +524,12 @@ export function App() {
           run: pasteSampleTsv,
         },
         {
+          id: 'paste-html',
+          label: 'Paste copied HTML',
+          disabled: !clipboardOutput.html,
+          run: pasteCopiedHtml,
+        },
+        {
           id: 'clear-selection',
           label: 'Clear selected cells',
           disabled: !canClearSelection,
@@ -652,6 +668,7 @@ export function App() {
           <button data-testid="merge-or-split-cell" type="button" disabled={!canRunCommand('mergeOrSplitS1000DTableCell')} onClick={() => runNamedCommand('mergeOrSplitS1000DTableCell')}>Merge or split cell</button>
           <button data-testid="copy-selection" type="button" disabled={!canCopySelection} onClick={copySelection}>Copy selection</button>
           <button data-testid="paste-tsv" type="button" onClick={pasteSampleTsv}>Paste sample TSV</button>
+          <button data-testid="paste-html" type="button" disabled={!clipboardOutput.html} onClick={pasteCopiedHtml}>Paste copied HTML</button>
           <button data-testid="clear-selection" type="button" disabled={!canClearSelection} onClick={clearSelectedCells}>Clear selected cells</button>
         </div>
       </section>
@@ -736,6 +753,7 @@ export function App() {
             </div>
             <p data-testid="editor-dom-output">Editor DOM has data-s1000d: {String(editorDomContainsDataAttrs)}</p>
             <p data-testid="clipboard-html-length">Copied HTML length: {clipboardOutput.html.length}</p>
+            <pre data-testid="clipboard-html-output">{clipboardOutput.html}</pre>
             <pre data-testid="clipboard-text-output">{clipboardOutput.text}</pre>
             <button
               data-testid="open-debug-tools"

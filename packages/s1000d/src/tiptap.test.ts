@@ -7,6 +7,7 @@ import {
   S1000DCellSelection,
   createS1000DTableNodeSpecs,
 } from './index.js';
+import { clearS1000DSelectedCells } from './clipboard.js';
 import {
   createS1000DTableEditingPlugin,
   createS1000DTableExtensions,
@@ -180,6 +181,24 @@ describe('S1000D tiptap integration', () => {
     expect(handled).toBe(true);
     expect(event.prevented).toBe(true);
     expect(view.state.selection).toBeInstanceOf(TextSelection);
+  });
+
+  it('preserves a multi-cell selection after clearing selected cells', () => {
+    const state = createStateWithSelection(['A', 'B', 'C', 'D'], [0, 1]);
+    const view = createView(state);
+
+    const handled = clearS1000DSelectedCells(view.state, view.dispatch);
+
+    expect(handled).toBe(true);
+    expect(view.state.selection).toBeInstanceOf(S1000DCellSelection);
+    if (view.state.selection instanceof S1000DCellSelection) {
+      const entryPositions = findNodePositions(view.state.doc, 's1000dEntry');
+      expect([view.state.selection.anchorEntryPos, view.state.selection.headEntryPos]).toEqual([
+        entryPositions[0],
+        entryPositions[1],
+      ]);
+    }
+    expect(getEntryTexts(view.state.doc)).toEqual(['', '', 'C', 'D']);
   });
 
   it('extends an existing S1000D cell selection with Shift-ArrowRight', () => {
