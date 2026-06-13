@@ -1,6 +1,6 @@
 import { Node, mergeAttributes, type RawCommands } from '@tiptap/core';
 import { type Node as ProseMirrorNode } from 'prosemirror-model';
-import { NodeSelection, Plugin, PluginKey, TextSelection, type EditorState } from 'prosemirror-state';
+import { NodeSelection, Plugin, PluginKey, TextSelection, type EditorState, type Transaction } from 'prosemirror-state';
 import { Decoration, DecorationSet, type EditorView } from 'prosemirror-view';
 
 import { createS1000DTableNode } from './builder.js';
@@ -585,7 +585,7 @@ function normalizeSelection(
 
 function deleteCurrentTable(
   state: EditorState,
-  dispatch: ((tr: any) => void) | undefined,
+  dispatch: ((tr: Transaction) => void) | undefined,
 ): boolean {
   const context = findS1000DTableContext(state);
   if (!context) return false;
@@ -601,7 +601,7 @@ function deleteCurrentTable(
 
 function goToAdjacentCell(
   state: EditorState,
-  dispatch: ((tr: any) => void) | undefined,
+  dispatch: ((tr: Transaction) => void) | undefined,
   dir: -1 | 1,
 ): boolean {
   const context = findS1000DTableContext(state);
@@ -621,7 +621,7 @@ function goToAdjacentCell(
 
 function selectCurrentCell(
   state: EditorState,
-  dispatch: ((tr: any) => void) | undefined,
+  dispatch: ((tr: Transaction) => void) | undefined,
 ): boolean {
   const context = findS1000DEntryContext(state);
   if (!context) return false;
@@ -634,7 +634,7 @@ function selectCurrentCell(
 
 function selectCurrentAxis(
   state: EditorState,
-  dispatch: ((tr: any) => void) | undefined,
+  dispatch: ((tr: Transaction) => void) | undefined,
   axis: 'row' | 'column',
 ): boolean {
   const context = findS1000DEntryContext(state);
@@ -651,7 +651,7 @@ function selectCurrentAxis(
 
 function selectCurrentTable(
   state: EditorState,
-  dispatch: ((tr: any) => void) | undefined,
+  dispatch: ((tr: Transaction) => void) | undefined,
 ): boolean {
   const context = findS1000DTableContext(state);
   if (!context) return false;

@@ -1,5 +1,5 @@
 import { Fragment, Schema, type Node as ProseMirrorNode } from 'prosemirror-model';
-import { EditorState, TextSelection } from 'prosemirror-state';
+import { EditorState } from 'prosemirror-state';
 import type { EditorView } from 'prosemirror-view';
 import { describe, expect, it } from 'vitest';
 

@@ -68,7 +68,7 @@ export interface ParsedS1000DTableClipboard {
   table?: ProseMirrorNode;
 }
 
-export interface S1000DTableClipboardOptions extends S1000DTableLookupOptions {}
+export type S1000DTableClipboardOptions = S1000DTableLookupOptions;
 
 export function serializeS1000DCellSelectionToHtml(
   state: EditorState,

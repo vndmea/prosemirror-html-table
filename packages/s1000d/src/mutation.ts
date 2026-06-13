@@ -12,7 +12,6 @@ import type { S1000DActiveTableContext, S1000DTablePositionContext } from './con
 import type { S1000DEntryRef, S1000DRowRef, S1000DTgroupGrid } from './grid.js';
 import { s1000dTableNodeNames } from './names.js';
 import { S1000DCellSelection, isS1000DCellSelection } from './selection.js';
-import { S1000DTableMap } from './table-map.js';
 import {
   findFirstS1000DEntryPosition,
   findS1000DEntryByPosition,

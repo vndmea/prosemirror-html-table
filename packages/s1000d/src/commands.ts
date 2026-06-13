@@ -1,5 +1,5 @@
 import { Fragment, type Node as ProseMirrorNode } from 'prosemirror-model';
-import { NodeSelection, Selection, TextSelection, type Command, type EditorState } from 'prosemirror-state';
+import { Selection, type Command, type EditorState } from 'prosemirror-state';
 
 import { createS1000DTableAdapter } from './adapter.js';
 import { type ResolvedColspec, resolveColspecs } from './cals/colspec.js';
@@ -11,27 +11,20 @@ import {
 } from './context.js';
 import { type S1000DEntryRef, type S1000DRowRef, type S1000DTgroupGrid } from './grid.js';
 import {
-  createFallbackS1000DSelection,
-  createS1000DSelectionAtEntry,
   getS1000DNodeChildren,
-  preserveS1000DCellSelectionOnTableReplace,
   replaceActiveS1000DTgroup,
   replaceS1000DChildAt,
-  replaceS1000DTable,
   replaceS1000DTableAndSelectEntry,
   replaceS1000DTableAndSelectRow,
 } from './mutation.js';
 import { s1000dTableNodeNames } from './names.js';
 import { createEmptyS1000DEntry, normalizeS1000DTgroup } from './normalize.js';
 import {
-  findFirstS1000DEntryPosition,
   findS1000DEntryByPosition,
-  findS1000DEntryPosition,
 } from './position.js';
-import { S1000DCellSelection, isS1000DCellSelection } from './selection.js';
-import { S1000DTableMap } from './table-map.js';
+import { isS1000DCellSelection } from './selection.js';
 
-export interface S1000DTableCommandOptions extends S1000DTableLookupOptions {}
+export type S1000DTableCommandOptions = S1000DTableLookupOptions;
 
 export interface S1000DTableContext {
   table: ProseMirrorNode;
@@ -211,7 +204,6 @@ export function mergeS1000DCells(options: S1000DTableCommandOptions = {}): Comma
     if (!isRectangularS1000DSelection(selectionInfo)) return false;
 
     const width = selectionInfo.right - selectionInfo.left + 1;
-    const height = selectionInfo.bottom - selectionInfo.top + 1;
     const ensureColspecs = width > 1;
     const tgroup = ensureColspecs
       ? ensureTgroupColspecs(selectionInfo.context.activeTgroup!, selectionInfo.grid.width)
@@ -634,20 +626,6 @@ function findSectionChildIndex(tgroup: ProseMirrorNode, section: string): number
   return match;
 }
 
-function mapTgroupRows(
-  tgroup: ProseMirrorNode,
-  mapper: (row: ProseMirrorNode) => ProseMirrorNode,
-): ProseMirrorNode {
-  const children = getS1000DNodeChildren(tgroup).map((child) => {
-    if (!isSectionNode(child)) return child;
-
-    const rows = getS1000DNodeChildren(child).map((row) => mapper(row));
-    return child.copy(Fragment.fromArray(rows));
-  });
-
-  return tgroup.copy(Fragment.fromArray(children));
-}
-
 function mapTgroupRowsWithGrid(
   tgroup: ProseMirrorNode,
   grid: S1000DTgroupGrid,
@@ -1052,19 +1030,6 @@ function findBestEntryForSelection(
     ?? anchoredEntries[anchoredEntries.length - 1];
 }
 
-function expandEntryForInsertedColumn(
-  entry: ProseMirrorNode,
-  insertColumn: number,
-  colspecs: readonly ResolvedColspec[],
-): ProseMirrorNode {
-  const nextEndColumn = insertColumn;
-  return createS1000DTableAdapter().copyEntryWithSpan(entry, {
-    namest: resolveEntryStartColname(entry, colspecs),
-    nameend: resolveColnameByIndex(colspecs, nextEndColumn),
-    spanname: null,
-  });
-}
-
 function clearEntrySpanAttrs(
   entry: ProseMirrorNode,
   columnIndex: number,
@@ -1106,16 +1071,6 @@ function shrinkEntryForDeletedColumn(
   }
 
   return copyEntryWithResolvedRange(entry, nextStart, nextEnd, support);
-}
-
-function resolveEntryStartColname(entry: ProseMirrorNode, colspecs: readonly ResolvedColspec[]): string | null {
-  if (typeof entry.attrs.namest === 'string' && entry.attrs.namest) {
-    return entry.attrs.namest;
-  }
-  if (typeof entry.attrs.colname === 'string' && entry.attrs.colname) {
-    return entry.attrs.colname;
-  }
-  return resolveColnameByIndex(colspecs, 0);
 }
 
 function resolveColspecIndexByName(colspecs: readonly ResolvedColspec[], colname: unknown): number | undefined {

@@ -2,7 +2,6 @@ import {
   colspecAttrs,
   entryAttrs,
   rowAttrs,
-  sectionAttrs,
   spanspecAttrs,
   tableAttrs,
   tgroupAttrs,
@@ -71,11 +70,11 @@ export function getKnownColspecAttrs(profile: S1000DTableProfile | undefined): r
   return normalizeS1000DTableProfile(profile) === 'extended' ? colspecAttrs : procedColspecAttrs;
 }
 
-export function getKnownSpanspecAttrs(_profile: S1000DTableProfile | undefined): readonly string[] {
+export function getKnownSpanspecAttrs(): readonly string[] {
   return spanspecAttrs;
 }
 
-export function getKnownSectionAttrs(_profile: S1000DTableProfile | undefined): readonly string[] {
+export function getKnownSectionAttrs(): readonly string[] {
   return procedSectionAttrs;
 }
 
