@@ -1,8 +1,12 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "rootDir": "src",
-    "outDir": "dist"
+    "baseUrl": "../..",
+    "paths": {
+      "tiptap-html-table": ["packages/tiptap/src/index.ts"],
+      "tiptap-html-table/table-interaction": ["packages/tiptap/src/table-interaction/index.ts"],
+      "tiptap-html-table/table-interaction/*": ["packages/tiptap/src/table-interaction/*"]
+    }
   },
   "include": ["src/**/*.ts"],
   "exclude": ["src/**/*.test.ts", "dist"]

@@ -16,14 +16,14 @@ import {
   toTableRect,
   type TableGeometry,
   type TableRect,
-} from '../../tiptap/src/table-interaction/dom-geometry.js';
+} from 'tiptap-html-table/table-interaction/dom-geometry';
 import {
   getTableOverlayPositionState,
   getVisibleTableSelectionRect,
   type TableOverlayPositionState,
-} from '../../tiptap/src/table-interaction/overlay-geometry.js';
-import { TableOverlayHost } from '../../tiptap/src/table-interaction/overlay-host.js';
-import { TableResizeLifecycle, applyTableColumnPreviewWidths } from '../../tiptap/src/table-interaction/resize-lifecycle.js';
+} from 'tiptap-html-table/table-interaction/overlay-geometry';
+import { TableOverlayHost } from 'tiptap-html-table/table-interaction/overlay-host';
+import { TableResizeLifecycle, applyTableColumnPreviewWidths } from 'tiptap-html-table/table-interaction/resize-lifecycle';
 
 const ROW_HANDLE_OFFSET = 10;
 const COLUMN_HANDLE_OFFSET = 10;

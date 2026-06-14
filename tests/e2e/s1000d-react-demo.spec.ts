@@ -1,122 +1,142 @@
 import { expect, test, type Page } from '@playwright/test';
 
-test.describe('S1000D React demo', () => {
-  async function openDebugTools(page: Page) {
-    const debugTools = page.getByTestId('debug-tools');
-    await expect(debugTools).toBeVisible();
-    const isExpanded = await debugTools.evaluate((element: HTMLElement) => (element as HTMLDetailsElement).open);
-    if (!isExpanded) {
-      await page.getByTestId('debug-tools-toggle').click();
-    }
-  }
+import {
+  clearDemoSelection,
+  copyDemoSelection,
+  expectDemoApi,
+  exportDemoXml,
+  getDemoEntryText,
+  getDemoClipboard,
+  getDemoSnapshot,
+  loadDemoSample,
+  loadDemoXml,
+  pasteDemoHtml,
+  pasteDemoSingleCell,
+  pasteDemoTsv,
+  renderDemoHtml,
+  runDemoCommand,
+  selectDemoCell,
+  selectDemoRange,
+  validateDemo,
+} from './s1000d-demo-api';
 
+test.describe('S1000D React demo', () => {
   test('demo loads with the required UI surface', async ({ page }) => {
     await page.goto('/');
+    await expectDemoApi(page);
 
     await expect(page.getByTestId('s1000d-demo-title')).toHaveText('S1000D Table Demo');
     await expect(page.getByTestId('editor')).toBeVisible();
-    await expect(page.getByTestId('validation-output')).toBeVisible();
-    await expect(page.getByTestId('xml-output')).toBeVisible();
-    await expect(page.getByTestId('html-output')).toBeVisible();
-    await expect(page.getByTestId('html-preview')).toBeVisible();
+
+    const snapshot = await getDemoSnapshot(page);
+    expect(snapshot.validation.valid).toBe(true);
+    expect(snapshot.xml).toContain('<table');
+    expect(snapshot.html).toContain('<table');
   });
 
   test('loads the proced sample and validates it', async ({ page }) => {
     await page.goto('/');
-    await page.getByTestId('load-proced').click();
+    await expectDemoApi(page);
+    await loadDemoSample(page, 'proced');
 
     await expect(page.getByTestId('editor')).toContainText('Check system status');
-    await page.getByTestId('validate').click();
-    await expect(page.getByTestId('validation-output')).toContainText('"valid": true');
+    const validation = await validateDemo(page);
+    expect(validation.valid).toBe(true);
   });
 
   test('renders final HTML without editor-only data attributes by default', async ({ page }) => {
     await page.goto('/');
-    await page.getByTestId('load-proced').click();
-    await page.getByTestId('render-html').click();
+    await expectDemoApi(page);
+    await loadDemoSample(page, 'proced');
 
-    const htmlOutput = page.getByTestId('html-output');
-    await expect(htmlOutput).toContainText('<table');
-    await expect(htmlOutput).toContainText('<caption>');
-    await expect(htmlOutput).toContainText('<colgroup>');
-    await expect(htmlOutput).toContainText('<tbody>');
-    await expect(htmlOutput).not.toContainText('<tbody><tbody>');
-    await expect(htmlOutput).not.toContainText('data-s1000d');
+    const html = await renderDemoHtml(page);
+    expect(html).toContain('<table');
+    expect(html).toContain('<caption>');
+    expect(html).toContain('<colgroup>');
+    expect(html).toContain('<tbody>');
+    expect(html).not.toContain('<tbody><tbody>');
+    expect(html).not.toContain('data-s1000d');
   });
 
   test('exports XML for the current table', async ({ page }) => {
     await page.goto('/');
-    await page.getByTestId('load-proced').click();
-    await page.getByTestId('export-xml').click();
+    await expectDemoApi(page);
+    await loadDemoSample(page, 'proced');
 
-    const xmlOutput = page.getByTestId('xml-output');
-    await expect(xmlOutput).toContainText('<table');
-    await expect(xmlOutput).toContainText('<tgroup');
-    await expect(xmlOutput).toContainText('<tbody');
-    await expect(xmlOutput).toContainText('<entry');
+    const xml = await exportDemoXml(page);
+    expect(xml).toContain('<table');
+    expect(xml).toContain('<tgroup');
+    expect(xml).toContain('<tbody');
+    expect(xml).toContain('<entry');
   });
 
   test('row command updates the XML output', async ({ page }) => {
     await page.goto('/');
-    await page.getByTestId('load-proced').click();
-    await openDebugTools(page);
-    await page.getByTestId('select-cell').click();
-    await page.getByTestId('add-row-after').click();
-    await page.getByTestId('export-xml').click();
+    await expectDemoApi(page);
+    await loadDemoSample(page, 'proced');
+    await runDemoCommand(page, 'selectFirstBodyCell');
+    await runDemoCommand(page, 'addS1000DTableRowAfter');
 
-    const xml = await page.getByTestId('xml-output').textContent();
-    expect((xml?.match(/<row\b/g) ?? []).length).toBeGreaterThanOrEqual(4);
+    const xml = await exportDemoXml(page);
+    expect((xml.match(/<row\b/g) ?? []).length).toBeGreaterThanOrEqual(4);
   });
 
   test('column command updates rendered html', async ({ page }) => {
     await page.goto('/');
-    await page.getByTestId('load-proced').click();
-    await openDebugTools(page);
-    await page.getByTestId('select-cell').click();
-    await page.getByTestId('add-column-after').click();
-    await page.getByTestId('render-html').click();
+    await expectDemoApi(page);
+    await loadDemoSample(page, 'proced');
+    await runDemoCommand(page, 'selectFirstBodyCell');
+    await runDemoCommand(page, 'addS1000DTableColumnAfter');
 
-    const html = await page.getByTestId('html-output').textContent();
-    expect((html?.match(/<col\b/g) ?? []).length).toBeGreaterThanOrEqual(3);
+    const html = await renderDemoHtml(page);
+    expect((html.match(/<col\b/g) ?? []).length).toBeGreaterThanOrEqual(3);
   });
 
-  test('toolbar commands work from real handle selection without debug selection buttons', async ({ page }) => {
+  test('row handle selection plus API command updates XML', async ({ page }) => {
     await page.goto('/');
-    await page.getByTestId('load-proced').click();
+    await expectDemoApi(page);
+    await loadDemoSample(page, 'proced');
 
     const table = page.getByTestId('editor').getByTestId('s1000d-table');
     await table.hover();
     await page.getByTestId('s1000d-row-handle').first().click();
 
-    await expect(page.getByTestId('selection-scope-label')).toHaveText('Row actions');
-    await expect(page.getByTestId('add-row-after')).toBeEnabled();
-    await page.getByTestId('add-row-after').click();
+    const before = await getDemoSnapshot(page);
+    expect(before.selectionScope).toBe('row');
+    expect(before.selectionSummary).toContain('Rows 0-0');
+
+    expect(await runDemoCommand(page, 'addS1000DTableRowAfter')).toBe(true);
     await expect(page.getByTestId('editor').locator('.ProseMirror')).toBeFocused();
 
-    await page.getByTestId('export-xml').click();
-    const xml = await page.getByTestId('xml-output').textContent();
-    expect((xml?.match(/<row\b/g) ?? []).length).toBeGreaterThanOrEqual(4);
+    const xml = await exportDemoXml(page);
+    expect((xml.match(/<row\b/g) ?? []).length).toBeGreaterThanOrEqual(4);
   });
 
-  test('table handle selects the whole table and keeps table actions available', async ({ page }) => {
+  test('table handle selects the whole table and table actions remain available', async ({ page }) => {
     await page.goto('/');
-    await page.getByTestId('load-proced').click();
+    await expectDemoApi(page);
+    await loadDemoSample(page, 'proced');
 
     const table = page.getByTestId('editor').getByTestId('s1000d-table');
     await table.hover();
     await page.getByTestId('s1000d-table-handle').click();
 
-    await expect(page.getByTestId('selection-scope-label')).toHaveText('Table actions');
-    await expect(page.getByTestId('selection-output')).toContainText('Whole table: true');
+    const snapshot = await getDemoSnapshot(page);
+    expect(snapshot.selectionScope).toBe('table');
+    expect(snapshot.selectionSummary).toContain('Whole table: true');
+
     await page.getByTestId('selection-actions-trigger').click();
     await expect(page.getByTestId('selection-menu-item-export-xml')).toBeVisible();
     await page.getByTestId('selection-menu-item-render-html').click();
-    await expect(page.getByTestId('html-output')).toContainText('<table');
+
+    const html = await renderDemoHtml(page);
+    expect(html).toContain('<table');
   });
 
   test('selection context menu supports keyboard navigation and dismissal', async ({ page }) => {
     await page.goto('/');
-    await page.getByTestId('load-proced').click();
+    await expectDemoApi(page);
+    await loadDemoSample(page, 'proced');
 
     const table = page.getByTestId('editor').getByTestId('s1000d-table');
     await table.hover();
@@ -133,234 +153,318 @@ test.describe('S1000D React demo', () => {
     await page.keyboard.press('Enter');
     await expect(page.getByTestId('selection-menu')).toBeHidden();
 
-    await page.getByTestId('render-html').click();
-    const html = await page.getByTestId('html-output').textContent();
-    expect((html?.match(/<col\b/g) ?? []).length).toBeGreaterThanOrEqual(3);
+    const html = await renderDemoHtml(page);
+    expect((html.match(/<col\b/g) ?? []).length).toBeGreaterThanOrEqual(3);
   });
 
   test('row context menu can delete a selected row', async ({ page }) => {
     await page.goto('/');
-    await page.getByTestId('load-proced').click();
+    await expectDemoApi(page);
+    await loadDemoSample(page, 'proced');
 
     const table = page.getByTestId('editor').getByTestId('s1000d-table');
     await table.hover();
     await page.getByTestId('s1000d-row-handle').nth(1).click();
 
-    await page.getByTestId('export-xml').click();
-    const beforeXml = await page.getByTestId('xml-output').textContent();
-    const beforeRows = beforeXml?.match(/<row\b/g)?.length ?? 0;
+    const beforeRows = (await exportDemoXml(page).then((xml) => xml.match(/<row\b/g)?.length ?? 0));
 
     await page.getByTestId('selection-actions-trigger').click();
     await page.getByTestId('selection-menu-item-delete-row').click();
-    await page.getByTestId('export-xml').click();
 
-    const afterXml = await page.getByTestId('xml-output').textContent();
-    expect(afterXml?.match(/<row\b/g)?.length ?? 0).toBe(beforeRows - 1);
+    const afterRows = (await exportDemoXml(page).then((xml) => xml.match(/<row\b/g)?.length ?? 0));
+    expect(afterRows).toBe(beforeRows - 1);
   });
 
   test('cell context menu can merge and split a keyboard-selected cell range', async ({ page }) => {
     await page.goto('/');
-    await page.getByTestId('load-extended').click();
+    await expectDemoApi(page);
+    await loadDemoSample(page, 'extended');
 
     const table = page.getByTestId('editor').getByTestId('s1000d-table');
     const bodyRows = table.locator('tbody[data-s1000d="tbody"] tr');
     await bodyRows.nth(0).locator('td').nth(1).click();
-    await page.getByTestId('add-row-after').click();
+    expect(await runDemoCommand(page, 'addS1000DTableRowAfter')).toBe(true);
     await bodyRows.nth(0).locator('td').nth(1).click();
     await page.keyboard.press('Shift+ArrowRight');
     await page.keyboard.press('Shift+ArrowDown');
 
-    await expect(page.getByTestId('selection-scope-label')).toHaveText('Selection actions');
-    await expect(page.getByTestId('selection-output')).toContainText('Rows 3-4');
-    await expect(page.getByTestId('selection-output')).toContainText('Columns 1-2');
+    const selected = await getDemoSnapshot(page);
+    expect(selected.selectionScope).toBe('multi-cell');
+    expect(selected.selectionSummary).toContain('Entries');
+    expect(selected.selectionSummary).toContain('Cell selection: true');
+
     await page.getByTestId('selection-actions-trigger').click();
     await expect(page.getByTestId('selection-menu-item-merge-cells')).toBeEnabled();
     await page.getByTestId('selection-menu-item-merge-cells').click();
-    await page.getByTestId('render-html').click();
-    await expect(page.getByTestId('html-output')).toContainText('colspan=');
+
+    const mergedHtml = await renderDemoHtml(page);
+    expect(mergedHtml).toContain('colspan=');
 
     await page.getByTestId('selection-actions-trigger').click();
     await page.getByTestId('selection-menu-item-split-cell').click();
-    await page.getByTestId('validate').click();
-    await expect(page.getByTestId('validation-output')).toContainText('"valid": true');
+
+    const validation = await validateDemo(page);
+    expect(validation.valid).toBe(true);
+  });
+
+  test('resize writes colwidth to the active tgroup only and participates in undo/redo', async ({ page }) => {
+    await page.goto('/');
+    await expectDemoApi(page);
+
+    await loadDemoXml(page, `
+<table id="multi-tgroup-table">
+  <title>Multi tgroup width check</title>
+  <tgroup cols="2">
+    <colspec colname="a1" colwidth="80px"/>
+    <colspec colname="a2" colwidth="90px"/>
+    <tbody>
+      <row><entry>A1</entry><entry>A2</entry></row>
+    </tbody>
+  </tgroup>
+  <tgroup cols="2">
+    <colspec colname="b1" colwidth="120px"/>
+    <colspec colname="b2" colwidth="140px"/>
+    <tbody>
+      <row><entry>B1</entry><entry>B2</entry></row>
+    </tbody>
+  </tgroup>
+</table>
+    `.trim(), 'extended');
+
+    const table = page.getByTestId('editor').getByTestId('s1000d-table');
+    await table.hover();
+
+    const firstBodyCell = table.locator('tbody[data-s1000d="tbody"]').nth(0).locator('td').first();
+    await firstBodyCell.click();
+
+    const beforeXml = await exportDemoXml(page);
+    expect(beforeXml).toContain('colname="a1" colwidth="80px"');
+    expect(beforeXml).toContain('colname="b1" colwidth="120px"');
+
+    const resizeHandle = page.getByTestId('s1000d-resize-handle').first();
+    const handleBox = await resizeHandle.boundingBox();
+    expect(handleBox).toBeTruthy();
+
+    await page.mouse.move(handleBox!.x + handleBox!.width / 2, handleBox!.y + handleBox!.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(handleBox!.x + handleBox!.width / 2 + 42, handleBox!.y + handleBox!.height / 2, { steps: 5 });
+    await page.mouse.up();
+
+    const resizedXml = await exportDemoXml(page);
+    expect(resizedXml).not.toContain('colname="a1" colwidth="80px"');
+    expect(resizedXml).toContain('colname="b1" colwidth="120px"');
+
+    const resizedHtml = await renderDemoHtml(page);
+    expect(resizedHtml).toMatch(/<col style="width: \d+px;"/);
+
+    expect(await runDemoCommand(page, 'undo')).toBe(true);
+    const undoXml = await exportDemoXml(page);
+    expect(undoXml).toContain('colname="a1" colwidth="80px"');
+    expect(undoXml).toContain('colname="b1" colwidth="120px"');
+
+    expect(await runDemoCommand(page, 'redo')).toBe(true);
+    const redoXml = await exportDemoXml(page);
+    expect(redoXml).not.toContain('colname="a1" colwidth="80px"');
+    expect(redoXml).toContain('colname="b1" colwidth="120px"');
   });
 
   test('toolbar structural commands participate in undo and redo', async ({ page }) => {
     await page.goto('/');
-    await page.getByTestId('load-proced').click();
+    await expectDemoApi(page);
+    await loadDemoSample(page, 'proced');
 
     const table = page.getByTestId('editor').getByTestId('s1000d-table');
     await table.hover();
     await page.getByTestId('s1000d-row-handle').nth(1).click();
-    await page.getByTestId('export-xml').click();
-    const beforeXml = await page.getByTestId('xml-output').textContent();
-    const beforeRows = beforeXml?.match(/<row\b/g)?.length ?? 0;
 
-    await page.getByTestId('add-row-after').click();
-    await page.getByTestId('export-xml').click();
-    const afterXml = await page.getByTestId('xml-output').textContent();
-    expect(afterXml?.match(/<row\b/g)?.length ?? 0).toBe(beforeRows + 1);
+    const beforeRows = (await exportDemoXml(page).then((xml) => xml.match(/<row\b/g)?.length ?? 0));
+    expect(await runDemoCommand(page, 'addS1000DTableRowAfter')).toBe(true);
+    const afterRows = (await exportDemoXml(page).then((xml) => xml.match(/<row\b/g)?.length ?? 0));
+    expect(afterRows).toBe(beforeRows + 1);
 
-    await expect(page.getByTestId('undo')).toBeEnabled();
     await page.getByTestId('undo').click();
-    await page.getByTestId('export-xml').click();
-    const undoXml = await page.getByTestId('xml-output').textContent();
-    expect(undoXml?.match(/<row\b/g)?.length ?? 0).toBe(beforeRows);
+    const undoRows = (await exportDemoXml(page).then((xml) => xml.match(/<row\b/g)?.length ?? 0));
+    expect(undoRows).toBe(beforeRows);
 
-    await expect(page.getByTestId('redo')).toBeEnabled();
     await page.getByTestId('redo').click();
-    await page.getByTestId('export-xml').click();
-    const redoXml = await page.getByTestId('xml-output').textContent();
-    expect(redoXml?.match(/<row\b/g)?.length ?? 0).toBe(beforeRows + 1);
+    const redoRows = (await exportDemoXml(page).then((xml) => xml.match(/<row\b/g)?.length ?? 0));
+    expect(redoRows).toBe(beforeRows + 1);
   });
 
   test('tab and shift-tab navigate between neighboring cells', async ({ page }) => {
     await page.goto('/');
-    await page.getByTestId('load-proced').click();
+    await expectDemoApi(page);
+    await loadDemoSample(page, 'proced');
 
     const table = page.getByTestId('editor').getByTestId('s1000d-table');
     const firstBodyCell = table.locator('tbody[data-s1000d="tbody"] tr').first().locator('td').first();
     await firstBodyCell.click();
 
     await page.keyboard.press('Tab');
-    await expect(page.getByTestId('selection-output')).toContainText('Columns 1-1');
+    let snapshot = await getDemoSnapshot(page);
+    expect(snapshot.selectionSummary).toContain('Columns 1-1');
 
     await page.keyboard.press('Shift+Tab');
-    await expect(page.getByTestId('selection-output')).toContainText('Columns 0-0');
+    snapshot = await getDemoSnapshot(page);
+    expect(snapshot.selectionSummary).toContain('Columns 0-0');
   });
 
   test('tab on the last body cell adds a new row and moves focus into it', async ({ page }) => {
     await page.goto('/');
-    await page.getByTestId('load-proced').click();
+    await expectDemoApi(page);
+    await loadDemoSample(page, 'proced');
 
     const table = page.getByTestId('editor').getByTestId('s1000d-table');
     const lastBodyCell = table.locator('tbody[data-s1000d="tbody"] tr').last().locator('td').nth(1);
     await lastBodyCell.click();
 
-    await page.getByTestId('export-xml').click();
-    const beforeXml = await page.getByTestId('xml-output').textContent();
-    const beforeRows = beforeXml?.match(/<row\b/g)?.length ?? 0;
-
+    const beforeRows = (await exportDemoXml(page).then((xml) => xml.match(/<row\b/g)?.length ?? 0));
     await page.keyboard.press('Tab');
-    await expect(page.getByTestId('selection-output')).toContainText(`Rows ${beforeRows - 1}-${beforeRows - 1}`);
-    await page.getByTestId('export-xml').click();
-    const afterXml = await page.getByTestId('xml-output').textContent();
-    expect(afterXml?.match(/<row\b/g)?.length ?? 0).toBe(beforeRows + 1);
-    await expect(page.getByTestId('selection-output')).toContainText('Columns 1-1');
+
+    const snapshot = await getDemoSnapshot(page);
+    expect(snapshot.selectionSummary).toContain(`Rows ${beforeRows}-${beforeRows}`);
+
+    const afterRows = (await exportDemoXml(page).then((xml) => xml.match(/<row\b/g)?.length ?? 0));
+    expect(afterRows).toBe(beforeRows + 1);
+    expect(snapshot.selectionSummary).toContain('Columns 1-1');
   });
 
   test('delete clears a selected cell range and escape collapses the cell selection', async ({ page }) => {
     await page.goto('/');
-    await page.getByTestId('load-proced').click();
+    await expectDemoApi(page);
+    await loadDemoSample(page, 'proced');
 
     const table = page.getByTestId('editor').getByTestId('s1000d-table');
     const bodyRow = table.locator('tbody[data-s1000d="tbody"] tr').first();
     await bodyRow.locator('td').first().click();
     await page.keyboard.press('Shift+ArrowRight');
-    await expect(page.getByTestId('selection-output')).toContainText('Entries 2');
+
+    let snapshot = await getDemoSnapshot(page);
+    expect(snapshot.selectionSummary).toContain('Entries 2');
 
     await page.keyboard.press('Delete');
-    await page.getByTestId('export-xml').click();
-    const xml = await page.getByTestId('xml-output').textContent();
+    const xml = await exportDemoXml(page);
     expect(xml).not.toContain('Check system status');
     expect(xml).not.toContain('1</entry>');
 
     await bodyRow.locator('td').first().click();
     await page.keyboard.press('Shift+ArrowRight');
     await page.keyboard.press('Escape');
-    await expect(page.getByTestId('selection-output')).toContainText('Cell selection: false');
+    snapshot = await getDemoSnapshot(page);
+    expect(snapshot.selectionSummary).toContain('Cell selection: false');
   });
 
   test('delete removes the whole table when the table handle selection is active', async ({ page }) => {
     await page.goto('/');
-    await page.getByTestId('load-proced').click();
+    await expectDemoApi(page);
+    await loadDemoSample(page, 'proced');
 
     const table = page.getByTestId('editor').getByTestId('s1000d-table');
     await table.hover();
     await page.getByTestId('s1000d-table-handle').click();
-    await expect(page.getByTestId('selection-scope-label')).toHaveText('Table actions');
+
+    const before = await getDemoSnapshot(page);
+    expect(before.selectionScope).toBe('table');
 
     await page.keyboard.press('Delete');
     await expect(page.getByTestId('editor')).not.toContainText('Check system status');
-    await page.getByTestId('validate').click();
-    await expect(page.getByTestId('validation-output')).toContainText('No S1000D table is loaded.');
+
+    const validation = await validateDemo(page);
+    expect(validation.issues[0]?.message).toContain('No S1000D table is loaded.');
   });
 
   test('move commands keep the table valid', async ({ page }) => {
     await page.goto('/');
-    await page.getByTestId('load-proced').click();
-    await openDebugTools(page);
-    await page.getByTestId('select-row').click();
-    await page.getByTestId('move-row-down').click();
-    await page.getByTestId('validate').click();
+    await expectDemoApi(page);
+    await loadDemoSample(page, 'proced');
+    await runDemoCommand(page, 'selectFirstBodyRow');
+    expect(await runDemoCommand(page, 'moveS1000DTableRowDown')).toBe(true);
 
-    await expect(page.getByTestId('validation-output')).toContainText('"valid": true');
+    const validation = await validateDemo(page);
+    expect(validation.valid).toBe(true);
   });
 
   test('extended sample renders rowspan, colspan, and tfoot', async ({ page }) => {
     await page.goto('/');
-    await page.getByTestId('load-extended').click();
-    await page.getByTestId('render-html').click();
+    await expectDemoApi(page);
+    await loadDemoSample(page, 'extended');
 
-    const html = page.getByTestId('html-output');
-    await expect(html).toContainText('colspan=');
-    await expect(html).toContainText('rowspan=');
-    await expect(html).toContainText('<tfoot>');
+    const html = await renderDemoHtml(page);
+    expect(html).toContain('colspan=');
+    expect(html).toContain('rowspan=');
+    expect(html).toContain('<tfoot>');
   });
 
   test('merge and split flow stays valid', async ({ page }) => {
     await page.goto('/');
-    await page.getByTestId('load-proced').click();
-    await openDebugTools(page);
-    await page.getByTestId('select-first-two-cells').click();
-    await page.getByTestId('merge-cells').click();
-    await page.getByTestId('render-html').click();
-    await expect(page.getByTestId('html-output')).toContainText('colspan=');
+    await expectDemoApi(page);
+    await loadDemoXml(page, `
+<table id="merge-flow-table">
+  <tgroup cols="3">
+    <tbody>
+      <row id="merge-row-1"><entry>A1</entry><entry>A2</entry><entry>A3</entry></row>
+      <row id="merge-row-2"><entry>B1</entry><entry>B2</entry><entry>B3</entry></row>
+      <row id="merge-row-3"><entry>C1</entry><entry>C2</entry><entry>C3</entry></row>
+    </tbody>
+  </tgroup>
+</table>
+    `.trim(), 'extended');
 
-    await page.getByTestId('split-cell').click();
-    await page.getByTestId('validate').click();
-    await expect(page.getByTestId('validation-output')).toContainText('"valid": true');
+    expect(await selectDemoRange(page, 0, 0, 1, 1)).toBe(true);
+    const snapshot = await getDemoSnapshot(page);
+    expect(snapshot.selectionScope).toBe('multi-cell');
+    expect(await runDemoCommand(page, 'mergeS1000DTableCells')).toBe(true);
+
+    let html = await renderDemoHtml(page);
+    expect(html).toContain('colspan=');
+
+    expect(await runDemoCommand(page, 'splitS1000DTableCell')).toBe(true);
+    const validation = await validateDemo(page);
+    expect(validation.valid).toBe(true);
   });
 
   test('unsafe attrs stay filtered in default renderer output', async ({ page }) => {
     await page.goto('/');
-    await page.getByTestId('load-unsafe').click();
-    await page.getByTestId('render-html').click();
+    await expectDemoApi(page);
+    await loadDemoSample(page, 'unsafe');
 
-    const html = page.getByTestId('html-output');
-    await expect(html).not.toContainText('onclick');
-    await expect(html).not.toContainText('style=');
-    await expect(html).not.toContainText('javascript:');
+    const html = await renderDemoHtml(page);
+    expect(html).not.toContain('onclick');
+    expect(html).not.toContain('style=');
+    expect(html).not.toContain('javascript:');
   });
 
   test('editor DOM and renderer output stay distinct', async ({ page }) => {
     await page.goto('/');
-    await page.getByTestId('load-proced').click();
-    await page.getByTestId('render-html').click();
-    await openDebugTools(page);
+    await expectDemoApi(page);
+    await loadDemoSample(page, 'proced');
 
-    await expect(page.getByTestId('editor-dom-output')).toContainText('true');
-    await expect(page.getByTestId('html-output')).not.toContainText('data-s1000d');
+    const snapshot = await getDemoSnapshot(page);
+    expect(snapshot.editorDomContainsDataAttrs).toBe(true);
+    expect(snapshot.html).not.toContain('data-s1000d');
   });
 
   test('clipboard MVP copy and paste path works', async ({ page }) => {
     await page.goto('/');
-    await page.getByTestId('load-proced').click();
-    await openDebugTools(page);
-    await page.getByTestId('select-cell').click();
-    await page.getByTestId('copy-selection').click();
+    await expectDemoApi(page);
+    await loadDemoSample(page, 'proced');
+    await runDemoCommand(page, 'selectFirstBodyCell');
 
-    await expect(page.getByTestId('clipboard-html-length')).not.toContainText('0');
-    await page.getByTestId('paste-tsv').click();
-    await page.getByTestId('validate').click();
+    const copied = await copyDemoSelection(page);
+    expect(copied.html.length).toBeGreaterThan(0);
 
-    await expect(page.getByTestId('clipboard-text-output')).toContainText('1');
-    await expect(page.getByTestId('validation-output')).toContainText('"valid": true');
+    expect(await pasteDemoTsv(page)).toBe(true);
+    const validation = await validateDemo(page);
+    expect(validation.valid).toBe(true);
+
+    const clipboard = await getDemoClipboard(page);
+    expect(clipboard.text).toContain('1');
   });
 
   test('clipboard copy exposes TSV and html table payloads for a 2x2 range', async ({ page }) => {
     await page.goto('/');
-    await page.getByTestId('load-extended').click();
+    await expectDemoApi(page);
+    await loadDemoSample(page, 'extended');
 
     const table = page.getByTestId('editor').getByTestId('s1000d-table');
     const bodyRows = table.locator('tbody[data-s1000d="tbody"] tr');
@@ -377,16 +481,17 @@ test.describe('S1000D React demo', () => {
     await page.mouse.move(lastBox!.x + (lastBox!.width / 2), lastBox!.y + (lastBox!.height / 2), { steps: 6 });
     await page.mouse.up();
 
-    await page.getByTestId('copy-selection').click();
-    await expect(page.getByTestId('clipboard-text-output')).toContainText('\t');
-    await expect(page.getByTestId('clipboard-text-output')).toContainText('\n');
-    await expect(page.getByTestId('clipboard-html-output')).toContainText('<table');
-    await expect(page.getByTestId('clipboard-html-output')).toContainText('<tbody>');
+    const clipboard = await copyDemoSelection(page);
+    expect(clipboard.text).toContain('\t');
+    expect(clipboard.text).toContain('\n');
+    expect(clipboard.html).toContain('<table');
+    expect(clipboard.html).toContain('<tbody>');
   });
 
   test('clipboard html paste restores a copied range and keeps xml valid', async ({ page }) => {
     await page.goto('/');
-    await page.getByTestId('load-proced').click();
+    await expectDemoApi(page);
+    await loadDemoSample(page, 'proced');
 
     const table = page.getByTestId('editor').getByTestId('s1000d-table');
     const bodyRows = table.locator('tbody[data-s1000d="tbody"] tr');
@@ -410,34 +515,34 @@ test.describe('S1000D React demo', () => {
     await page.mouse.down();
     await page.mouse.move(sourceSecondBox!.x + (sourceSecondBox!.width / 2), sourceSecondBox!.y + (sourceSecondBox!.height / 2), { steps: 4 });
     await page.mouse.up();
-    await expect(page.getByTestId('selection-output')).toContainText('Entries 2');
-    await page.getByTestId('copy-selection').click();
+    await copyDemoSelection(page);
 
     await page.mouse.move(targetFirstBox!.x + (targetFirstBox!.width / 2), targetFirstBox!.y + (targetFirstBox!.height / 2));
     await page.mouse.down();
     await page.mouse.move(targetSecondBox!.x + (targetSecondBox!.width / 2), targetSecondBox!.y + (targetSecondBox!.height / 2), { steps: 4 });
     await page.mouse.up();
-    await expect(page.getByTestId('selection-output')).toContainText('Rows 2-2');
-    await expect(page.getByTestId('selection-output')).toContainText('Columns 0-1');
 
-    await page.getByTestId('clear-selection').click();
-    await page.getByTestId('export-xml').click();
-    const clearedXml = await page.getByTestId('xml-output').textContent();
+    let snapshot = await getDemoSnapshot(page);
+    expect(snapshot.selectionSummary).toContain('Rows 2-2');
+    expect(snapshot.selectionSummary).toContain('Columns 0-1');
+
+    expect(await clearDemoSelection(page)).toBe(true);
+    const clearedXml = await exportDemoXml(page);
     expect(clearedXml).not.toContain('Record result');
 
-    await page.getByTestId('paste-html').click();
-    await page.getByTestId('validate').click();
-    await expect(page.getByTestId('validation-output')).toContainText('"valid": true');
+    expect(await pasteDemoHtml(page)).toBe(true);
+    const validation = await validateDemo(page);
+    expect(validation.valid).toBe(true);
 
-    await page.getByTestId('export-xml').click();
-    const xml = await page.getByTestId('xml-output').textContent();
-    expect(xml?.match(/Check system status/g)?.length ?? 0).toBeGreaterThanOrEqual(2);
-    expect(xml?.match(/<para>1<\/para>/g)?.length ?? 0).toBeGreaterThanOrEqual(2);
+    const xml = await exportDemoXml(page);
+    expect(xml.match(/Check system status/g)?.length ?? 0).toBeGreaterThanOrEqual(2);
+    expect(xml.match(/<para>1<\/para>/g)?.length ?? 0).toBeGreaterThanOrEqual(2);
   });
 
   test('single-cell paste fills a multi-cell selection and stays valid', async ({ page }) => {
     await page.goto('/');
-    await page.getByTestId('load-proced').click();
+    await expectDemoApi(page);
+    await loadDemoSample(page, 'proced');
 
     const table = page.getByTestId('editor').getByTestId('s1000d-table');
     const bodyRows = table.locator('tbody[data-s1000d="tbody"] tr');
@@ -454,17 +559,100 @@ test.describe('S1000D React demo', () => {
     await page.mouse.move(lastBox!.x + (lastBox!.width / 2), lastBox!.y + (lastBox!.height / 2), { steps: 6 });
     await page.mouse.up();
 
-    await page.getByTestId('paste-single-cell').click();
-    await page.getByTestId('validate').click();
-    await expect(page.getByTestId('validation-output')).toContainText('"valid": true');
-    await page.getByTestId('export-xml').click();
-    const xml = await page.getByTestId('xml-output').textContent();
-    expect(xml?.match(/<para>Alpha<\/para>/g)?.length ?? 0).toBeGreaterThanOrEqual(2);
+    expect(await pasteDemoSingleCell(page)).toBe(true);
+    const validation = await validateDemo(page);
+    expect(validation.valid).toBe(true);
+
+    const xml = await exportDemoXml(page);
+    expect(xml.match(/<para>Alpha<\/para>/g)?.length ?? 0).toBeGreaterThanOrEqual(2);
+  });
+
+  test('paste into a merged target is rejected and the document stays unchanged', async ({ page }) => {
+    await page.goto('/');
+    await expectDemoApi(page);
+    await loadDemoSample(page, 'extended');
+
+    expect(await selectDemoCell(page, 0, 1)).toBe(true);
+    const beforeXml = await exportDemoXml(page);
+    const beforeText = await getDemoEntryText(page, 0, 1);
+
+    expect(await pasteDemoTsv(page, 'X\tY')).toBe(false);
+
+    const afterXml = await exportDemoXml(page);
+    const afterText = await getDemoEntryText(page, 0, 1);
+    expect(afterXml).toBe(beforeXml);
+    expect(afterText).toBe(beforeText);
+  });
+
+  test('API-driven multi-tgroup commands mutate only the active tgroup', async ({ page }) => {
+    await page.goto('/');
+    await expectDemoApi(page);
+
+    await loadDemoXml(page, `
+<table id="multi-tgroup-edit">
+  <title>Multi tgroup edit</title>
+  <tgroup cols="2">
+    <tbody>
+      <row id="tg1-row-1"><entry>A1</entry><entry>A2</entry></row>
+    </tbody>
+  </tgroup>
+  <tgroup cols="2">
+    <tbody>
+      <row id="tg2-row-1"><entry>B1</entry><entry>B2</entry></row>
+    </tbody>
+  </tgroup>
+</table>
+    `.trim(), 'extended');
+
+    expect(await selectDemoCell(page, 0, 0, 1)).toBe(true);
+    expect(await runDemoCommand(page, 'addS1000DTableRowAfter')).toBe(true);
+
+    const xml = await exportDemoXml(page);
+    expect((xml.match(/tg1-row-1/g) ?? []).length).toBe(1);
+    expect((xml.match(/tg2-row-1/g) ?? []).length).toBe(1);
+    expect((xml.match(/<tgroup\b/g) ?? []).length).toBe(2);
+    expect((xml.match(/<row\b/g) ?? []).length).toBe(3);
+  });
+
+  test('API-driven range selection can merge then clear selected cells while keeping XML valid', async ({ page }) => {
+    await page.goto('/');
+    await expectDemoApi(page);
+    await loadDemoXml(page, `
+<table id="range-clear-table">
+  <tgroup cols="3">
+    <tbody>
+      <row id="clear-row-1"><entry>A1</entry><entry>A2</entry><entry>A3</entry></row>
+      <row id="clear-row-2"><entry>B1</entry><entry>B2</entry><entry>B3</entry></row>
+      <row id="clear-row-3"><entry>C1</entry><entry>C2</entry><entry>C3</entry></row>
+    </tbody>
+  </tgroup>
+</table>
+    `.trim(), 'extended');
+
+    expect(await selectDemoRange(page, 0, 0, 1, 1)).toBe(true);
+    let snapshot = await getDemoSnapshot(page);
+    expect(snapshot.selectionScope).toBe('multi-cell');
+
+    expect(await runDemoCommand(page, 'mergeS1000DTableCells')).toBe(true);
+    let html = await renderDemoHtml(page);
+    expect(html).toContain('colspan=');
+
+    expect(await runDemoCommand(page, 'splitS1000DTableCell')).toBe(true);
+    expect(await clearDemoSelection(page)).toBe(true);
+
+    const validation = await validateDemo(page);
+    expect(validation.valid).toBe(true);
+    const xml = await exportDemoXml(page);
+    expect(xml).not.toContain('A1');
+    expect(xml).not.toContain('A2');
+    expect(xml).not.toContain('B1');
+    expect(xml).not.toContain('B2');
   });
 
   test('overlay selection and resize loop writes colwidth back to XML', async ({ page }) => {
     await page.goto('/');
-    await page.getByTestId('load-proced').click();
+    await expectDemoApi(page);
+    await loadDemoSample(page, 'proced');
 
     const editor = page.getByTestId('editor');
     const table = editor.getByTestId('s1000d-table');
@@ -474,7 +662,9 @@ test.describe('S1000D React demo', () => {
 
     const rowHandle = page.getByTestId('s1000d-row-handle').first();
     await rowHandle.click();
-    await expect(page.getByTestId('selection-output')).toContainText('Rows 0-0');
+
+    const before = await getDemoSnapshot(page);
+    expect(before.selectionSummary).toContain('Rows 0-0');
 
     const resizeHandle = page.getByTestId('s1000d-resize-handle').first();
     const handleBox = await resizeHandle.boundingBox();
@@ -485,13 +675,14 @@ test.describe('S1000D React demo', () => {
     await page.mouse.move(handleBox!.x + handleBox!.width / 2 + 36, handleBox!.y + handleBox!.height / 2);
     await page.mouse.up();
 
-    await page.getByTestId('export-xml').click();
-    await expect(page.getByTestId('xml-output')).toContainText('colwidth=');
+    const xml = await exportDemoXml(page);
+    expect(xml).toContain('colwidth=');
   });
 
   test('hovering row and column handles paints row and column feedback', async ({ page }) => {
     await page.goto('/');
-    await page.getByTestId('load-proced').click();
+    await expectDemoApi(page);
+    await loadDemoSample(page, 'proced');
 
     const table = page.getByTestId('editor').getByTestId('s1000d-table');
     await table.hover();
@@ -508,7 +699,8 @@ test.describe('S1000D React demo', () => {
 
   test('hovering a cell shows cell feedback and drag selects a cell range', async ({ page }) => {
     await page.goto('/');
-    await page.getByTestId('load-extended').click();
+    await expectDemoApi(page);
+    await loadDemoSample(page, 'extended');
 
     const table = page.getByTestId('editor').getByTestId('s1000d-table');
     const bodyRows = table.locator('tbody[data-s1000d="tbody"] tr');
@@ -529,15 +721,17 @@ test.describe('S1000D React demo', () => {
     await page.mouse.move(lastBox!.x + (lastBox!.width / 2), lastBox!.y + (lastBox!.height / 2), { steps: 6 });
     await page.mouse.up();
 
-    await expect(page.getByTestId('selection-output')).toContainText('Rows 2-3');
-    await expect(page.getByTestId('selection-output')).toContainText('Columns 0-1');
-    await expect(page.getByTestId('selection-output')).not.toContainText('Cell selection: false');
+    const snapshot = await getDemoSnapshot(page);
+    expect(snapshot.selectionSummary).toContain('Rows 2-3');
+    expect(snapshot.selectionSummary).toContain('Columns 0-1');
+    expect(snapshot.selectionSummary).not.toContain('Cell selection: false');
     await expect(page.getByTestId('s1000d-selection-cell-fill')).toBeVisible();
   });
 
   test('overlay stays aligned after page scroll and viewport resize', async ({ page }) => {
     await page.goto('/');
-    await page.getByTestId('load-proced').click();
+    await expectDemoApi(page);
+    await loadDemoSample(page, 'proced');
 
     const table = page.getByTestId('editor').getByTestId('s1000d-table');
     await table.hover();

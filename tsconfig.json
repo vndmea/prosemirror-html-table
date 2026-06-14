@@ -9,7 +9,9 @@
       "prosemirror-html-table-s1000d/clipboard": ["packages/s1000d/src/clipboard.ts"],
       "prosemirror-html-table-s1000d/renderer": ["packages/s1000d/src/renderer.ts"],
       "prosemirror-html-table-s1000d/tiptap": ["packages/s1000d/src/tiptap.ts"],
-      "tiptap-html-table": ["packages/tiptap/src/index.ts"]
+      "tiptap-html-table": ["packages/tiptap/src/index.ts"],
+      "tiptap-html-table/table-interaction": ["packages/tiptap/src/table-interaction/index.ts"],
+      "tiptap-html-table/table-interaction/*": ["packages/tiptap/src/table-interaction/*"]
     }
   },
   "include": ["packages/**/*.ts", "tests/**/*.ts", "examples/s1000d-snippets/**/*.ts", "*.config.ts"],

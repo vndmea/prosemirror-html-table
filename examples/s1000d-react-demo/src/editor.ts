@@ -39,11 +39,7 @@ export function getFirstTbodyEntryPositions(doc: ProseMirrorNode): number[] {
   const tableInfo = findFirstS1000DTable(doc);
   if (!tableInfo) return [];
 
-  const nodePositions = new Map<ProseMirrorNode, number>();
-  doc.descendants((node, pos) => {
-    nodePositions.set(node, pos);
-    return true;
-  });
+  const nodePositions = getNodePositions(doc);
 
   const firstTgroup = createS1000DTableGrid(tableInfo.table).tgroups[0];
   if (!firstTgroup) return [];
@@ -88,4 +84,76 @@ export function focusFirstBodyCell(state: EditorState): Transaction | null {
   const [firstEntryPos] = getFirstTbodyEntryPositions(state.doc);
   if (typeof firstEntryPos !== 'number') return null;
   return state.tr.setSelection(TextSelection.near(state.doc.resolve(firstEntryPos + 1))).scrollIntoView();
+}
+
+export function findGridEntryPosition(
+  doc: ProseMirrorNode,
+  rowIndex: number,
+  columnIndex: number,
+  tgroupIndex = 0,
+): number | null {
+  const tableInfo = findFirstS1000DTable(doc);
+  if (!tableInfo) return null;
+
+  const tgroup = createS1000DTableGrid(tableInfo.table).tgroups[tgroupIndex];
+  if (!tgroup) return null;
+
+  const entry = tgroup.slots[rowIndex]?.[columnIndex]?.entry;
+  if (!entry) return null;
+
+  return getNodePositions(doc).get(entry.node) ?? null;
+}
+
+export function selectGridCell(
+  state: EditorState,
+  rowIndex: number,
+  columnIndex: number,
+  tgroupIndex = 0,
+): Transaction | null {
+  const entryPos = findGridEntryPosition(state.doc, rowIndex, columnIndex, tgroupIndex);
+  if (typeof entryPos !== 'number') return null;
+  return state.tr.setSelection(S1000DCellSelection.create(state.doc, entryPos)).scrollIntoView();
+}
+
+export function selectGridRange(
+  state: EditorState,
+  anchorRowIndex: number,
+  anchorColumnIndex: number,
+  headRowIndex: number,
+  headColumnIndex: number,
+  tgroupIndex = 0,
+): Transaction | null {
+  const anchorPos = findGridEntryPosition(state.doc, anchorRowIndex, anchorColumnIndex, tgroupIndex);
+  const headPos = findGridEntryPosition(state.doc, headRowIndex, headColumnIndex, tgroupIndex);
+  if (typeof anchorPos !== 'number' || typeof headPos !== 'number') return null;
+  return state.tr.setSelection(S1000DCellSelection.create(state.doc, anchorPos, headPos)).scrollIntoView();
+}
+
+export function selectGridRow(
+  state: EditorState,
+  rowIndex: number,
+  tgroupIndex = 0,
+): Transaction | null {
+  const entryPos = findGridEntryPosition(state.doc, rowIndex, 0, tgroupIndex);
+  if (typeof entryPos !== 'number') return null;
+  return state.tr.setSelection(S1000DCellSelection.rowSelection(state.doc.resolve(entryPos + 1))).scrollIntoView();
+}
+
+export function selectGridColumn(
+  state: EditorState,
+  columnIndex: number,
+  tgroupIndex = 0,
+): Transaction | null {
+  const entryPos = findGridEntryPosition(state.doc, 0, columnIndex, tgroupIndex);
+  if (typeof entryPos !== 'number') return null;
+  return state.tr.setSelection(S1000DCellSelection.colSelection(state.doc.resolve(entryPos + 1))).scrollIntoView();
+}
+
+function getNodePositions(doc: ProseMirrorNode): Map<ProseMirrorNode, number> {
+  const nodePositions = new Map<ProseMirrorNode, number>();
+  doc.descendants((node, pos) => {
+    nodePositions.set(node, pos);
+    return true;
+  });
+  return nodePositions;
 }

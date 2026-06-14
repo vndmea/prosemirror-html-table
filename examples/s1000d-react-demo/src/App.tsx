@@ -6,10 +6,12 @@ import { history, redo, undo } from '@tiptap/pm/history';
 import { EditorContent, useEditor } from '@tiptap/react';
 import type { Editor as TiptapEditor } from '@tiptap/core';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { NodeSelection, type EditorState } from 'prosemirror-state';
+import { NodeSelection, type EditorState, type Transaction } from 'prosemirror-state';
 
 import {
   isS1000DCellSelection,
+  serializeS1000DTableXml,
+  validateS1000DTable,
   type S1000DTableProfile,
 } from 'prosemirror-html-table-s1000d';
 import {
@@ -18,20 +20,33 @@ import {
   getS1000DSelectionInfo,
   isWholeS1000DTableSelection,
   parseS1000DHtmlClipboard,
+  parseS1000DPlainTextClipboard,
   serializeS1000DCellSelectionToHtml,
   serializeS1000DCellSelectionToText,
 } from 'prosemirror-html-table-s1000d/clipboard';
+import { renderS1000DTableToHtml } from 'prosemirror-html-table-s1000d/renderer';
 import { createS1000DTableExtensions } from 'prosemirror-html-table-s1000d/tiptap';
 
 import {
   createDocFromS1000DXml,
   findFirstS1000DTable,
+  findGridEntryPosition,
   focusFirstBodyCell,
+  selectGridCell,
+  selectGridColumn,
+  selectGridRange,
+  selectGridRow,
+  selectFirstBodyCell,
+  selectFirstBodyColumn,
+  selectFirstBodyRow,
+  selectFirstTwoBodyCells,
   selectWholeTable,
 } from './editor';
 import {
   extendedSampleXml,
   procedSampleXml,
+  sampleSingleCellText,
+  sampleTsv,
   unsafeRawAttrsSampleXml,
 } from './samples';
 
@@ -49,6 +64,65 @@ type DemoMenuAction = {
   destructive?: boolean;
   run: () => void;
 };
+
+type ValidationOutput = {
+  valid: boolean;
+  issues: Array<{ message: string; code?: string | undefined }>;
+};
+
+type DemoSnapshot = {
+  profile: S1000DTableProfile;
+  selectionScope: DemoSelectionScope;
+  selectionLabel: string;
+  selectionSummary: string;
+  validation: ValidationOutput;
+  xml: string;
+  html: string;
+  clipboard: ClipboardOutput;
+  editorDomContainsDataAttrs: boolean;
+};
+
+type DemoApi = {
+  loadSample: (kind: SampleKind) => boolean;
+  loadXml: (xml: string, profile?: S1000DTableProfile) => boolean;
+  validate: () => ValidationOutput;
+  exportXml: () => string;
+  renderHtml: (includeRawAttrs?: boolean) => string;
+  getSelectionSummary: () => string;
+  getClipboard: () => ClipboardOutput;
+  copySelection: () => ClipboardOutput;
+  pasteHtml: (html?: string) => boolean;
+  pasteTsv: (text?: string) => boolean;
+  pasteSingleCell: (text?: string) => boolean;
+  clearSelection: () => boolean;
+  selectCell: (rowIndex: number, columnIndex: number, tgroupIndex?: number) => boolean;
+  selectRange: (
+    anchorRowIndex: number,
+    anchorColumnIndex: number,
+    headRowIndex: number,
+    headColumnIndex: number,
+    tgroupIndex?: number,
+  ) => boolean;
+  selectRow: (rowIndex: number, tgroupIndex?: number) => boolean;
+  selectColumn: (columnIndex: number, tgroupIndex?: number) => boolean;
+  getEntryText: (rowIndex: number, columnIndex: number, tgroupIndex?: number) => string | null;
+  runCommand: (name: string) => boolean;
+  getSnapshot: () => DemoSnapshot;
+};
+
+declare global {
+  interface Window {
+    __S1000D_DEMO__?: DemoApi;
+  }
+}
+
+function resolveWindowDemoApi(): DemoApi | undefined {
+  if (typeof window === 'undefined') {
+    return undefined;
+  }
+
+  return window.__S1000D_DEMO__;
+}
 
 const HistoryExtension = Extension.create({
   name: 'history',
@@ -135,6 +209,43 @@ function getSelectionScopeLabel(scope: DemoSelectionScope): string {
   }
 }
 
+function toValidationOutput(state: EditorState | null, profile: S1000DTableProfile): ValidationOutput {
+  if (!state) {
+    return { valid: false, issues: [{ message: 'Editor state is not ready yet.' }] };
+  }
+
+  const table = findFirstS1000DTable(state.doc)?.table;
+  if (!table) {
+    return { valid: false, issues: [{ message: 'No S1000D table is loaded.' }] };
+  }
+
+  const result = validateS1000DTable(table, { profile });
+  return {
+    valid: result.valid,
+    issues: result.issues.map((issue) => ({ message: issue.message })),
+  };
+}
+
+function describeSelection(state: EditorState | null): string {
+  if (!state) return 'Editor not ready.';
+
+  const parts = [
+    `Cell selection: ${String(isS1000DCellSelection(state.selection))}`,
+    `Whole table: ${String(isWholeS1000DTableSelection(state))}`,
+  ];
+
+  const selectionInfo = getS1000DSelectionInfo(state);
+  if (selectionInfo) {
+    parts.push(`Rows ${selectionInfo.top}-${selectionInfo.bottom}`);
+    parts.push(`Columns ${selectionInfo.left}-${selectionInfo.right}`);
+    parts.push(`Entries ${selectionInfo.entries.length}`);
+  } else if (state.selection instanceof NodeSelection) {
+    parts.push(`Node selection: ${state.selection.node.type.name}`);
+  }
+
+  return parts.join(' | ');
+}
+
 export function App() {
   const [profile, setProfile] = useState<S1000DTableProfile>('proced');
   const [toolbarRevision, setToolbarRevision] = useState(0);
@@ -143,6 +254,7 @@ export function App() {
   const [selectionMenuPosition, setSelectionMenuPosition] = useState<{ left: number; top: number } | null>(null);
   const selectionMenuRef = useRef<HTMLDivElement | null>(null);
   const selectionMenuTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const clipboardOutputRef = useRef<ClipboardOutput>({ html: '', text: '' });
 
   const extensions = useMemo(() => [
     Document,
@@ -170,7 +282,12 @@ export function App() {
   function loadSample(kind: SampleKind) {
     if (!editor) return;
     const nextProfile = inferProfile(kind);
-    const doc = createDocFromS1000DXml(editor.schema, getSampleXml(kind), nextProfile);
+    loadXmlDocument(getSampleXml(kind), nextProfile);
+  }
+
+  function loadXmlDocument(xml: string, nextProfile: S1000DTableProfile) {
+    if (!editor) return;
+    const doc = createDocFromS1000DXml(editor.schema, xml, nextProfile);
     setProfile(nextProfile);
     editor.view.dispatch(
       editor.state.tr
@@ -186,7 +303,9 @@ export function App() {
     }
 
     void nextProfile;
-    setClipboardOutput({ html: '', text: '' });
+    const nextClipboard = { html: '', text: '' };
+    clipboardOutputRef.current = nextClipboard;
+    setClipboardOutput(nextClipboard);
   }
 
   function runEditorCommand(command: () => boolean) {
@@ -216,15 +335,66 @@ export function App() {
     if (!editor) return;
     const html = serializeS1000DCellSelectionToHtml(editor.state) ?? '';
     const text = serializeS1000DCellSelectionToText(editor.state) ?? '';
-    setClipboardOutput({ html, text });
+    const nextClipboard = { html, text };
+    clipboardOutputRef.current = nextClipboard;
+    setClipboardOutput(nextClipboard);
+  }
+
+  function validateCurrentTable(): ValidationOutput {
+    return toValidationOutput(editor?.state ?? null, profile);
+  }
+
+  function exportXml(): string {
+    if (!editor) return '';
+    const table = findFirstS1000DTable(editor.state.doc)?.table;
+    if (!table) return '';
+    return serializeS1000DTableXml(table, { profile });
+  }
+
+  function renderHtml(includeRawAttrs = false): string {
+    if (!editor) return '';
+    const table = findFirstS1000DTable(editor.state.doc)?.table;
+    if (!table) return '';
+    return renderS1000DTableToHtml(table, { profile, strict: false, includeRawAttrs });
+  }
+
+  function pasteSampleTsv(): boolean {
+    return pastePlainText(sampleTsv);
+  }
+
+  function pastePlainText(text: string): boolean {
+    if (!editor) return false;
+    const clipboard = parseS1000DPlainTextClipboard(text, editor.schema);
+    if (!clipboard) return false;
+    const applied = applyS1000DClipboardToSelection(editor.state, editor.view.dispatch, clipboard);
+    if (applied) {
+      editor.commands.focus();
+    }
+    return applied;
+  }
+
+  function pasteSingleCellText(): boolean {
+    return pastePlainText(sampleSingleCellText);
+  }
+
+  function pasteSingleCellValue(text: string): boolean {
+    return pastePlainText(text);
+  }
+
+  function pasteHtmlText(html: string): boolean {
+    if (!editor) return false;
+    const clipboard = parseS1000DHtmlClipboard(html, editor.schema);
+    if (!clipboard) return false;
+    const applied = applyS1000DClipboardToSelection(editor.state, editor.view.dispatch, clipboard);
+    if (applied) {
+      editor.commands.focus();
+    }
+    return applied;
   }
 
   function pasteCopiedHtml() {
-    if (!editor || !clipboardOutput.html) return;
-    const clipboard = parseS1000DHtmlClipboard(clipboardOutput.html, editor.schema);
-    if (!clipboard) return;
-    applyS1000DClipboardToSelection(editor.state, editor.view.dispatch, clipboard);
-    editor.commands.focus();
+    if (!editor || !clipboardOutputRef.current.html) return;
+    void pasteHtmlText(clipboardOutputRef.current.html);
   }
 
   function clearSelectedCells() {
@@ -270,6 +440,130 @@ export function App() {
   const selectionScopeLabel = getSelectionScopeLabel(selectionScope);
   const hasActionMenu = selectionScope !== 'none';
 
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    const runSelectionHelper = (builder: (state: EditorState) => ReturnType<typeof focusFirstBodyCell>) => {
+      if (!editor) return false;
+      const tr = builder(editor.state);
+      if (!tr) return false;
+      editor.view.dispatch(tr);
+      editor.commands.focus();
+      return true;
+    };
+
+    const runCustomSelection = (builder: (state: EditorState) => Transaction | null) => {
+      if (!editor) return false;
+      const tr = builder(editor.state);
+      if (!tr) return false;
+      editor.view.dispatch(tr);
+      editor.commands.focus();
+      return true;
+    };
+
+    const api: DemoApi = {
+      loadSample: (kind) => {
+        if (!editor) return false;
+        loadSample(kind);
+        return true;
+      },
+      loadXml: (xml, nextProfile = 'extended') => {
+        if (!editor) return false;
+        loadXmlDocument(xml, nextProfile);
+        return true;
+      },
+      validate: () => validateCurrentTable(),
+      exportXml: () => exportXml(),
+      renderHtml: (includeRawAttrs = false) => renderHtml(includeRawAttrs),
+      getSelectionSummary: () => describeSelection(editor?.state ?? null),
+      getClipboard: () => clipboardOutputRef.current,
+      copySelection: () => {
+        if (!editor) {
+          return clipboardOutputRef.current;
+        }
+        const nextClipboard = {
+          html: serializeS1000DCellSelectionToHtml(editor.state) ?? '',
+          text: serializeS1000DCellSelectionToText(editor.state) ?? '',
+        };
+        clipboardOutputRef.current = nextClipboard;
+        setClipboardOutput(nextClipboard);
+        return nextClipboard;
+      },
+      pasteHtml: (html) => {
+        if (html) {
+          return pasteHtmlText(html);
+        }
+        if (!clipboardOutputRef.current.html) return false;
+        return pasteHtmlText(clipboardOutputRef.current.html);
+      },
+      pasteTsv: (text) => pastePlainText(text ?? sampleTsv),
+      pasteSingleCell: (text) => pasteSingleCellValue(text ?? sampleSingleCellText),
+      clearSelection: () => {
+        if (!editor) return false;
+        const cleared = clearS1000DSelectedCells(editor.state, editor.view.dispatch);
+        if (cleared) {
+          editor.commands.focus();
+        }
+        return cleared;
+      },
+      selectCell: (rowIndex, columnIndex, tgroupIndex = 0) =>
+        runCustomSelection((state) => selectGridCell(state, rowIndex, columnIndex, tgroupIndex)),
+      selectRange: (anchorRowIndex, anchorColumnIndex, headRowIndex, headColumnIndex, tgroupIndex = 0) =>
+        runCustomSelection((state) =>
+          selectGridRange(state, anchorRowIndex, anchorColumnIndex, headRowIndex, headColumnIndex, tgroupIndex)),
+      selectRow: (rowIndex, tgroupIndex = 0) =>
+        runCustomSelection((state) => selectGridRow(state, rowIndex, tgroupIndex)),
+      selectColumn: (columnIndex, tgroupIndex = 0) =>
+        runCustomSelection((state) => selectGridColumn(state, columnIndex, tgroupIndex)),
+      getEntryText: (rowIndex, columnIndex, tgroupIndex = 0) => {
+        if (!editor) return null;
+        const entryPos = findGridEntryPosition(editor.state.doc, rowIndex, columnIndex, tgroupIndex);
+        return typeof entryPos === 'number' ? editor.state.doc.nodeAt(entryPos)?.textContent ?? null : null;
+      },
+      runCommand: (name) => {
+        if (name === 'undo') {
+          if (!editor) return false;
+          const applied = undo(editor.state, editor.view.dispatch);
+          if (applied) editor.commands.focus();
+          return applied;
+        }
+        if (name === 'redo') {
+          if (!editor) return false;
+          const applied = redo(editor.state, editor.view.dispatch);
+          if (applied) editor.commands.focus();
+          return applied;
+        }
+        if (name === 'selectFirstBodyCell') return runSelectionHelper(selectFirstBodyCell);
+        if (name === 'selectFirstBodyRow') return runSelectionHelper(selectFirstBodyRow);
+        if (name === 'selectFirstBodyColumn') return runSelectionHelper(selectFirstBodyColumn);
+        if (name === 'selectFirstTwoBodyCells') return runSelectionHelper(selectFirstTwoBodyCells);
+        if (name === 'selectWholeTable') return runSelectionHelper(selectWholeTable);
+        if (!editor) return false;
+        return runEditorCommand(() => commands?.[name]?.() ?? false);
+      },
+      getSnapshot: () => ({
+        profile,
+        selectionScope: getDemoSelectionScope(editor?.state ?? null),
+        selectionLabel: getSelectionScopeLabel(getDemoSelectionScope(editor?.state ?? null)),
+        selectionSummary: describeSelection(editor?.state ?? null),
+        validation: validateCurrentTable(),
+        xml: exportXml(),
+        html: renderHtml(false),
+        clipboard: clipboardOutputRef.current,
+        editorDomContainsDataAttrs: editor?.view.dom.innerHTML.includes('data-s1000d') ?? false,
+      }),
+    };
+
+    window.__S1000D_DEMO__ = api;
+    return () => {
+      if (window.__S1000D_DEMO__ === api) {
+        delete window.__S1000D_DEMO__;
+      }
+    };
+  }, [commands, editor, profile]);
+
   const selectionMenuActions: DemoMenuAction[] = [
     ...(selectionScope === 'table'
       ? [
@@ -283,6 +577,41 @@ export function App() {
             if (!tr) return;
             editor.view.dispatch(tr);
             editor.commands.focus();
+          },
+        },
+        {
+          id: 'delete-table',
+          label: 'Delete table',
+          disabled: false,
+          destructive: true,
+          run: () => {
+            if (!editor) return;
+            editor.commands.deleteSelection();
+            editor.commands.focus();
+          },
+        },
+        {
+          id: 'validate-table',
+          label: 'Validate table',
+          disabled: false,
+          run: () => {
+            void validateCurrentTable();
+          },
+        },
+        {
+          id: 'export-xml',
+          label: 'Export XML',
+          disabled: false,
+          run: () => {
+            void exportXml();
+          },
+        },
+        {
+          id: 'render-html',
+          label: 'Render HTML',
+          disabled: false,
+          run: () => {
+            void renderHtml(false);
           },
         },
       ]
@@ -413,6 +742,66 @@ export function App() {
           disabled: !canClearSelection,
           destructive: true,
           run: clearSelectedCells,
+        },
+        {
+          id: 'set-align-left',
+          label: 'Align left',
+          disabled: false,
+          run: () => {
+            if (!editor) return;
+            editor.commands.updateAttributes('entry', { align: 'left' });
+            editor.commands.focus();
+          },
+        },
+        {
+          id: 'set-align-center',
+          label: 'Align center',
+          disabled: false,
+          run: () => {
+            if (!editor) return;
+            editor.commands.updateAttributes('entry', { align: 'center' });
+            editor.commands.focus();
+          },
+        },
+        {
+          id: 'set-align-right',
+          label: 'Align right',
+          disabled: false,
+          run: () => {
+            if (!editor) return;
+            editor.commands.updateAttributes('entry', { align: 'right' });
+            editor.commands.focus();
+          },
+        },
+        {
+          id: 'set-valign-top',
+          label: 'Align top',
+          disabled: false,
+          run: () => {
+            if (!editor) return;
+            editor.commands.updateAttributes('entry', { valign: 'top' });
+            editor.commands.focus();
+          },
+        },
+        {
+          id: 'set-valign-middle',
+          label: 'Align middle',
+          disabled: false,
+          run: () => {
+            if (!editor) return;
+            editor.commands.updateAttributes('entry', { valign: 'middle' });
+            editor.commands.focus();
+          },
+        },
+        {
+          id: 'set-valign-bottom',
+          label: 'Align bottom',
+          disabled: false,
+          run: () => {
+            if (!editor) return;
+            editor.commands.updateAttributes('entry', { valign: 'bottom' });
+            editor.commands.focus();
+          },
         },
       ]
       : []),

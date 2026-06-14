@@ -44,6 +44,7 @@ export {
 } from './nodes.js';
 
 export { defaultHtmlTableTiptapOptions } from './options.js';
+export * from './table-interaction/index.js';
 export type {
   DistributeHtmlTableColumnsOptions,
   FitHtmlTableToWidthOptions,
