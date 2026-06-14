@@ -169,6 +169,30 @@ export async function selectDemoRange(
   );
 }
 
+export async function selectDemoRow(
+  page: Page,
+  rowIndex: number,
+  tgroupIndex = 0,
+): Promise<boolean> {
+  return page.evaluate(
+    ({ nextRowIndex, nextTgroupIndex }) =>
+      window.__S1000D_DEMO__!.selectRow(nextRowIndex, nextTgroupIndex),
+    { nextRowIndex: rowIndex, nextTgroupIndex: tgroupIndex },
+  );
+}
+
+export async function selectDemoColumn(
+  page: Page,
+  columnIndex: number,
+  tgroupIndex = 0,
+): Promise<boolean> {
+  return page.evaluate(
+    ({ nextColumnIndex, nextTgroupIndex }) =>
+      window.__S1000D_DEMO__!.selectColumn(nextColumnIndex, nextTgroupIndex),
+    { nextColumnIndex: columnIndex, nextTgroupIndex: tgroupIndex },
+  );
+}
+
 export async function getDemoEntryText(
   page: Page,
   rowIndex: number,

@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test } from '@playwright/test';
 
 import {
   clearDemoSelection,
@@ -16,7 +16,9 @@ import {
   renderDemoHtml,
   runDemoCommand,
   selectDemoCell,
+  selectDemoColumn,
   selectDemoRange,
+  selectDemoRow,
   validateDemo,
 } from './s1000d-demo-api';
 
@@ -301,7 +303,7 @@ test.describe('S1000D React demo', () => {
     await firstBodyCell.click();
 
     await page.keyboard.press('Tab');
-    let snapshot = await getDemoSnapshot(page);
+    const snapshot = await getDemoSnapshot(page);
     expect(snapshot.selectionSummary).toContain('Columns 1-1');
 
     await page.keyboard.press('Shift+Tab');
@@ -339,7 +341,7 @@ test.describe('S1000D React demo', () => {
     await bodyRow.locator('td').first().click();
     await page.keyboard.press('Shift+ArrowRight');
 
-    let snapshot = await getDemoSnapshot(page);
+    const snapshot = await getDemoSnapshot(page);
     expect(snapshot.selectionSummary).toContain('Entries 2');
 
     await page.keyboard.press('Delete');
@@ -384,6 +386,49 @@ test.describe('S1000D React demo', () => {
     expect(validation.valid).toBe(true);
   });
 
+  test('merged-cell row and column selections stay aligned', async ({ page }) => {
+    await page.goto('/');
+    await expectDemoApi(page);
+    await loadDemoSample(page, 'extended');
+
+    expect(await selectDemoRow(page, 2)).toBe(true);
+    const snapshot = await getDemoSnapshot(page);
+    expect(snapshot.selectionScope).toBe('row');
+    expect(snapshot.selectionSummary).toContain('Rows 2-2');
+
+    expect(await selectDemoColumn(page, 0)).toBe(true);
+    snapshot = await getDemoSnapshot(page);
+    expect(snapshot.selectionScope).toBe('column');
+    expect(snapshot.selectionSummary).toContain('Columns 0-0');
+
+    const validation = await validateDemo(page);
+    expect(validation.valid).toBe(true);
+  });
+
+  test('merged-cell range commands stay valid after API selection', async ({ page }) => {
+    await page.goto('/');
+    await expectDemoApi(page);
+    await loadDemoSample(page, 'extended');
+
+    expect(await selectDemoRange(page, 3, 1, 3, 2)).toBe(true);
+    const snapshot = await getDemoSnapshot(page);
+    expect(snapshot.selectionScope).toBe('multi-cell');
+
+    expect(await clearDemoSelection(page)).toBe(true);
+    let xml = await exportDemoXml(page);
+    expect(xml).toContain('Merged description');
+    expect(xml).not.toContain('Detail note');
+
+    expect(await runDemoCommand(page, 'undo')).toBe(true);
+    expect(await selectDemoRange(page, 3, 1, 3, 2)).toBe(true);
+    expect(await runDemoCommand(page, 'mergeS1000DTableCells')).toBe(true);
+
+    const validation = await validateDemo(page);
+    expect(validation.valid).toBe(true);
+    xml = await exportDemoXml(page);
+    expect(xml).toContain('namest=');
+  });
+
   test('extended sample renders rowspan, colspan, and tfoot', async ({ page }) => {
     await page.goto('/');
     await expectDemoApi(page);
@@ -415,7 +460,7 @@ test.describe('S1000D React demo', () => {
     expect(snapshot.selectionScope).toBe('multi-cell');
     expect(await runDemoCommand(page, 'mergeS1000DTableCells')).toBe(true);
 
-    let html = await renderDemoHtml(page);
+    const html = await renderDemoHtml(page);
     expect(html).toContain('colspan=');
 
     expect(await runDemoCommand(page, 'splitS1000DTableCell')).toBe(true);
@@ -522,7 +567,7 @@ test.describe('S1000D React demo', () => {
     await page.mouse.move(targetSecondBox!.x + (targetSecondBox!.width / 2), targetSecondBox!.y + (targetSecondBox!.height / 2), { steps: 4 });
     await page.mouse.up();
 
-    let snapshot = await getDemoSnapshot(page);
+    const snapshot = await getDemoSnapshot(page);
     expect(snapshot.selectionSummary).toContain('Rows 2-2');
     expect(snapshot.selectionSummary).toContain('Columns 0-1');
 
@@ -630,11 +675,11 @@ test.describe('S1000D React demo', () => {
     `.trim(), 'extended');
 
     expect(await selectDemoRange(page, 0, 0, 1, 1)).toBe(true);
-    let snapshot = await getDemoSnapshot(page);
+    const snapshot = await getDemoSnapshot(page);
     expect(snapshot.selectionScope).toBe('multi-cell');
 
     expect(await runDemoCommand(page, 'mergeS1000DTableCells')).toBe(true);
-    let html = await renderDemoHtml(page);
+    const html = await renderDemoHtml(page);
     expect(html).toContain('colspan=');
 
     expect(await runDemoCommand(page, 'splitS1000DTableCell')).toBe(true);
@@ -677,6 +722,92 @@ test.describe('S1000D React demo', () => {
 
     const xml = await exportDemoXml(page);
     expect(xml).toContain('colwidth=');
+  });
+
+  test('remaining row and column actions stay valid and support undo redo', async ({ page }) => {
+    await page.goto('/');
+    await expectDemoApi(page);
+    await loadDemoSample(page, 'proced');
+
+    expect(await selectDemoRow(page, 1)).toBe(true);
+    expect(await runDemoCommand(page, 'moveS1000DTableRowUp')).toBe(true);
+    let xml = await exportDemoXml(page);
+    expect(xml.indexOf('Check system status')).toBeLessThan(xml.indexOf('Step'));
+
+    expect(await runDemoCommand(page, 'moveS1000DTableRowDown')).toBe(true);
+    expect(await selectDemoRow(page, 2)).toBe(true);
+    expect(await clearDemoSelection(page)).toBe(true);
+    xml = await exportDemoXml(page);
+    expect(xml).not.toContain('Record result');
+
+    expect(await runDemoCommand(page, 'undo')).toBe(true);
+    expect(await selectDemoColumn(page, 0)).toBe(true);
+    expect(await runDemoCommand(page, 'moveS1000DTableColumnRight')).toBe(true);
+    expect(await runDemoCommand(page, 'moveS1000DTableColumnLeft')).toBe(true);
+    expect(await runDemoCommand(page, 'deleteS1000DTableColumn')).toBe(true);
+
+    const validation = await validateDemo(page);
+    expect(validation.valid).toBe(true);
+    expect(await runDemoCommand(page, 'undo')).toBe(true);
+    expect(await runDemoCommand(page, 'redo')).toBe(true);
+  });
+
+  test('cell alignment actions write attributes and keep renderer/xml valid', async ({ page }) => {
+    await page.goto('/');
+    await expectDemoApi(page);
+    await loadDemoSample(page, 'extended');
+
+    const table = page.getByTestId('editor').getByTestId('s1000d-table');
+    const bodyCell = table.locator('tbody[data-s1000d="tbody"] tr').nth(1).locator('td').first();
+    await bodyCell.click();
+
+    await page.getByTestId('selection-actions-trigger').click();
+    await page.getByTestId('selection-menu-item-set-align-center').click();
+    await page.getByTestId('selection-actions-trigger').click();
+    await page.getByTestId('selection-menu-item-set-valign-bottom').click();
+
+    const snapshot = await getDemoSnapshot(page);
+    expect(snapshot.selectionScope).toBe('cell');
+
+    const html = await renderDemoHtml(page);
+    expect(html).toContain('<table');
+    const validation = await validateDemo(page);
+    expect(validation.valid).toBe(true);
+  });
+
+  test('selection recovery and overlay remain stable after destructive row and column commands', async ({ page }) => {
+    await page.goto('/');
+    await expectDemoApi(page);
+    await loadDemoSample(page, 'proced');
+
+    const table = page.getByTestId('editor').getByTestId('s1000d-table');
+    await table.hover();
+    await expect(page.getByTestId('s1000d-overlay')).toBeVisible();
+
+    expect(await selectDemoRow(page, 2)).toBe(true);
+    await page.getByTestId('selection-actions-trigger').click();
+    await page.getByTestId('selection-menu-item-delete-row').click();
+
+    let snapshot = await getDemoSnapshot(page);
+    expect(['row', 'cell']).toContain(snapshot.selectionScope);
+    await expect(page.getByTestId('s1000d-overlay')).toBeVisible();
+
+    expect(await selectDemoColumn(page, 1)).toBe(true);
+    await page.getByTestId('selection-actions-trigger').click();
+    await page.getByTestId('selection-menu-item-delete-column').click();
+
+    snapshot = await getDemoSnapshot(page);
+    expect(['column', 'cell', 'multi-cell']).toContain(snapshot.selectionScope);
+    await expect(page.getByTestId('s1000d-overlay')).toBeVisible();
+
+    const validation = await validateDemo(page);
+    expect(validation.valid).toBe(true);
+    const html = await renderDemoHtml(page);
+    expect(html).toContain('<table');
+
+    expect(await runDemoCommand(page, 'undo')).toBe(true);
+    expect(await runDemoCommand(page, 'redo')).toBe(true);
+    expect((await validateDemo(page)).valid).toBe(true);
   });
 
   test('hovering row and column handles paints row and column feedback', async ({ page }) => {

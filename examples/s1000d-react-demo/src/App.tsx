@@ -116,14 +116,6 @@ declare global {
   }
 }
 
-function resolveWindowDemoApi(): DemoApi | undefined {
-  if (typeof window === 'undefined') {
-    return undefined;
-  }
-
-  return window.__S1000D_DEMO__;
-}
-
 const HistoryExtension = Extension.create({
   name: 'history',
 
@@ -358,10 +350,6 @@ export function App() {
     return renderS1000DTableToHtml(table, { profile, strict: false, includeRawAttrs });
   }
 
-  function pasteSampleTsv(): boolean {
-    return pastePlainText(sampleTsv);
-  }
-
   function pastePlainText(text: string): boolean {
     if (!editor) return false;
     const clipboard = parseS1000DPlainTextClipboard(text, editor.schema);
@@ -371,10 +359,6 @@ export function App() {
       editor.commands.focus();
     }
     return applied;
-  }
-
-  function pasteSingleCellText(): boolean {
-    return pastePlainText(sampleSingleCellText);
   }
 
   function pasteSingleCellValue(text: string): boolean {
@@ -437,7 +421,6 @@ export function App() {
   const canUndo = Boolean(editor && undo(editor.state));
   const canRedo = Boolean(editor && redo(editor.state));
   const selectionScope = getDemoSelectionScope(editor?.state ?? null);
-  const selectionScopeLabel = getSelectionScopeLabel(selectionScope);
   const hasActionMenu = selectionScope !== 'none';
 
   useEffect(() => {

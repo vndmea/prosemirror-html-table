@@ -53,7 +53,7 @@ export {
   s1000dTableDomAdapter,
 } from './dom-adapter.js';
 export type { S1000DTableDOMContext, S1000DTableDomAdapter } from './dom-adapter.js';
-  export { S1000DTableNodeView } from './view.js';
+export { S1000DTableNodeView } from './view.js';
 import { S1000DTableNodeView } from './view.js';
 export { createS1000DTableOverlayPlugin } from './overlay.js';
 

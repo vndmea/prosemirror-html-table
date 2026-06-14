@@ -2,51 +2,48 @@ import { readFileSync } from 'node:fs';
 
 import { describe, expect, it } from 'vitest';
 
-import * as clipboardExports from './clipboard.js';
-import * as rendererExports from './renderer.js';
-import * as rootExports from './index.js';
-import * as tiptapExports from './tiptap.js';
+function readWorkspaceFile(relativePath: string): string {
+  return readFileSync(new URL(`../../../${relativePath}`, import.meta.url), 'utf8');
+}
 
 describe('S1000D package boundaries', () => {
-  it('keeps subpath APIs out of the main entry', () => {
-    expect('createS1000DTableExtensions' in rootExports).toBe(false);
-    expect('createS1000DTableEditingPlugin' in rootExports).toBe(false);
-    expect('serializeS1000DCellSelectionToHtml' in rootExports).toBe(false);
-    expect('parseS1000DHtmlClipboard' in rootExports).toBe(false);
-    expect('renderS1000DTableToHtml' in rootExports).toBe(false);
-    expect('defaultS1000DTableTiptapOptions' in rootExports).toBe(false);
-    expect('applyS1000DClipboardToSelection' in rootExports).toBe(false);
+  it('keeps overlay dependencies on public tiptap table-interaction exports only', () => {
+    const overlay = readWorkspaceFile('packages/s1000d/src/overlay.ts');
 
-    expect(typeof rootExports.createS1000DTableNodeSpecs).toBe('function');
-    expect(typeof rootExports.parseS1000DTableXml).toBe('function');
-    expect(typeof rootExports.serializeS1000DTableXml).toBe('function');
-    expect(typeof rootExports.validateS1000DTable).toBe('function');
-    expect(typeof rootExports.addS1000DRowAfter).toBe('function');
-    expect(typeof tiptapExports.createS1000DTableExtensions).toBe('function');
-    expect(typeof tiptapExports.createS1000DTableEditingPlugin).toBe('function');
-    expect(typeof clipboardExports.serializeS1000DCellSelectionToHtml).toBe('function');
-    expect(typeof clipboardExports.parseS1000DHtmlClipboard).toBe('function');
-    expect(typeof rendererExports.renderS1000DTableToHtml).toBe('function');
-
-    const rootSource = readFileSync(new URL('./index.ts', import.meta.url), 'utf8');
-    expect(rootSource).not.toContain("./tiptap.js");
-    expect(rootSource).not.toContain("./clipboard.js");
-    expect(rootSource).not.toContain("./renderer.js");
+    expect(overlay).toContain("from 'tiptap-html-table/table-interaction/dom-geometry'");
+    expect(overlay).toContain("from 'tiptap-html-table/table-interaction/overlay-geometry'");
+    expect(overlay).toContain("from 'tiptap-html-table/table-interaction/overlay-host'");
+    expect(overlay).toContain("from 'tiptap-html-table/table-interaction/resize-lifecycle'");
+    expect(overlay).not.toContain('../../tiptap/src/');
+    expect(overlay).not.toContain('../tiptap/');
   });
 
-  it('declares subpath exports and optional tiptap peers', () => {
-    const packageJson = JSON.parse(
-      readFileSync(new URL('../package.json', import.meta.url), 'utf8'),
-    ) as {
-      exports: Record<string, unknown>;
-      peerDependenciesMeta?: Record<string, { optional?: boolean }>;
-    };
+  it('does not let tiptap import s1000d implementation files', () => {
+    const tiptapOverlay = readWorkspaceFile('packages/tiptap/src/html-table-overlay-view.ts');
+    const tiptapPackage = readWorkspaceFile('packages/tiptap/package.json');
 
-    expect(packageJson.exports['.']).toBeDefined();
-    expect(packageJson.exports['./clipboard']).toBeDefined();
-    expect(packageJson.exports['./renderer']).toBeDefined();
-    expect(packageJson.exports['./tiptap']).toBeDefined();
-    expect(packageJson.peerDependenciesMeta?.['@tiptap/core']?.optional).toBe(true);
-    expect(packageJson.peerDependenciesMeta?.['prosemirror-view']?.optional).toBe(true);
+    expect(tiptapOverlay).not.toContain('packages/s1000d');
+    expect(tiptapOverlay).not.toContain("from 'prosemirror-html-table-s1000d");
+    expect(tiptapPackage).toContain('"./table-interaction"');
+    expect(tiptapPackage).toContain('"./table-interaction/*"');
+  });
+
+  it('keeps s1000d public subpath boundaries explicit', () => {
+    const packageJson = readWorkspaceFile('packages/s1000d/package.json');
+    const index = readWorkspaceFile('packages/s1000d/src/index.ts');
+
+    expect(packageJson).toContain('"./clipboard"');
+    expect(packageJson).toContain('"./renderer"');
+    expect(packageJson).toContain('"./tiptap"');
+    expect(index).not.toContain("./tiptap.js");
+    expect(index).not.toContain("./clipboard.js");
+  });
+
+  it('keeps examples on public package entrypoints', () => {
+    const examples = readWorkspaceFile('packages/s1000d/src/examples.test.ts');
+    expect(examples).toContain("from 'prosemirror-html-table-s1000d'");
+    expect(examples).toContain("from 'prosemirror-html-table-s1000d/tiptap'");
+    expect(examples).toContain("from 'prosemirror-html-table-s1000d/clipboard'");
+    expect(examples).toContain("from 'prosemirror-html-table-s1000d/renderer'");
   });
 });

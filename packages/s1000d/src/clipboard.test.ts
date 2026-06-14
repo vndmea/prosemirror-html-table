@@ -1,5 +1,5 @@
 import { Fragment, Schema, type Node as ProseMirrorNode } from 'prosemirror-model';
-import { EditorState, NodeSelection, TextSelection } from 'prosemirror-state';
+import { EditorState, NodeSelection } from 'prosemirror-state';
 import { describe, expect, it } from 'vitest';
 
 import { S1000DCellSelection } from './index.js';

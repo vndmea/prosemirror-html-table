@@ -1095,13 +1095,14 @@ function createInsertedColspec(
   const previous = colspecs.find((colspec) => colspec.index === insertIndex - 1);
   const next = colspecs.find((colspec) => colspec.index === insertIndex);
   const base = previous?.node ?? next?.node ?? null;
-  const colnum = String(insertIndex + 1);
   const colname = buildInsertedColname(insertIndex, colspecs);
-  const attrs = {
+  const attrs: Record<string, unknown> = {
     ...(base?.attrs ?? {}),
     colname,
-    colnum,
   };
+  if (colspecs.some((colspec) => colspec.node.attrs.colnum != null)) {
+    attrs.colnum = String(insertIndex + 1);
+  }
 
   return colspecType.create(attrs);
 }
@@ -1147,11 +1148,12 @@ function resequenceColspecChildren(children: readonly ProseMirrorNode[]): ProseM
       return child;
     }
 
+    const nextAttrs: Record<string, unknown> = { ...child.attrs };
+    if (nextAttrs.colnum != null) {
+      nextAttrs.colnum = String(colnum);
+    }
     const nextChild = child.type.create(
-      {
-        ...child.attrs,
-        colnum: String(colnum),
-      },
+      nextAttrs,
       child.content,
       child.marks,
     );
