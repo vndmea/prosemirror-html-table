@@ -74,3 +74,4 @@ export const unsafeRawAttrsSampleXml = `
 `.trim();
 
 export const sampleTsv = 'Alpha\tBeta';
+export const sampleSingleCellText = 'Alpha';

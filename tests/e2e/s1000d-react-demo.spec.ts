@@ -229,6 +229,26 @@ test.describe('S1000D React demo', () => {
     await expect(page.getByTestId('selection-output')).toContainText('Columns 0-0');
   });
 
+  test('tab on the last body cell adds a new row and moves focus into it', async ({ page }) => {
+    await page.goto('/');
+    await page.getByTestId('load-proced').click();
+
+    const table = page.getByTestId('editor').getByTestId('s1000d-table');
+    const lastBodyCell = table.locator('tbody[data-s1000d="tbody"] tr').last().locator('td').nth(1);
+    await lastBodyCell.click();
+
+    await page.getByTestId('export-xml').click();
+    const beforeXml = await page.getByTestId('xml-output').textContent();
+    const beforeRows = beforeXml?.match(/<row\b/g)?.length ?? 0;
+
+    await page.keyboard.press('Tab');
+    await expect(page.getByTestId('selection-output')).toContainText(`Rows ${beforeRows - 1}-${beforeRows - 1}`);
+    await page.getByTestId('export-xml').click();
+    const afterXml = await page.getByTestId('xml-output').textContent();
+    expect(afterXml?.match(/<row\b/g)?.length ?? 0).toBe(beforeRows + 1);
+    await expect(page.getByTestId('selection-output')).toContainText('Columns 1-1');
+  });
+
   test('delete clears a selected cell range and escape collapses the cell selection', async ({ page }) => {
     await page.goto('/');
     await page.getByTestId('load-proced').click();
@@ -249,6 +269,21 @@ test.describe('S1000D React demo', () => {
     await page.keyboard.press('Shift+ArrowRight');
     await page.keyboard.press('Escape');
     await expect(page.getByTestId('selection-output')).toContainText('Cell selection: false');
+  });
+
+  test('delete removes the whole table when the table handle selection is active', async ({ page }) => {
+    await page.goto('/');
+    await page.getByTestId('load-proced').click();
+
+    const table = page.getByTestId('editor').getByTestId('s1000d-table');
+    await table.hover();
+    await page.getByTestId('s1000d-table-handle').click();
+    await expect(page.getByTestId('selection-scope-label')).toHaveText('Table actions');
+
+    await page.keyboard.press('Delete');
+    await expect(page.getByTestId('editor')).not.toContainText('Check system status');
+    await page.getByTestId('validate').click();
+    await expect(page.getByTestId('validation-output')).toContainText('No S1000D table is loaded.');
   });
 
   test('move commands keep the table valid', async ({ page }) => {
@@ -398,6 +433,33 @@ test.describe('S1000D React demo', () => {
     const xml = await page.getByTestId('xml-output').textContent();
     expect(xml?.match(/Check system status/g)?.length ?? 0).toBeGreaterThanOrEqual(2);
     expect(xml?.match(/<para>1<\/para>/g)?.length ?? 0).toBeGreaterThanOrEqual(2);
+  });
+
+  test('single-cell paste fills a multi-cell selection and stays valid', async ({ page }) => {
+    await page.goto('/');
+    await page.getByTestId('load-proced').click();
+
+    const table = page.getByTestId('editor').getByTestId('s1000d-table');
+    const bodyRows = table.locator('tbody[data-s1000d="tbody"] tr');
+    const firstCell = bodyRows.first().locator('td').first();
+    const secondRowSecondCell = bodyRows.nth(1).locator('td').nth(1);
+    const firstBox = await firstCell.boundingBox();
+    const lastBox = await secondRowSecondCell.boundingBox();
+    expect(firstBox).toBeTruthy();
+    expect(lastBox).toBeTruthy();
+
+    await table.hover();
+    await page.mouse.move(firstBox!.x + (firstBox!.width / 2), firstBox!.y + (firstBox!.height / 2));
+    await page.mouse.down();
+    await page.mouse.move(lastBox!.x + (lastBox!.width / 2), lastBox!.y + (lastBox!.height / 2), { steps: 6 });
+    await page.mouse.up();
+
+    await page.getByTestId('paste-single-cell').click();
+    await page.getByTestId('validate').click();
+    await expect(page.getByTestId('validation-output')).toContainText('"valid": true');
+    await page.getByTestId('export-xml').click();
+    const xml = await page.getByTestId('xml-output').textContent();
+    expect(xml?.match(/<para>Alpha<\/para>/g)?.length ?? 0).toBeGreaterThanOrEqual(2);
   });
 
   test('overlay selection and resize loop writes colwidth back to XML', async ({ page }) => {

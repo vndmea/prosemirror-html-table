@@ -181,7 +181,7 @@ export function applyS1000DClipboardToSelection(
   const startColumn = selectionInfo?.left ?? cellContext.entry.columnIndex ?? 0;
   const maxHeight = selectionInfo ? (selectionInfo.bottom - selectionInfo.top + 1) : (cellContext.grid.height - startRow);
   const maxWidth = selectionInfo ? (selectionInfo.right - selectionInfo.left + 1) : (cellContext.grid.width - startColumn);
-  const rows = clipClipboardRows(clipboard.rows, maxWidth, maxHeight);
+  const rows = normalizeClipboardRowsForTarget(clipboard.rows, maxWidth, maxHeight);
   const replacements = new Map<S1000DEntryRef, ProseMirrorNode>();
 
   for (let rowOffset = 0; rowOffset < rows.length; rowOffset += 1) {
@@ -628,6 +628,39 @@ function clipClipboardRows(
   return rows
     .slice(0, Math.max(1, maxHeight))
     .map((row) => row.slice(0, Math.max(1, maxWidth)));
+}
+
+function normalizeClipboardRowsForTarget(
+  rows: ParsedS1000DClipboardCell[][],
+  maxWidth: number,
+  maxHeight: number,
+): ParsedS1000DClipboardCell[][] {
+  const clipped = clipClipboardRows(rows, maxWidth, maxHeight);
+  if (clipped.length === 0) {
+    return clipped;
+  }
+
+  if (clipped.length === 1 && clipped[0]?.length === 1) {
+    const cell = clipped[0]?.[0];
+    if (!cell) {
+      return clipped;
+    }
+    return Array.from({ length: Math.max(1, maxHeight) }, () =>
+      Array.from({ length: Math.max(1, maxWidth) }, () => cloneClipboardCell(cell)),
+    );
+  }
+
+  return clipped;
+}
+
+function cloneClipboardCell(cell: ParsedS1000DClipboardCell): ParsedS1000DClipboardCell {
+  return {
+    attrs: { ...cell.attrs },
+    content: cell.content,
+    text: cell.text,
+    rowSpan: cell.rowSpan,
+    colSpan: cell.colSpan,
+  };
 }
 
 function encodeBase64UrlUtf8(value: string): string {

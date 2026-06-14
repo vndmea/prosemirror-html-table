@@ -40,6 +40,7 @@ import {
 import {
   extendedSampleXml,
   procedSampleXml,
+  sampleSingleCellText,
   sampleTsv,
   unsafeRawAttrsSampleXml,
 } from './samples';
@@ -314,6 +315,15 @@ export function App() {
     updateAll(editor.state, profile);
   }
 
+  function pasteSingleCellText() {
+    if (!editor) return;
+    const clipboard = parseS1000DPlainTextClipboard(sampleSingleCellText, editor.schema);
+    if (!clipboard) return;
+    applyS1000DClipboardToSelection(editor.state, editor.view.dispatch, clipboard);
+    editor.commands.focus();
+    updateAll(editor.state, profile);
+  }
+
   function pasteCopiedHtml() {
     if (!editor || !clipboardOutput.html) return;
     const clipboard = parseS1000DHtmlClipboard(clipboardOutput.html, editor.schema);
@@ -524,6 +534,12 @@ export function App() {
           run: pasteSampleTsv,
         },
         {
+          id: 'paste-single-cell',
+          label: 'Paste sample cell',
+          disabled: false,
+          run: pasteSingleCellText,
+        },
+        {
           id: 'paste-html',
           label: 'Paste copied HTML',
           disabled: !clipboardOutput.html,
@@ -668,6 +684,7 @@ export function App() {
           <button data-testid="merge-or-split-cell" type="button" disabled={!canRunCommand('mergeOrSplitS1000DTableCell')} onClick={() => runNamedCommand('mergeOrSplitS1000DTableCell')}>Merge or split cell</button>
           <button data-testid="copy-selection" type="button" disabled={!canCopySelection} onClick={copySelection}>Copy selection</button>
           <button data-testid="paste-tsv" type="button" onClick={pasteSampleTsv}>Paste sample TSV</button>
+          <button data-testid="paste-single-cell" type="button" onClick={pasteSingleCellText}>Paste sample cell</button>
           <button data-testid="paste-html" type="button" disabled={!clipboardOutput.html} onClick={pasteCopiedHtml}>Paste copied HTML</button>
           <button data-testid="clear-selection" type="button" disabled={!canClearSelection} onClick={clearSelectedCells}>Clear selected cells</button>
         </div>
