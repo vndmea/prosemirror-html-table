@@ -10,10 +10,7 @@ describe('S1000D package boundaries', () => {
   it('keeps overlay dependencies on public tiptap table-interaction exports only', () => {
     const overlay = readWorkspaceFile('packages/s1000d/src/overlay.ts');
 
-    expect(overlay).toContain("from 'tiptap-html-table/table-interaction/dom-geometry'");
-    expect(overlay).toContain("from 'tiptap-html-table/table-interaction/overlay-geometry'");
-    expect(overlay).toContain("from 'tiptap-html-table/table-interaction/overlay-host'");
-    expect(overlay).toContain("from 'tiptap-html-table/table-interaction/resize-lifecycle'");
+    expect(overlay).toContain("from 'tiptap-html-table/table-interaction'");
     expect(overlay).not.toContain('../../tiptap/src/');
     expect(overlay).not.toContain('../tiptap/');
   });
@@ -35,7 +32,6 @@ describe('S1000D package boundaries', () => {
     expect(tiptapOverlay).not.toContain('packages/s1000d');
     expect(tiptapOverlay).not.toContain("from 'prosemirror-html-table-s1000d");
     expect(tiptapPackage).toContain('"./table-interaction"');
-    expect(tiptapPackage).toContain('"./table-interaction/*"');
   });
 
   it('keeps s1000d public subpath boundaries explicit', () => {
@@ -49,7 +45,7 @@ describe('S1000D package boundaries', () => {
     expect(index).not.toContain("./tiptap.js");
     expect(index).not.toContain("./clipboard.js");
     expect(index).not.toContain("./renderer.js");
-    expect(overlay).toContain("from 'tiptap-html-table/table-interaction/");
+    expect(overlay).toContain("from 'tiptap-html-table/table-interaction'");
   });
 
   it('keeps examples on public package entrypoints', () => {

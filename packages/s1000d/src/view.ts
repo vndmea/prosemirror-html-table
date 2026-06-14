@@ -4,6 +4,7 @@ import type { ViewMutationRecord } from 'prosemirror-view';
 
 import { createS1000DTableAdapter } from './adapter.js';
 import { resolveColspecs } from './cals/index.js';
+import { ensureS1000DTableStyles } from './styles.js';
 import type { S1000DTableTiptapOptions } from './tiptap.js';
 
 const S1000D_TABLE_WRAPPER_CLASS = 's1000d-table-node__wrapper';
@@ -23,6 +24,7 @@ export class S1000DTableNodeView {
     this.node = props.node;
     this.options = options;
     this.htmlAttributes = mergeAttributes(this.options.HTMLAttributes, props.HTMLAttributes);
+    ensureS1000DTableStyles(document);
 
     this.wrapper = document.createElement('div');
     this.wrapper.className = S1000D_TABLE_WRAPPER_CLASS;

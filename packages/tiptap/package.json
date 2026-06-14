@@ -44,11 +44,6 @@
       "import": "./dist/table-interaction/index.js",
       "require": "./dist/table-interaction/index.cjs"
     },
-    "./table-interaction/*": {
-      "types": "./dist/table-interaction/*.d.ts",
-      "import": "./dist/table-interaction/*.js",
-      "require": "./dist/table-interaction/*.cjs"
-    },
     "./styles.css": "./dist/styles.css"
   },
   "scripts": {

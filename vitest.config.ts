@@ -4,20 +4,56 @@ import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
   resolve: {
-    alias: {
-      'prosemirror-html-table': fileURLToPath(new URL('./packages/core/src/index.ts', import.meta.url)),
-      'prosemirror-html-table-s1000d': fileURLToPath(new URL('./packages/s1000d/src/index.ts', import.meta.url)),
-      'prosemirror-html-table-s1000d/clipboard': fileURLToPath(new URL('./packages/s1000d/src/clipboard.ts', import.meta.url)),
-      'prosemirror-html-table-s1000d/tiptap': fileURLToPath(new URL('./packages/s1000d/src/tiptap.ts', import.meta.url)),
-      'tiptap-html-table': fileURLToPath(new URL('./packages/tiptap/src/index.ts', import.meta.url)),
-      'tiptap-html-table/table-interaction': fileURLToPath(new URL('./packages/tiptap/src/table-interaction/index.ts', import.meta.url)),
-      'tiptap-html-table/table-interaction/dom-adapter': fileURLToPath(new URL('./packages/tiptap/src/table-interaction/dom-adapter.ts', import.meta.url)),
-      'tiptap-html-table/table-interaction/dom-geometry': fileURLToPath(new URL('./packages/tiptap/src/table-interaction/dom-geometry.ts', import.meta.url)),
-      'tiptap-html-table/table-interaction/menu-controller': fileURLToPath(new URL('./packages/tiptap/src/table-interaction/menu-controller.ts', import.meta.url)),
-      'tiptap-html-table/table-interaction/overlay-geometry': fileURLToPath(new URL('./packages/tiptap/src/table-interaction/overlay-geometry.ts', import.meta.url)),
-      'tiptap-html-table/table-interaction/overlay-host': fileURLToPath(new URL('./packages/tiptap/src/table-interaction/overlay-host.ts', import.meta.url)),
-      'tiptap-html-table/table-interaction/resize-lifecycle': fileURLToPath(new URL('./packages/tiptap/src/table-interaction/resize-lifecycle.ts', import.meta.url)),
-    },
+    alias: [
+      {
+        find: 'tiptap-html-table/table-interaction/dom-adapter',
+        replacement: fileURLToPath(new URL('./packages/tiptap/src/table-interaction/dom-adapter.ts', import.meta.url)),
+      },
+      {
+        find: 'tiptap-html-table/table-interaction/dom-geometry',
+        replacement: fileURLToPath(new URL('./packages/tiptap/src/table-interaction/dom-geometry.ts', import.meta.url)),
+      },
+      {
+        find: 'tiptap-html-table/table-interaction/menu-controller',
+        replacement: fileURLToPath(new URL('./packages/tiptap/src/table-interaction/menu-controller.ts', import.meta.url)),
+      },
+      {
+        find: 'tiptap-html-table/table-interaction/overlay-geometry',
+        replacement: fileURLToPath(new URL('./packages/tiptap/src/table-interaction/overlay-geometry.ts', import.meta.url)),
+      },
+      {
+        find: 'tiptap-html-table/table-interaction/overlay-host',
+        replacement: fileURLToPath(new URL('./packages/tiptap/src/table-interaction/overlay-host.ts', import.meta.url)),
+      },
+      {
+        find: 'tiptap-html-table/table-interaction/resize-lifecycle',
+        replacement: fileURLToPath(new URL('./packages/tiptap/src/table-interaction/resize-lifecycle.ts', import.meta.url)),
+      },
+      {
+        find: 'tiptap-html-table/table-interaction',
+        replacement: fileURLToPath(new URL('./packages/tiptap/src/table-interaction/index.ts', import.meta.url)),
+      },
+      {
+        find: 'prosemirror-html-table-s1000d/clipboard',
+        replacement: fileURLToPath(new URL('./packages/s1000d/src/clipboard.ts', import.meta.url)),
+      },
+      {
+        find: 'prosemirror-html-table-s1000d/tiptap',
+        replacement: fileURLToPath(new URL('./packages/s1000d/src/tiptap.ts', import.meta.url)),
+      },
+      {
+        find: 'prosemirror-html-table-s1000d',
+        replacement: fileURLToPath(new URL('./packages/s1000d/src/index.ts', import.meta.url)),
+      },
+      {
+        find: 'prosemirror-html-table',
+        replacement: fileURLToPath(new URL('./packages/core/src/index.ts', import.meta.url)),
+      },
+      {
+        find: 'tiptap-html-table',
+        replacement: fileURLToPath(new URL('./packages/tiptap/src/index.ts', import.meta.url)),
+      },
+    ],
   },
   test: {
     environment: 'node',

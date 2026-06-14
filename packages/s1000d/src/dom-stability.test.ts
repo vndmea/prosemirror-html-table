@@ -2,7 +2,7 @@ import { chromium } from '@playwright/test';
 import { describe, expect, it } from 'vitest';
 
 describe('S1000D editor DOM stability', () => {
-  it('confirms browsers normalize nested table sections out of the tgroup wrapper', async () => {
+  it('confirms browsers normalize nested table sections out of the tgroup wrapper', { timeout: 15000 }, async () => {
     const browser = await chromium.launch({ headless: true });
 
     try {

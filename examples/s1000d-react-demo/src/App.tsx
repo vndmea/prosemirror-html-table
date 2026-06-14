@@ -82,6 +82,11 @@ type DemoSnapshot = {
   editorDomContainsDataAttrs: boolean;
 };
 
+type SelectionHandleMenuDetail = {
+  left: number;
+  top: number;
+};
+
 type DemoApi = {
   loadSample: (kind: SampleKind) => boolean;
   loadXml: (xml: string, profile?: S1000DTableProfile) => boolean;
@@ -395,17 +400,19 @@ export function App() {
     openSelectionMenu(rect.left, rect.bottom + 8);
   }
 
-  const commands = editor?.commands as unknown as Record<string, (() => boolean) | undefined> | undefined;
-  const canCommands = editor?.can() as unknown as Record<string, (() => boolean) | undefined> | undefined;
   void toolbarRevision;
   void profile;
 
   function canRunCommand(name: string): boolean {
+    const canCommands = editor?.can() as unknown as Record<string, (() => boolean) | undefined> | undefined;
     return Boolean(canCommands?.[name]?.());
   }
 
   function runNamedCommand(name: string): void {
-    runEditorCommand(() => commands?.[name]?.() ?? false);
+    runEditorCommand(() => {
+      const commands = editor?.commands as unknown as Record<string, (() => boolean) | undefined> | undefined;
+      return commands?.[name]?.() ?? false;
+    });
   }
 
   function runHistoryCommand(command: typeof undo | typeof redo): void {
@@ -524,7 +531,10 @@ export function App() {
         if (name === 'selectFirstTwoBodyCells') return runSelectionHelper(selectFirstTwoBodyCells);
         if (name === 'selectWholeTable') return runSelectionHelper(selectWholeTable);
         if (!editor) return false;
-        return runEditorCommand(() => commands?.[name]?.() ?? false);
+        return runEditorCommand(() => {
+          const commands = editor.commands as unknown as Record<string, (() => boolean) | undefined>;
+          return commands[name]?.() ?? false;
+        });
       },
       getSnapshot: () => ({
         profile,
@@ -545,7 +555,7 @@ export function App() {
         delete window.__S1000D_DEMO__;
       }
     };
-  }, [commands, editor, profile]);
+  }, [editor, profile]);
 
   const selectionMenuActions: DemoMenuAction[] = [
     ...(selectionScope === 'table'
@@ -865,6 +875,25 @@ export function App() {
       document.removeEventListener('keydown', handleKeyDown);
     };
   }, [selectionMenuOpen]);
+
+  useEffect(() => {
+    const handleSelectionHandleMenu = (event: Event) => {
+      if (!(event instanceof CustomEvent)) {
+        return;
+      }
+      const detail = event.detail as SelectionHandleMenuDetail | undefined;
+      const currentScope = getDemoSelectionScope(editor?.state ?? null);
+      if (!detail || currentScope === 'none') {
+        return;
+      }
+      openSelectionMenu(detail.left, detail.top);
+    };
+
+    document.addEventListener('s1000d-selection-handle-menu', handleSelectionHandleMenu);
+    return () => {
+      document.removeEventListener('s1000d-selection-handle-menu', handleSelectionHandleMenu);
+    };
+  }, [editor]);
 
   useEffect(() => {
     if (!selectionMenuOpen) {

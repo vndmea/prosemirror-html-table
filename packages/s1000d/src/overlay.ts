@@ -10,20 +10,20 @@ import { replaceActiveS1000DTgroup, replaceS1000DTable } from './mutation.js';
 import { s1000dTableNodeNames } from './names.js';
 import { findS1000DEntryPosition } from './position.js';
 import { S1000DCellSelection, isS1000DCellSelection } from './selection.js';
+import { ensureS1000DTableStyles } from './styles.js';
 import type { S1000DEntryRef, S1000DTgroupGrid } from './grid.js';
 import {
   getVisibleTableRect,
-  toTableRect,
-  type TableGeometry,
-  type TableRect,
-} from 'tiptap-html-table/table-interaction/dom-geometry';
-import {
   getTableOverlayPositionState,
   getVisibleTableSelectionRect,
+  TableOverlayHost,
+  TableResizeLifecycle,
+  toTableRect,
+  applyTableColumnPreviewWidths,
+  type TableGeometry,
   type TableOverlayPositionState,
-} from 'tiptap-html-table/table-interaction/overlay-geometry';
-import { TableOverlayHost } from 'tiptap-html-table/table-interaction/overlay-host';
-import { TableResizeLifecycle, applyTableColumnPreviewWidths } from 'tiptap-html-table/table-interaction/resize-lifecycle';
+  type TableRect,
+} from 'tiptap-html-table/table-interaction';
 
 const ROW_HANDLE_OFFSET = 10;
 const COLUMN_HANDLE_OFFSET = 10;
@@ -108,6 +108,7 @@ class S1000DTableOverlayView {
   private readonly columnBand: HTMLDivElement;
   private readonly cellFill: HTMLDivElement;
   private readonly cellOutline: HTMLDivElement;
+  private readonly cellHandle: HTMLButtonElement;
   private readonly hoverRowBand: HTMLDivElement;
   private readonly hoverColumnBand: HTMLDivElement;
   private readonly hoverCellFill: HTMLDivElement;
@@ -152,16 +153,12 @@ class S1000DTableOverlayView {
 
   constructor(view: EditorView) {
     this.view = view;
+    ensureS1000DTableStyles(view.dom.ownerDocument);
     this.root = view.dom.ownerDocument.createElement('div');
+    this.root.className = 's1000d-table-overlay';
     this.root.dataset.s1000dTableOverlay = 'true';
     this.root.dataset.testid = 's1000d-overlay';
     this.root.hidden = true;
-    Object.assign(this.root.style, {
-      position: 'absolute',
-      inset: '0',
-      zIndex: '5',
-      pointerEvents: 'none',
-    });
 
     this.overlayHost = new TableOverlayHost(this.root, {
       hostClassName: 's1000d-table-overlay-host',
@@ -173,56 +170,24 @@ class S1000DTableOverlayView {
     this.columnHandlesParent = createLayer(this.root.ownerDocument, 's1000d-table-overlay__columns');
     this.resizersParent = createLayer(this.root.ownerDocument, 's1000d-table-overlay__resizers');
     this.tableHandle = this.createTableHandle();
-    this.rowBand = createBand(this.root.ownerDocument);
+    this.rowBand = createBand(this.root.ownerDocument, 's1000d-table-overlay__selection-band s1000d-table-overlay__selection-band--row');
     this.rowBand.dataset.testid = 's1000d-selection-row-band';
-    this.columnBand = createBand(this.root.ownerDocument);
+    this.columnBand = createBand(this.root.ownerDocument, 's1000d-table-overlay__selection-band s1000d-table-overlay__selection-band--column');
     this.columnBand.dataset.testid = 's1000d-selection-column-band';
-    this.cellFill = createBox(this.root.ownerDocument, {
-      background: 'rgba(37, 99, 235, 0.08)',
-      borderRadius: '2px',
-      pointerEvents: 'none',
-      position: 'absolute',
-      zIndex: '2',
-    });
-    this.cellOutline = createBox(this.root.ownerDocument, {
-      border: '1px solid #2563eb',
-      borderRadius: '2px',
-      boxSizing: 'border-box',
-      pointerEvents: 'none',
-      position: 'absolute',
-      zIndex: '3',
-    });
+    this.cellFill = createBox(this.root.ownerDocument, 's1000d-table-overlay__cell-selection-fill');
+    this.cellOutline = createBox(this.root.ownerDocument, 's1000d-table-overlay__cell-selection-outline');
+    this.cellHandle = this.createCellHandle();
     this.cellFill.dataset.testid = 's1000d-selection-cell-fill';
     this.cellOutline.dataset.testid = 's1000d-selection-cell-outline';
-    this.hoverRowBand = createBand(this.root.ownerDocument, {
-      background: 'rgba(37, 99, 235, 0.08)',
-      boxShadow: 'inset 0 0 0 1px rgba(37, 99, 235, 0.22)',
-      zIndex: '1',
-    });
+    this.hoverRowBand = createBox(this.root.ownerDocument, 's1000d-table-overlay__hover-band');
     this.hoverRowBand.dataset.testid = 's1000d-hover-row-band';
-    this.hoverColumnBand = createBand(this.root.ownerDocument, {
-      background: 'rgba(37, 99, 235, 0.08)',
-      boxShadow: 'inset 0 0 0 1px rgba(37, 99, 235, 0.22)',
-      zIndex: '1',
-    });
+    this.hoverColumnBand = createBox(this.root.ownerDocument, 's1000d-table-overlay__hover-band');
     this.hoverColumnBand.dataset.testid = 's1000d-hover-column-band';
-    this.hoverCellFill = createBox(this.root.ownerDocument, {
-      background: 'rgba(37, 99, 235, 0.06)',
-      borderRadius: '2px',
-      pointerEvents: 'none',
-      position: 'absolute',
-      zIndex: '1',
-    });
+    this.hoverCellFill = createBox(this.root.ownerDocument, 's1000d-table-overlay__hover-cell-fill');
     this.hoverCellFill.dataset.testid = 's1000d-hover-cell-fill';
-    this.hoverCellOutline = createBox(this.root.ownerDocument, {
-      border: '1px dashed rgba(37, 99, 235, 0.5)',
-      borderRadius: '2px',
-      boxSizing: 'border-box',
-      pointerEvents: 'none',
-      position: 'absolute',
-      zIndex: '2',
-    });
+    this.hoverCellOutline = createBox(this.root.ownerDocument, 's1000d-table-overlay__hover-cell-outline');
     this.hoverCellOutline.dataset.testid = 's1000d-hover-cell-outline';
+    this.cellOutline.append(this.cellHandle);
 
     this.root.append(
       this.hoverRowBand,
@@ -316,10 +281,12 @@ class S1000DTableOverlayView {
     this.columnBand.hidden = true;
     this.cellFill.hidden = true;
     this.cellOutline.hidden = true;
+    this.cellHandle.hidden = true;
     this.hoverRowBand.hidden = true;
     this.hoverColumnBand.hidden = true;
     this.hoverCellFill.hidden = true;
     this.hoverCellOutline.hidden = true;
+    this.root.dataset.selectionScope = 'none';
 
     if (!selectionInfo) {
       return;
@@ -339,21 +306,27 @@ class S1000DTableOverlayView {
     }
 
     if (rowSelection) {
+      this.root.dataset.selectionScope = 'row';
       applyRect(this.rowBand, rect);
       this.rowBand.hidden = false;
       return;
     }
 
     if (columnSelection) {
+      this.root.dataset.selectionScope = 'column';
       applyRect(this.columnBand, rect);
       this.columnBand.hidden = false;
       return;
     }
 
+    this.root.dataset.selectionScope = isTableSelectionForContext(this.view, selectionInfo.tablePos) ? 'table' : 'cell';
     applyRect(this.cellFill, rect);
     applyRect(this.cellOutline, rect);
     this.cellFill.hidden = false;
     this.cellOutline.hidden = false;
+    this.cellHandle.hidden = false;
+    this.cellHandle.setAttribute('aria-label', 'Cell actions');
+    this.cellHandle.title = 'Cell actions';
   }
 
   private renderHoverFeedback(
@@ -555,25 +528,9 @@ class S1000DTableOverlayView {
     const handle = this.root.ownerDocument.createElement('button');
     handle.type = 'button';
     handle.tabIndex = -1;
+    handle.className = 's1000d-table-overlay__handle s1000d-table-overlay__handle--table';
     handle.dataset.testid = 's1000d-table-handle';
     handle.setAttribute('aria-label', 'Select table');
-    Object.assign(handle.style, {
-      position: 'absolute',
-      minWidth: '0',
-      padding: '0',
-      border: '1px solid rgba(37, 99, 235, 0.22)',
-      borderRadius: '4px',
-      background: '#ffffff',
-      boxShadow: '0 2px 8px rgba(15, 23, 42, 0.08)',
-      color: '#1d4ed8',
-      fontSize: '10px',
-      fontWeight: '700',
-      lineHeight: '1',
-      transform: 'translate(-50%, -50%)',
-      pointerEvents: 'auto',
-      cursor: 'pointer',
-    });
-    handle.textContent = '□';
     handle.addEventListener('mousedown', (event) => this.handleTableMouseDown(event));
     handle.addEventListener('mouseenter', () => this.handleTableHover(handle));
     handle.addEventListener('mouseleave', (event) => this.handleAxisLeave(event));
@@ -584,24 +541,8 @@ class S1000DTableOverlayView {
     const handle = this.root.ownerDocument.createElement('button');
     handle.type = 'button';
     handle.tabIndex = -1;
+    handle.className = `s1000d-table-overlay__handle s1000d-table-overlay__handle--${axis}`;
     handle.dataset.testid = axis === 'row' ? 's1000d-row-handle' : 's1000d-column-handle';
-    Object.assign(handle.style, {
-      position: 'absolute',
-      minWidth: '0',
-      padding: '0',
-      border: '1px solid rgba(37, 99, 235, 0.22)',
-      borderRadius: '999px',
-      background: '#ffffff',
-      boxShadow: '0 2px 8px rgba(15, 23, 42, 0.08)',
-      color: '#1d4ed8',
-      fontSize: '10px',
-      fontWeight: '700',
-      lineHeight: '1',
-      transform: 'translate(-50%, -50%)',
-      pointerEvents: 'auto',
-      cursor: 'pointer',
-    });
-    handle.textContent = axis === 'row' ? '⋮' : '⋯';
     handle.addEventListener('mousedown', (event) => this.handleAxisMouseDown(event, axis));
     handle.addEventListener('mouseenter', () => this.handleAxisHover(handle, axis));
     handle.addEventListener('mouseleave', (event) => this.handleAxisLeave(event));
@@ -612,18 +553,21 @@ class S1000DTableOverlayView {
     const handle = this.root.ownerDocument.createElement('button');
     handle.type = 'button';
     handle.tabIndex = -1;
+    handle.className = 's1000d-table-overlay__resize-handle';
     handle.dataset.testid = 's1000d-resize-handle';
-    Object.assign(handle.style, {
-      position: 'absolute',
-      minWidth: '0',
-      padding: '0',
-      border: '0',
-      background: 'transparent',
-      transform: 'translateX(-50%)',
-      pointerEvents: 'auto',
-      cursor: 'col-resize',
-    });
     handle.addEventListener('mousedown', (event) => this.handleResizeStart(event));
+    return handle;
+  }
+
+  private createCellHandle(): HTMLButtonElement {
+    const handle = this.root.ownerDocument.createElement('button');
+    handle.type = 'button';
+    handle.className = 's1000d-table-overlay__cell-selection-handle';
+    handle.dataset.testid = 's1000d-cell-handle';
+    handle.tabIndex = -1;
+    handle.hidden = true;
+    handle.addEventListener('mousedown', (event) => this.handleCellHandleMouseDown(event));
+    handle.addEventListener('click', (event) => this.handleCellHandleClick(event));
     return handle;
   }
 
@@ -716,6 +660,44 @@ class S1000DTableOverlayView {
     this.hoveredColumnIndex = null;
     this.hoverMode = null;
     this.render();
+  }
+
+  private handleCellHandleMouseDown(event: MouseEvent): void {
+    event.preventDefault();
+    event.stopPropagation();
+    this.openCellHandleMenu();
+  }
+
+  private handleCellHandleClick(event: MouseEvent): void {
+    if (event.detail !== 0) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+    this.openCellHandleMenu();
+  }
+
+  private openCellHandleMenu(): void {
+    const context = this.getActiveContext();
+    if (!context?.activeTgroup) {
+      return;
+    }
+
+    const selectionInfo = getS1000DSelectionInfo(this.view.state, { tablePos: context.tablePos })
+      ?? getS1000DSelectionInfo(this.view.state);
+    if (!selectionInfo && !isWholeS1000DTableSelection(this.view.state, { tablePos: context.tablePos })) {
+      return;
+    }
+
+    const rect = this.cellHandle.getBoundingClientRect();
+    this.root.ownerDocument.dispatchEvent(new CustomEvent('s1000d-selection-handle-menu', {
+      detail: {
+        left: rect.left + rect.width / 2,
+        top: rect.bottom + 8,
+      },
+    }));
+    this.view.focus();
   }
 
   private handleResizeStart(event: MouseEvent): void {
@@ -1048,22 +1030,14 @@ function createLayer(ownerDocument: Document, className: string): HTMLDivElement
 
 function createBand(
   ownerDocument: Document,
-  style: Partial<CSSStyleDeclaration> = {},
+  className: string,
 ): HTMLDivElement {
-  return createBox(ownerDocument, {
-    position: 'absolute',
-    zIndex: '1',
-    background: 'rgba(37, 99, 235, 0.05)',
-    borderRadius: '2px',
-    boxShadow: 'inset 0 0 0 1px rgba(37, 99, 235, 0.18)',
-    pointerEvents: 'none',
-    ...style,
-  });
+  return createBox(ownerDocument, className);
 }
 
-function createBox(ownerDocument: Document, style: Partial<CSSStyleDeclaration>): HTMLDivElement {
+function createBox(ownerDocument: Document, className: string): HTMLDivElement {
   const element = ownerDocument.createElement('div');
-  Object.assign(element.style, style);
+  element.className = className;
   element.hidden = true;
   return element;
 }

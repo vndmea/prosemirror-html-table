@@ -4,8 +4,7 @@
     "baseUrl": "../..",
     "paths": {
       "tiptap-html-table": ["packages/tiptap/src/index.ts"],
-      "tiptap-html-table/table-interaction": ["packages/tiptap/src/table-interaction/index.ts"],
-      "tiptap-html-table/table-interaction/*": ["packages/tiptap/src/table-interaction/*"]
+      "tiptap-html-table/table-interaction": ["packages/tiptap/src/table-interaction/index.ts"]
     }
   },
   "include": ["src/**/*.ts"],

@@ -1,8 +1,12 @@
 body {
   margin: 0;
-  font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
-  background: #f7f7f7;
-  color: #222;
+  min-width: 320px;
+  background: #f8fafc;
+  color: #1f2937;
+  font-family:
+    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    "PingFang SC", "Microsoft YaHei", sans-serif;
+  line-height: 1.5;
 }
 
 button {
@@ -13,37 +17,89 @@ button {
   min-height: 100vh;
 }
 
+.s1000d-demo,
+.s1000d-demo * {
+  box-sizing: border-box;
+}
+
 .s1000d-demo {
-  max-width: 1200px;
+  max-width: 1280px;
   margin: 0 auto;
-  padding: 24px 20px 32px;
+  padding: 0.75rem 1rem 1rem;
 }
 
 .s1000d-demo__header {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 8px;
-  margin-bottom: 16px;
+  gap: 0.35rem;
+  margin-bottom: 0.65rem;
 }
 
 .s1000d-demo__header h1 {
   margin: 0;
-  font-size: 24px;
-  font-weight: 600;
+  color: #0f172a;
+  font-size: 1rem;
+  font-weight: 700;
+  line-height: 1.3;
 }
 
 .s1000d-demo__description {
   margin: 0;
-  color: #555;
-  line-height: 1.5;
+  color: #475569;
+  font-size: 0.88rem;
+  line-height: 1.35;
+}
+
+.s1000d-demo__description code {
+  border-radius: 6px;
+  background: #e2e8f0;
+  padding: 0.1rem 0.3rem;
 }
 
 .s1000d-demo__toolbar {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
-  justify-content: flex-start;
+  gap: 0.32rem;
+  width: 100%;
+  margin-top: 0.15rem;
+  padding: 0.5rem 0.55rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.86);
+}
+
+.s1000d-demo__toolbar button,
+.s1000d-demo__context-menu button {
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #0f172a;
+  cursor: pointer;
+  padding: 0.34rem 0.56rem;
+  font-size: 0.82rem;
+  line-height: 1.1;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    transform 0.15s ease;
+}
+
+.s1000d-demo__toolbar button:hover:not(:disabled),
+.s1000d-demo__context-menu button:hover:not(:disabled) {
+  background: #f1f5f9;
+  border-color: #94a3b8;
+  transform: translateY(-1px);
+}
+
+.s1000d-demo__toolbar button:disabled,
+.s1000d-demo__context-menu button:disabled {
+  border-color: #e2e8f0;
+  background: #f8fafc;
+  color: #94a3b8;
+  cursor: not-allowed;
+  opacity: 0.72;
+  transform: none;
 }
 
 .s1000d-demo__workspace {
@@ -51,73 +107,62 @@ button {
   min-width: 0;
 }
 
-.s1000d-demo__toolbar button,
-.s1000d-demo__context-menu button {
-  border: 1px solid #cfcfcf;
-  border-radius: 6px;
-  background: #fff;
-  color: #222;
-  padding: 7px 12px;
-}
-
-.s1000d-demo__toolbar button:hover:not(:disabled),
-.s1000d-demo__context-menu button:hover:not(:disabled) {
-  background: #f0f0f0;
-}
-
-.s1000d-demo__toolbar button:disabled,
-.s1000d-demo__context-menu button:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
 .s1000d-demo__editor {
-  border: 1px solid #d8d8d8;
-  border-radius: 8px;
-  background: #fff;
-  padding: 16px;
-  min-height: 360px;
+  min-width: 0;
+  overflow: visible;
+  border-radius: 12px;
+  background: #ffffff;
 }
 
 .s1000d-demo__editor .ProseMirror {
-  min-height: 320px;
+  min-height: 380px;
   outline: none;
 }
 
-.s1000d-demo__editor table {
-  width: 100%;
-  border-collapse: collapse;
+.s1000d-demo__editor .ProseMirror-hideselection *::selection,
+.s1000d-demo__editor .ProseMirror-hideselection *::-moz-selection {
+  background: transparent;
 }
 
-.s1000d-demo__editor td,
-.s1000d-demo__editor th {
-  border: 1px solid #c7c7c7;
-  padding: 8px 10px;
+.s1000d-demo__editor .ProseMirror-hideselection {
+  caret-color: transparent;
+}
+
+.s1000d-demo__editor p {
+  margin: 0.35rem 0;
 }
 
 .s1000d-demo__context-menu {
   position: fixed;
   z-index: 40;
-  min-width: 180px;
-  padding: 6px;
-  border: 1px solid #d8d8d8;
-  border-radius: 8px;
-  background: #fff;
   display: grid;
-  gap: 4px;
+  gap: 0.25rem;
+  min-width: 12rem;
+  max-width: 16rem;
+  padding: 0.4rem;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  border-radius: 0.7rem;
+  background: #ffffff;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.12);
 }
 
 .s1000d-demo__context-menu button {
-  text-align: left;
   width: 100%;
+  text-align: left;
 }
 
 .s1000d-demo__context-menu button.is-destructive {
-  color: #b42318;
+  border-color: #fecaca;
+  color: #991b1b;
 }
 
-@media (max-width: 1080px) {
+.s1000d-demo__context-menu button.is-destructive:hover:not(:disabled) {
+  background: #fef2f2;
+  border-color: #fca5a5;
+}
+
+@media (max-width: 960px) {
   .s1000d-demo {
-    padding: 16px;
+    padding: 0.6rem 0.7rem 0.8rem;
   }
 }

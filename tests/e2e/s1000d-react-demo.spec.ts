@@ -209,6 +209,24 @@ test.describe('S1000D React demo', () => {
     expect(validation.valid).toBe(true);
   });
 
+  test('cell selection handle appears on a selected range and opens the action menu', async ({ page }) => {
+    await page.goto('/');
+    await expectDemoApi(page);
+    await loadDemoSample(page, 'extended');
+
+    const table = page.getByTestId('editor').getByTestId('s1000d-table');
+    const bodyRows = table.locator('tbody[data-s1000d="tbody"] tr');
+    await bodyRows.nth(0).locator('td').nth(1).click();
+    await page.keyboard.press('Shift+ArrowRight');
+
+    const cellHandle = page.getByTestId('s1000d-cell-handle');
+    await expect(cellHandle).toBeVisible();
+    await cellHandle.click();
+
+    await expect(page.getByTestId('selection-menu')).toBeVisible();
+    await expect(page.getByTestId('selection-menu-item-copy-selection')).toBeVisible();
+  });
+
   test('resize writes colwidth to the active tgroup only and participates in undo/redo', async ({ page }) => {
     await page.goto('/');
     await expectDemoApi(page);
@@ -303,7 +321,7 @@ test.describe('S1000D React demo', () => {
     await firstBodyCell.click();
 
     await page.keyboard.press('Tab');
-    const snapshot = await getDemoSnapshot(page);
+    let snapshot = await getDemoSnapshot(page);
     expect(snapshot.selectionSummary).toContain('Columns 1-1');
 
     await page.keyboard.press('Shift+Tab');
@@ -341,7 +359,7 @@ test.describe('S1000D React demo', () => {
     await bodyRow.locator('td').first().click();
     await page.keyboard.press('Shift+ArrowRight');
 
-    const snapshot = await getDemoSnapshot(page);
+    let snapshot = await getDemoSnapshot(page);
     expect(snapshot.selectionSummary).toContain('Entries 2');
 
     await page.keyboard.press('Delete');
@@ -392,7 +410,7 @@ test.describe('S1000D React demo', () => {
     await loadDemoSample(page, 'extended');
 
     expect(await selectDemoRow(page, 2)).toBe(true);
-    const snapshot = await getDemoSnapshot(page);
+    let snapshot = await getDemoSnapshot(page);
     expect(snapshot.selectionScope).toBe('row');
     expect(snapshot.selectionSummary).toContain('Rows 2-2');
 
