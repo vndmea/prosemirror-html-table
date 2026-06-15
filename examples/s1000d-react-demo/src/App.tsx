@@ -740,8 +740,12 @@ export function App() {
             if (!hasActionMenu) {
               return;
             }
+            const scope = selectionScope === 'multi-cell' ? 'cell' : selectionScope;
+            if (scope === 'none') {
+              return;
+            }
             event.preventDefault();
-            openSelectionMenuForScope(selectionScope === 'multi-cell' ? 'cell' : selectionScope, event.clientX, event.clientY + 4);
+            openSelectionMenuForScope(scope, event.clientX, event.clientY + 4);
           }}
         >
           {editor ? <EditorContent editor={editor} /> : null}
