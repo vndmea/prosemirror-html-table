@@ -9,62 +9,35 @@ import {
   measureHtmlTableGeometry,
   type HtmlTableGeometry,
 } from './table-dom.js';
+import {
+  buildTableInteractionState,
+  createDefaultTableInteractionState,
+  defaultTableSelectedAxisState,
+  deriveTableContextTriggerState,
+  type TableContextTriggerState,
+  type TableHoverKind,
+  type TableHoverState,
+  type TableInteractionMeta,
+  type TableInteractionState,
+  type TableReference,
+  type TableResizeState,
+  type TableSelectedAxisKind,
+  type TableSelectedAxisState,
+} from './table-interaction/interaction-state.js';
 import { getTableSelectionInfo } from './table-utils.js';
 
-export type HtmlTableHoverKind = 'table' | 'cell';
-export type HtmlTableSelectedAxisKind = 'row' | 'column';
+export type HtmlTableHoverKind = TableHoverKind;
+export type HtmlTableSelectedAxisKind = TableSelectedAxisKind;
 const HTML_TABLE_OVERLAY_SELECTOR = '[data-html-table-overlay]';
 
-export interface HtmlTableReference {
-  tablePos: number;
-  table: ProseMirrorNode;
-}
+export type HtmlTableReference = TableReference<ProseMirrorNode>;
+export type HtmlTableHoverState = TableHoverState;
+export type HtmlTableSelectedAxisState = TableSelectedAxisState;
+export type HtmlTableResizeState = TableResizeState;
+export type HtmlTableContextTriggerState = TableContextTriggerState;
+export type HtmlTableInteractionState = TableInteractionState<ProseMirrorNode, HtmlTableGeometry>;
 
-export interface HtmlTableHoverState {
-  kind: HtmlTableHoverKind;
-  tablePos: number;
-  rowIndex: number | null;
-  columnIndex: number | null;
-}
-
-export interface HtmlTableSelectedAxisState {
-  kind: HtmlTableSelectedAxisKind | null;
-  index: number | null;
-  tablePos: number | null;
-}
-
-export interface HtmlTableResizeState {
-  tablePos: number;
-  columnIndex: number;
-}
-
-export interface HtmlTableContextTriggerState {
-  visible: boolean;
-  left: number | null;
-  top: number | null;
-}
-
-export interface HtmlTableInteractionState {
-  activeTable: HtmlTableReference | null;
-  tableSelected: boolean;
-  hovered: HtmlTableHoverState | null;
-  selectedAxis: HtmlTableSelectedAxisState;
-  selectedAxisExplicit?: boolean;
-  contextTrigger: HtmlTableContextTriggerState;
-  contextMenuOpen: boolean;
-  geometry: HtmlTableGeometry | null;
-  resizing: HtmlTableResizeState | null;
-}
-
-interface HtmlTableInteractionMeta {
-  hovered?: HtmlTableHoverState | null;
-  hoveredTable?: HtmlTableReference | null;
-  geometry?: HtmlTableGeometry | null;
-  resizing?: HtmlTableResizeState | null;
-  selectedAxis?: HtmlTableSelectedAxisState | null;
-  selectedAxisExplicit?: boolean | null;
-  contextMenuOpen?: boolean | null;
-}
+type HtmlTableInteractionMeta = TableInteractionMeta<ProseMirrorNode, HtmlTableGeometry>;
 
 interface HtmlTableCellDragState {
   tablePos: number;
@@ -73,27 +46,7 @@ interface HtmlTableCellDragState {
   selectionStarted: boolean;
 }
 
-const defaultSelectedAxisState: HtmlTableSelectedAxisState = {
-  kind: null,
-  index: null,
-  tablePos: null,
-};
-
-const defaultInteractionState: HtmlTableInteractionState = {
-  activeTable: null,
-  tableSelected: false,
-  hovered: null,
-  selectedAxis: defaultSelectedAxisState,
-  selectedAxisExplicit: false,
-  contextTrigger: {
-    visible: false,
-    left: null,
-    top: null,
-  },
-  contextMenuOpen: false,
-  geometry: null,
-  resizing: null,
-};
+const defaultInteractionState = createDefaultTableInteractionState<ProseMirrorNode, HtmlTableGeometry>();
 
 export const htmlTableInteractionPluginKey = new PluginKey<HtmlTableInteractionState>('html-table-interaction');
 
@@ -129,7 +82,7 @@ export function getHtmlTableContextTriggerState(
   selectedAxis: HtmlTableSelectedAxisState,
   geometry: HtmlTableGeometry | null,
 ): HtmlTableContextTriggerState {
-  return deriveContextTriggerState(activeTable, tableSelected, selectedAxis, geometry);
+  return deriveTableContextTriggerState(activeTable, tableSelected, selectedAxis, geometry);
 }
 
 function buildInteractionState(
@@ -138,64 +91,19 @@ function buildInteractionState(
   meta: HtmlTableInteractionMeta = {},
   selectionChanged = false,
 ): HtmlTableInteractionState {
-  const selectionTable = getSelectionTableReference(state.selection);
-  const activeTable = selectionTable ?? meta.hoveredTable ?? null;
-  const tableSelected = isTableNodeSelection(state.selection);
-  const derivedSelectedAxis = selectionTable ? getSelectedAxisState(state.selection, selectionTable) : defaultSelectedAxisState;
-  const selectedAxis =
-    meta.selectedAxis !== undefined
-      ? meta.selectedAxis ?? defaultSelectedAxisState
-      : derivedSelectedAxis.kind || selectionChanged || !previous || previous.activeTable?.tablePos !== activeTable?.tablePos
-        ? derivedSelectedAxis
-        : previous.selectedAxis;
-  const selectedAxisExplicit =
-    selectedAxis.kind === null
-      ? false
-      : meta.selectedAxis !== undefined
-        ? Boolean(meta.selectedAxis && (meta.selectedAxisExplicit ?? true))
-        : Boolean(
-            previous?.selectedAxisExplicit
-            && previous.selectedAxis.kind === selectedAxis.kind
-            && previous.selectedAxis.tablePos === selectedAxis.tablePos,
-          );
-  const hovered = activeTable && meta.hovered?.tablePos === activeTable.tablePos ? meta.hovered : null;
-  const geometry =
-    activeTable && meta.geometry
-      ? meta.geometry
-      : previous && previous.activeTable?.tablePos === activeTable?.tablePos
-        ? previous.geometry
-        : null;
-  const contextTrigger = deriveContextTriggerState(
-    activeTable,
-    tableSelected,
-    selectedAxisExplicit ? selectedAxis : defaultSelectedAxisState,
-    geometry,
-  );
-  const canOpenContextMenu = contextTrigger.visible || Boolean(getTableSelectionInfo(state.doc, state.selection));
-  const contextMenuOpen =
-    meta.contextMenuOpen !== undefined
-      ? Boolean(meta.contextMenuOpen) && canOpenContextMenu
-      : canOpenContextMenu && !selectionChanged
-        ? previous?.contextMenuOpen ?? false
-        : false;
-  const resizing =
-    activeTable && meta.resizing !== undefined
-      ? meta.resizing
-      : previous && previous.activeTable?.tablePos === activeTable?.tablePos
-        ? previous.resizing
-        : null;
-
-  return {
-    activeTable,
-    tableSelected,
-    hovered,
-    selectedAxis,
-    selectedAxisExplicit,
-    contextTrigger,
-    contextMenuOpen,
-    geometry,
-    resizing,
-  };
+  return buildTableInteractionState({
+    state,
+    selection: state.selection,
+    previous,
+    meta,
+    selectionChanged,
+    getSelectionTableReference,
+    isTableNodeSelection,
+    getSelectedAxisState,
+    deriveContextTriggerState: getHtmlTableContextTriggerState,
+    canOpenContextMenu: ({ state: nextState, contextTrigger }) =>
+      contextTrigger.visible || Boolean(getTableSelectionInfo(nextState.doc, nextState.selection)),
+  });
 }
 
 function getSelectionTableReference(selection: Selection): HtmlTableReference | null {
@@ -226,12 +134,12 @@ function isTableNodeSelection(selection: Selection): selection is NodeSelection 
 
 function getSelectedAxisState(selection: Selection, tableReference: HtmlTableReference): HtmlTableSelectedAxisState {
   if (!(selection instanceof CellSelection)) {
-    return defaultSelectedAxisState;
+    return defaultTableSelectedAxisState;
   }
 
   const selectionInfo = getTableSelectionInfo(selection.$from.doc, selection);
   if (!selectionInfo || selectionInfo.tablePos !== tableReference.tablePos) {
-    return defaultSelectedAxisState;
+    return defaultTableSelectedAxisState;
   }
 
   const grid = selectionInfo.grid;
@@ -259,106 +167,7 @@ function getSelectedAxisState(selection: Selection, tableReference: HtmlTableRef
     }
   }
 
-  return defaultSelectedAxisState;
-}
-
-function deriveContextTriggerState(
-  activeTable: HtmlTableReference | null,
-  tableSelected: boolean,
-  selectedAxis: HtmlTableSelectedAxisState,
-  geometry: HtmlTableGeometry | null,
-): HtmlTableContextTriggerState {
-  if (!activeTable || !geometry) {
-    return {
-      visible: false,
-      left: null,
-      top: null,
-    };
-  }
-
-  if (tableSelected) {
-    if (geometry.visibleTableRect.width <= 0 || geometry.visibleTableRect.height <= 0) {
-      return {
-        visible: false,
-        left: null,
-        top: null,
-      };
-    }
-
-    return {
-      visible: true,
-      left: geometry.visibleTableRect.left,
-      top: geometry.visibleTableRect.top,
-    };
-  }
-
-  if (selectedAxis.tablePos !== activeTable.tablePos) {
-    return {
-      visible: false,
-      left: null,
-      top: null,
-    };
-  }
-
-  if (selectedAxis.kind === 'row' && selectedAxis.index !== null) {
-    const row = geometry.rows[selectedAxis.index];
-    if (!row) {
-      return {
-        visible: false,
-        left: null,
-        top: null,
-      };
-    }
-
-    const top = Math.max(geometry.visibleTableRect.top, geometry.tableRect.top + row.top);
-    const bottom = Math.min(geometry.visibleTableRect.bottom, geometry.tableRect.top + row.top + row.height);
-    if (bottom <= top || geometry.visibleTableRect.width <= 0) {
-      return {
-        visible: false,
-        left: null,
-        top: null,
-      };
-    }
-
-    return {
-      visible: true,
-      left: geometry.visibleTableRect.left,
-      top: top + (bottom - top) / 2,
-    };
-  }
-
-  if (selectedAxis.kind === 'column' && selectedAxis.index !== null) {
-    const column = geometry.columns[selectedAxis.index];
-    if (!column) {
-      return {
-        visible: false,
-        left: null,
-        top: null,
-      };
-    }
-
-    const left = Math.max(geometry.visibleTableRect.left, geometry.tableRect.left + column.left);
-    const right = Math.min(geometry.visibleTableRect.right, geometry.tableRect.left + column.left + column.width);
-    if (right <= left || geometry.visibleTableRect.height <= 0) {
-      return {
-        visible: false,
-        left: null,
-        top: null,
-      };
-    }
-
-    return {
-      visible: true,
-      left: left + (right - left) / 2,
-      top: geometry.visibleTableRect.top,
-    };
-  }
-
-  return {
-    visible: false,
-    left: null,
-    top: null,
-  };
+  return defaultTableSelectedAxisState;
 }
 
 class HtmlTableInteractionView {

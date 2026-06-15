@@ -19,6 +19,26 @@ export type {
 } from './dom-geometry.js';
 
 export {
+  buildTableInteractionState,
+  createDefaultTableInteractionState,
+  defaultTableSelectedAxisState,
+  deriveTableContextTriggerState,
+} from './interaction-state.js';
+export type {
+  BuildTableInteractionStateOptions,
+  TableContextTriggerState,
+  TableHoverKind,
+  TableHoverState,
+  TableInteractionGeometry,
+  TableInteractionMeta,
+  TableInteractionState,
+  TableReference,
+  TableResizeState,
+  TableSelectedAxisKind,
+  TableSelectedAxisState,
+} from './interaction-state.js';
+
+export {
   getTableContextMenuPosition,
   getTableContextMenuTransformOrigin,
   getTableOverlayPositionState,
