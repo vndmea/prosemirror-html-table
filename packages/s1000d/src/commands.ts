@@ -708,12 +708,7 @@ function createEmptyS1000DRow(schema: ProseMirrorNode['type']['schema'], width: 
   return rowType.create({ id: `row-generated-${rowIndex}` }, entries);
 }
 
-function findRowRefBySelection(grid: S1000DTgroupGrid, selection: Selection): S1000DRowRef | undefined {
-  const directEntry = findEntryRefBySelection(grid, selection);
-  if (directEntry) {
-    return grid.rows.find((row) => row.rowIndex === directEntry.rowIndex);
-  }
-
+function findRowRefFromSelectionNode(grid: S1000DTgroupGrid, selection: Selection): S1000DRowRef | undefined {
   const selectedRow = findS1000DAncestorNode(selection, s1000dTableNodeNames.row);
   if (selectedRow) {
     return grid.rows.find((row) => row.node === selectedRow);
@@ -727,7 +722,16 @@ function findRowRefBySelection(grid: S1000DTgroupGrid, selection: Selection): S1
     }
   }
 
-  return grid.rows[0];
+  return undefined;
+}
+
+function findRowRefBySelection(grid: S1000DTgroupGrid, selection: Selection): S1000DRowRef | undefined {
+  const directEntry = findEntryRefBySelection(grid, selection);
+  if (directEntry) {
+    return grid.rows.find((row) => row.rowIndex === directEntry.rowIndex);
+  }
+
+  return findRowRefFromSelectionNode(grid, selection) ?? grid.rows[0];
 }
 
 function findEntryRefBySelection(grid: S1000DTgroupGrid, selection: Selection): S1000DEntryRef | undefined {
@@ -741,7 +745,7 @@ function findEntryRefBySelection(grid: S1000DTgroupGrid, selection: Selection): 
     return docPositionEntry;
   }
 
-  const rowRef = findRowRefBySelection(grid, selection);
+  const rowRef = findRowRefFromSelectionNode(grid, selection) ?? grid.rows[0];
   if (!rowRef) return undefined;
   return grid.entries.find((entry) => entry.rowIndex === rowRef.rowIndex);
 }

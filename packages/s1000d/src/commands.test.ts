@@ -30,6 +30,7 @@ import {
   rejectGraphicOnlyS1000DTable,
   splitS1000DCell,
 } from './index.js';
+import { s1000dTableNodeNames } from './names.js';
 import { createS1000DTableNodeSpecs } from './schema.js';
 import { extendedSchema, schema } from './tests/test-schema.js';
 
@@ -116,6 +117,23 @@ describe('S1000D table commands and adapters', () => {
     expect(entryNode.textContent).toBe('A');
     expect(findS1000DRowContext(state)?.rowRef.rowIndexInSection).toBe(0);
     expect(findS1000DEntryContext(state)?.entry.entryIndex).toBe(0);
+  });
+
+  it('resolves entry context from a row node selection without recursive fallback', () => {
+    const table = parseS1000DTableXml(
+      '<table id="tab-1"><tgroup cols="2"><tbody><row id="row-1"><entry>A</entry><entry>B</entry></row></tbody></tgroup></table>',
+      schema,
+    );
+    const doc = createDocSchema().nodes.doc!.create(null, [table]);
+    const [rowPos] = findNodePositions(doc, s1000dTableNodeNames.row);
+    const state = EditorState.create({
+      doc,
+      selection: NodeSelection.create(doc, rowPos!),
+    });
+
+    expect(findS1000DRowContext(state)?.rowRef.rowIndexInSection).toBe(0);
+    expect(findS1000DEntryContext(state)?.entry.entryIndex).toBe(0);
+    expect(findS1000DEntryContext(state)?.entry.node.textContent).toBe('A');
   });
 
   it('normalizes short rows to the tgroup width', () => {

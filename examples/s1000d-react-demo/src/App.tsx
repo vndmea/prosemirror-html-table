@@ -242,7 +242,7 @@ function describeSelection(state: EditorState | null): string {
 export function App() {
   const [profile, setProfile] = useState<S1000DTableProfile>('proced');
   const [toolbarRevision, setToolbarRevision] = useState(0);
-  const [clipboardOutput, setClipboardOutput] = useState<ClipboardOutput>({ html: '', text: '' });
+  const [, setClipboardOutput] = useState<ClipboardOutput>({ html: '', text: '' });
   const selectionMenuTriggerRef = useRef<HTMLButtonElement | null>(null);
   const clipboardOutputRef = useRef<ClipboardOutput>({ html: '', text: '' });
   const contextMenuActionsRef = useRef<S1000DContextMenuActionResolver>(() => []);
@@ -460,7 +460,6 @@ export function App() {
   }
 
   const canCopySelection = Boolean(editor && isS1000DCellSelection(editor.state.selection));
-  const canClearSelection = canCopySelection;
   const canUndo = Boolean(editor && undo(editor.state));
   const canRedo = Boolean(editor && redo(editor.state));
   const selectionScope = getDemoSelectionScope(editor?.state ?? null);

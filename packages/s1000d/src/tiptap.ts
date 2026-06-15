@@ -41,14 +41,7 @@ import {
 import { normalizeS1000DTableProfile, type S1000DTableProfile } from './profile.js';
 import { S1000DCellSelection, isS1000DCellSelection } from './selection.js';
 import {
-  closeS1000DTableContextMenu,
   createS1000DTableInteractionPlugin,
-  findSelectedS1000DTable,
-  getS1000DTableContextTriggerState,
-  getS1000DTableInteractionState,
-  openS1000DTableContextMenu,
-  setS1000DTableInteractionMeta,
-  s1000dTableInteractionPluginKey,
 } from './interaction.js';
 import type { S1000DContextMenuActionResolver } from './menu.js';
 import {

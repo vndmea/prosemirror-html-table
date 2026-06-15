@@ -1,5 +1,5 @@
 import type { Node as ProseMirrorNode } from 'prosemirror-model';
-import { NodeSelection, Plugin, PluginKey, type EditorState, type Selection, type Transaction } from 'prosemirror-state';
+import { NodeSelection, Plugin, PluginKey, type EditorState, type Selection } from 'prosemirror-state';
 import type { EditorView } from 'prosemirror-view';
 
 import {
