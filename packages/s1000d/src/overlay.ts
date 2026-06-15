@@ -1,5 +1,5 @@
 import { Fragment, type Node as ProseMirrorNode } from 'prosemirror-model';
-import { NodeSelection, Plugin, PluginKey } from 'prosemirror-state';
+import { NodeSelection, Plugin, PluginKey, TextSelection } from 'prosemirror-state';
 import type { EditorView } from 'prosemirror-view';
 
 import { createS1000DTableAdapter } from './adapter.js';
@@ -121,6 +121,8 @@ class S1000DTableOverlayView {
     | {
         tablePos: number;
         anchorEntryPos: number;
+        rowIndex: number;
+        columnIndex: number;
         startX: number;
         startY: number;
       }
@@ -142,9 +144,13 @@ class S1000DTableOverlayView {
       }
     | null = null;
   private readonly resizeLifecycle: TableResizeLifecycle;
+  private suppressNextClick = false;
+  private previousUserSelect: string | null = null;
+  private previousWebkitUserSelect: string | null = null;
   private readonly onMouseMove = (event: MouseEvent) => this.handleMouseMove(event);
   private readonly onMouseLeave = (event: MouseEvent) => this.handleMouseLeave(event);
   private readonly onMouseDown = (event: MouseEvent) => this.handleMouseDown(event);
+  private readonly onClickCapture = (event: MouseEvent) => this.handleClickCapture(event);
   private readonly onViewportChange = () => this.render();
   private readonly onResizeMove = (event: MouseEvent) => this.handleResizeMove(event);
   private readonly onResizeEnd = () => this.finishResize();
@@ -210,6 +216,7 @@ class S1000DTableOverlayView {
     this.view.dom.addEventListener('mouseover', this.onMouseMove);
     this.view.dom.addEventListener('mouseleave', this.onMouseLeave);
     this.view.dom.addEventListener('mousedown', this.onMouseDown);
+    this.view.dom.addEventListener('click', this.onClickCapture, true);
     this.root.ownerDocument.addEventListener('mousemove', this.onMouseMove);
     this.root.ownerDocument.addEventListener('mouseover', this.onMouseMove);
     this.root.ownerDocument.defaultView?.addEventListener('resize', this.onViewportChange);
@@ -228,11 +235,13 @@ class S1000DTableOverlayView {
     this.view.dom.removeEventListener('mouseover', this.onMouseMove);
     this.view.dom.removeEventListener('mouseleave', this.onMouseLeave);
     this.view.dom.removeEventListener('mousedown', this.onMouseDown);
+    this.view.dom.removeEventListener('click', this.onClickCapture, true);
     this.root.ownerDocument.removeEventListener('mousemove', this.onMouseMove);
     this.root.ownerDocument.removeEventListener('mouseover', this.onMouseMove);
     this.root.ownerDocument.defaultView?.removeEventListener('resize', this.onViewportChange);
     this.root.ownerDocument.removeEventListener('scroll', this.onViewportChange, true);
     this.stopCellDragListeners();
+    this.restoreNativeSelectionSuppression();
     this.overlayHost.detach();
   }
 
@@ -257,8 +266,11 @@ class S1000DTableOverlayView {
       getS1000DSelectionInfo(this.view.state, { tablePos: context.tablePos })
       ?? getS1000DSelectionInfo(this.view.state);
     const tableSelection = isTableSelectionForContext(this.view, context.tablePos);
-    const rowSelection = isS1000DCellSelection(this.view.state.selection) && this.view.state.selection.isRowSelection();
-    const columnSelection = isS1000DCellSelection(this.view.state.selection) && this.view.state.selection.isColSelection();
+    const rowSelection = isSingleRowSelection(this.view.state.selection, selectionInfo);
+    const columnSelection = isSingleColumnSelection(this.view.state.selection, selectionInfo);
+
+    this.root.classList.toggle('s1000d-table-overlay--dragging', Boolean(this.activeCellDrag || this.pendingCellDrag));
+    this.root.classList.toggle('s1000d-table-overlay--resizing', Boolean(this.activeResize));
 
     this.renderSelection(geometry, positionState, selectionInfo, rowSelection, columnSelection);
     this.renderHoverFeedback(context, geometry, positionState, selectionInfo);
@@ -282,6 +294,8 @@ class S1000DTableOverlayView {
     this.cellFill.hidden = true;
     this.cellOutline.hidden = true;
     this.cellHandle.hidden = true;
+    this.cellHandle.classList.remove('is-menu-open');
+    this.cellHandle.classList.remove('is-selected');
     this.hoverRowBand.hidden = true;
     this.hoverColumnBand.hidden = true;
     this.hoverCellFill.hidden = true;
@@ -309,22 +323,30 @@ class S1000DTableOverlayView {
       this.root.dataset.selectionScope = 'row';
       applyRect(this.rowBand, rect);
       this.rowBand.hidden = false;
-      return;
     }
 
     if (columnSelection) {
       this.root.dataset.selectionScope = 'column';
       applyRect(this.columnBand, rect);
       this.columnBand.hidden = false;
+    }
+
+    const hasCellSelection = isS1000DCellSelection(this.view.state.selection);
+    if (!hasCellSelection) {
       return;
     }
 
-    this.root.dataset.selectionScope = isTableSelectionForContext(this.view, selectionInfo.tablePos) ? 'table' : 'cell';
+    if (!rowSelection && !columnSelection) {
+      this.root.dataset.selectionScope = isTableSelectionForContext(this.view, selectionInfo.tablePos) ? 'table' : 'cell';
+    }
+
     applyRect(this.cellFill, rect);
     applyRect(this.cellOutline, rect);
+
     this.cellFill.hidden = false;
     this.cellOutline.hidden = false;
-    this.cellHandle.hidden = false;
+    this.cellHandle.hidden = !hasCellSelection;
+    this.cellHandle.classList.toggle('is-selected', true);
     this.cellHandle.setAttribute('aria-label', 'Cell actions');
     this.cellHandle.title = 'Cell actions';
   }
@@ -665,6 +687,7 @@ class S1000DTableOverlayView {
   private handleCellHandleMouseDown(event: MouseEvent): void {
     event.preventDefault();
     event.stopPropagation();
+    this.cellHandle.classList.add('is-menu-open');
     this.openCellHandleMenu();
   }
 
@@ -675,6 +698,7 @@ class S1000DTableOverlayView {
 
     event.preventDefault();
     event.stopPropagation();
+    this.cellHandle.classList.add('is-menu-open');
     this.openCellHandleMenu();
   }
 
@@ -691,12 +715,10 @@ class S1000DTableOverlayView {
     }
 
     const rect = this.cellHandle.getBoundingClientRect();
-    this.root.ownerDocument.dispatchEvent(new CustomEvent('s1000d-selection-handle-menu', {
-      detail: {
-        left: rect.left + rect.width / 2,
-        top: rect.bottom + 8,
-      },
-    }));
+    this.requestSelectionMenu('cell', rect, {
+      left: rect.left + rect.width / 2,
+      top: rect.top + (rect.height / 2),
+    });
     this.view.focus();
   }
 
@@ -852,32 +874,33 @@ class S1000DTableOverlayView {
 
   private handleMouseDown(event: MouseEvent): void {
     if (event.button !== 0 || this.activeResize) {
+      this.finishCellDrag();
       return;
     }
 
     const target = getPointerElement(this.root.ownerDocument, event) ?? (event.target instanceof Element ? event.target : event.target instanceof Node ? event.target.parentElement : null);
     if (!target || target.closest(OVERLAY_SELECTOR) || !target.closest('td, th')) {
+      this.finishCellDrag();
       return;
     }
 
-    const context = findS1000DTableAtDOM(this.view, target);
-    if (!context?.activeTgroup) {
+    const dragContext = getS1000DCellDragContext(this.view, target, event.clientX, event.clientY);
+    if (!dragContext) {
+      this.finishCellDrag();
       return;
     }
 
-    const hit = getGridHitAtPoint(context, event.clientX, event.clientY, false);
-    if (!hit) {
-      return;
-    }
-
-    const anchorEntryPos = findS1000DEntryPosition(context, hit.entry);
-    if (typeof anchorEntryPos !== 'number') {
-      return;
-    }
+    this.suppressNativeSelection();
+    this.root.ownerDocument.getSelection()?.removeAllRanges();
+    event.preventDefault();
+    event.stopPropagation();
+    this.view.focus();
 
     this.pendingCellDrag = {
-      tablePos: context.tablePos,
-      anchorEntryPos,
+      tablePos: dragContext.tablePos,
+      anchorEntryPos: dragContext.entryPos,
+      rowIndex: dragContext.rowIndex,
+      columnIndex: dragContext.columnIndex,
       startX: event.clientX,
       startY: event.clientY,
     };
@@ -885,67 +908,93 @@ class S1000DTableOverlayView {
   }
 
   private handleDocumentMouseMove(event: MouseEvent): void {
-    const pendingCellDrag = this.pendingCellDrag;
-    if (pendingCellDrag && !this.activeCellDrag) {
-      const movedX = Math.abs(event.clientX - pendingCellDrag.startX);
-      const movedY = Math.abs(event.clientY - pendingCellDrag.startY);
+    if (!this.activeCellDrag && !this.pendingCellDrag) {
+      return;
+    }
+
+    if ((event.buttons & 1) === 0) {
+      this.finishCellDrag();
+      return;
+    }
+
+    if (this.pendingCellDrag && !this.activeCellDrag) {
+      const movedX = Math.abs(event.clientX - this.pendingCellDrag.startX);
+      const movedY = Math.abs(event.clientY - this.pendingCellDrag.startY);
       if (Math.max(movedX, movedY) < DRAG_SELECTION_THRESHOLD) {
         return;
       }
 
       this.activeCellDrag = {
-        tablePos: pendingCellDrag.tablePos,
-        anchorEntryPos: pendingCellDrag.anchorEntryPos,
-        headEntryPos: pendingCellDrag.anchorEntryPos,
+        tablePos: this.pendingCellDrag.tablePos,
+        anchorEntryPos: this.pendingCellDrag.anchorEntryPos,
+        headEntryPos: this.pendingCellDrag.anchorEntryPos,
       };
-      this.view.dispatch(
-        this.view.state.tr.setSelection(
-          S1000DCellSelection.create(this.view.state.doc, pendingCellDrag.anchorEntryPos, pendingCellDrag.anchorEntryPos),
-        ),
-      );
     }
 
     if (!this.activeCellDrag) {
       return;
     }
 
-    const context = getRenderedS1000DTableContext(this.view, this.activeCellDrag.tablePos);
-    if (!context?.activeTgroup) {
-      this.finishCellDrag();
+    const dragContext = getS1000DCellDragContext(
+      this.view,
+      getPointerElement(this.root.ownerDocument, event),
+      event.clientX,
+      event.clientY,
+    );
+    if (!dragContext || dragContext.tablePos !== this.activeCellDrag.tablePos) {
       return;
     }
 
-    const hit = getGridHitAtPoint(context, event.clientX, event.clientY, true);
-    if (!hit) {
+    if (dragContext.entryPos === this.activeCellDrag.headEntryPos) {
       return;
     }
 
-    const headEntryPos = findS1000DEntryPosition(context, hit.entry);
-    if (typeof headEntryPos !== 'number') {
-      return;
-    }
-
-    this.hoveredTablePos = context.tablePos;
-    this.hoveredRowIndex = hit.rowIndex;
-    this.hoveredColumnIndex = hit.columnIndex;
+    this.hoveredTablePos = dragContext.tablePos;
+    this.hoveredRowIndex = dragContext.rowIndex;
+    this.hoveredColumnIndex = dragContext.columnIndex;
     this.hoverMode = 'cell';
 
-    if (this.activeCellDrag.headEntryPos === headEntryPos) {
+    this.activeCellDrag.headEntryPos = dragContext.entryPos;
+    if (this.activeCellDrag.anchorEntryPos === this.activeCellDrag.headEntryPos) {
       return;
     }
 
-    this.activeCellDrag.headEntryPos = headEntryPos;
+    this.suppressNativeSelection();
+    this.root.ownerDocument.getSelection()?.removeAllRanges();
     event.preventDefault();
+    event.stopPropagation();
     this.view.dispatch(
       this.view.state.tr.setSelection(
-        S1000DCellSelection.create(this.view.state.doc, this.activeCellDrag.anchorEntryPos, headEntryPos),
+        S1000DCellSelection.create(
+          this.view.state.doc,
+          this.activeCellDrag.anchorEntryPos,
+          this.activeCellDrag.headEntryPos,
+        ),
       ),
     );
     this.render();
   }
 
   private finishCellDrag(event?: MouseEvent): void {
-    if (this.activeCellDrag) {
+    if (
+      this.pendingCellDrag
+      && !this.activeCellDrag
+    ) {
+      const cursorSelection = TextSelection.near(
+        this.view.state.doc.resolve(this.pendingCellDrag.anchorEntryPos + 1),
+      );
+      this.view.dispatch(this.view.state.tr.setSelection(cursorSelection).scrollIntoView());
+      this.view.focus();
+      event?.preventDefault();
+      event?.stopPropagation();
+    }
+
+    if (
+      this.activeCellDrag
+      && this.activeCellDrag.anchorEntryPos !== this.activeCellDrag.headEntryPos
+    ) {
+      this.suppressNextClick = true;
+      this.root.ownerDocument.getSelection()?.removeAllRanges();
       this.view.dispatch(
         this.view.state.tr.setSelection(
           S1000DCellSelection.create(
@@ -957,11 +1006,13 @@ class S1000DTableOverlayView {
       );
       this.view.focus();
       event?.preventDefault();
+      event?.stopPropagation();
     }
 
     this.pendingCellDrag = null;
     this.activeCellDrag = null;
     this.stopCellDragListeners();
+    this.restoreNativeSelectionSuppression();
   }
 
   private startCellDragListeners(): void {
@@ -993,6 +1044,64 @@ class S1000DTableOverlayView {
     this.render();
   }
 
+  private handleClickCapture(event: MouseEvent): void {
+    if (!this.suppressNextClick) {
+      return;
+    }
+
+    this.suppressNextClick = false;
+    event.preventDefault();
+    event.stopPropagation();
+  }
+
+  private suppressNativeSelection(): void {
+    if (this.previousUserSelect !== null || this.previousWebkitUserSelect !== null) {
+      this.root.ownerDocument.getSelection()?.removeAllRanges();
+      return;
+    }
+
+    const { style } = this.view.dom;
+    this.previousUserSelect = style.userSelect;
+    this.previousWebkitUserSelect = style.webkitUserSelect;
+    style.userSelect = 'none';
+    style.webkitUserSelect = 'none';
+    this.root.ownerDocument.getSelection()?.removeAllRanges();
+  }
+
+  private restoreNativeSelectionSuppression(): void {
+    if (this.previousUserSelect === null || this.previousWebkitUserSelect === null) {
+      return;
+    }
+
+    const { style } = this.view.dom;
+    style.userSelect = this.previousUserSelect;
+    style.webkitUserSelect = this.previousWebkitUserSelect;
+    this.previousUserSelect = null;
+    this.previousWebkitUserSelect = null;
+  }
+
+  private requestSelectionMenu(
+    scope: 'cell',
+    rect: DOMRect,
+    anchor: { left: number; top: number },
+  ): void {
+    this.root.ownerDocument.dispatchEvent(new CustomEvent('s1000d-selection-menu-request', {
+      detail: {
+        scope,
+        anchorLeft: anchor.left,
+        anchorTop: anchor.top,
+        rect: {
+          left: rect.left,
+          top: rect.top,
+          right: rect.right,
+          bottom: rect.bottom,
+          width: rect.width,
+          height: rect.height,
+        },
+      },
+    }));
+  }
+
   private getActiveContext(): S1000DTableDOMContext | undefined {
     const selected = getSelectedRenderedS1000DTableContext(this.view);
     if (selected?.activeTgroup) {
@@ -1004,6 +1113,8 @@ class S1000DTableOverlayView {
 
   private detach(): void {
     this.root.hidden = true;
+    this.root.classList.remove('s1000d-table-overlay--dragging');
+    this.root.classList.remove('s1000d-table-overlay--resizing');
     this.tableHandle.hidden = true;
     this.rowBand.hidden = true;
     this.columnBand.hidden = true;
@@ -1211,6 +1322,30 @@ function isTableSelectionForContext(view: EditorView, tablePos: number): boolean
   );
 }
 
+function isSingleRowSelection(
+  selection: EditorView['state']['selection'],
+  selectionInfo: ReturnType<typeof getS1000DSelectionInfo> | undefined,
+): boolean {
+  return Boolean(
+    selectionInfo
+    && isS1000DCellSelection(selection)
+    && selection.isRowSelection()
+    && selectionInfo.top === selectionInfo.bottom,
+  );
+}
+
+function isSingleColumnSelection(
+  selection: EditorView['state']['selection'],
+  selectionInfo: ReturnType<typeof getS1000DSelectionInfo> | undefined,
+): boolean {
+  return Boolean(
+    selectionInfo
+    && isS1000DCellSelection(selection)
+    && selection.isColSelection()
+    && selectionInfo.left === selectionInfo.right,
+  );
+}
+
 function findAxisAnchorEntry(
   grid: S1000DTgroupGrid,
   axis: 'row' | 'column',
@@ -1283,6 +1418,59 @@ function getGridHitAtPoint(
   return entry ? { entry, rowIndex, columnIndex } : undefined;
 }
 
+function getS1000DCellDragContext(
+  view: EditorView,
+  target: EventTarget | null,
+  clientX?: number,
+  clientY?: number,
+): { tablePos: number; entryPos: number; rowIndex: number; columnIndex: number } | null {
+  const targetNode = target instanceof Node ? target : null;
+  const targetElement = targetNode instanceof Element ? targetNode : targetNode?.parentElement ?? null;
+  const cellElement = targetElement?.closest('td,th') as HTMLElement | null;
+  const tableContext = findS1000DTableAtDOM(view, cellElement ?? targetElement);
+  if (!tableContext?.activeTgroup) {
+    return null;
+  }
+
+  const grid = createS1000DTableAdapter().createGrid(tableContext.activeTgroup, tableContext.activeTgroupIndex);
+
+  if (cellElement) {
+    const entryPos = resolveEntryPosFromCellDOM(view, cellElement);
+    if (entryPos !== undefined) {
+      const entry = grid.entries.find((candidate) => findS1000DEntryPosition(tableContext, candidate) === entryPos);
+      if (entry) {
+        return {
+          tablePos: tableContext.tablePos,
+          entryPos,
+          rowIndex: entry.rowIndex,
+          columnIndex: entry.columnIndex,
+        };
+      }
+    }
+  }
+
+  if (clientX == null || clientY == null) {
+    return null;
+  }
+
+  const hit = getGridHitAtPoint(tableContext, clientX, clientY, true);
+  if (!hit) {
+    return null;
+  }
+
+  const entryPos = findS1000DEntryPosition(tableContext, hit.entry);
+  if (typeof entryPos !== 'number') {
+    return null;
+  }
+
+  return {
+    tablePos: tableContext.tablePos,
+    entryPos,
+    rowIndex: hit.rowIndex,
+    columnIndex: hit.columnIndex,
+  };
+}
+
 function findIndexByOffset(
   items: ReadonlyArray<{ start: number; size: number }>,
   offset: number,
@@ -1293,6 +1481,21 @@ function findIndexByOffset(
 
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
+}
+
+function resolveEntryPosFromCellDOM(view: EditorView, cell: HTMLElement): number | undefined {
+  try {
+    const resolved = view.state.doc.resolve(view.posAtDOM(cell, 0));
+    for (let depth = resolved.depth; depth > 0; depth -= 1) {
+      if (resolved.node(depth).type.name === s1000dTableNodeNames.entry) {
+        return resolved.before(depth);
+      }
+    }
+  } catch {
+    return undefined;
+  }
+
+  return undefined;
 }
 
 function getPointerElement(ownerDocument: Document, event: MouseEvent): Element | null {

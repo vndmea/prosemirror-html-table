@@ -6,6 +6,7 @@ import { createS1000DTableAdapter } from './adapter.js';
 import { resolveColspecs } from './cals/index.js';
 import { ensureS1000DTableStyles } from './styles.js';
 import type { S1000DTableTiptapOptions } from './tiptap.js';
+import { s1000dTableNodeNames } from './names.js';
 
 const S1000D_TABLE_WRAPPER_CLASS = 's1000d-table-node__wrapper';
 const S1000D_TABLE_CLASS = 's1000d-table-node__table';
@@ -44,6 +45,7 @@ export class S1000DTableNodeView {
     this.applyAttributes();
     this.syncWrapperState();
     this.syncColumnState();
+    this.syncEntrySpanState();
   }
 
   update(node: ProseMirrorNode): boolean {
@@ -55,6 +57,7 @@ export class S1000DTableNodeView {
     this.applyAttributes();
     this.syncWrapperState();
     this.syncColumnState();
+    this.syncEntrySpanState();
     return true;
   }
 
@@ -147,5 +150,55 @@ export class S1000DTableNodeView {
     this.wrapper.classList.toggle(S1000D_SELECTED_TABLE_CLASS, isSelected);
     this.wrapper.dataset.s1000dTableWrapper = 'true';
     this.wrapper.dataset.testid = 's1000d-table-wrapper';
+  }
+
+  private syncEntrySpanState(): void {
+    const adapter = createS1000DTableAdapter();
+    const spanByEntryNode = new Map<ProseMirrorNode, { rowSpan: number; colSpan: number }>();
+
+    adapter.getTgroups(this.node).forEach((tgroup, tgroupIndex) => {
+      const grid = adapter.createGrid(tgroup, tgroupIndex);
+      for (const entry of grid.entries) {
+        spanByEntryNode.set(entry.node, {
+          rowSpan: entry.rowSpan,
+          colSpan: entry.colSpan,
+        });
+      }
+    });
+
+    const entryNodes: ProseMirrorNode[] = [];
+    this.node.descendants((descendant) => {
+      if (descendant.type.name === s1000dTableNodeNames.entry) {
+        entryNodes.push(descendant);
+      }
+      return true;
+    });
+
+    const entryCells = Array.from(this.table.querySelectorAll<HTMLTableCellElement>('td[data-s1000d="entry"], th[data-s1000d="entry"]'));
+    const count = Math.min(entryNodes.length, entryCells.length);
+
+    for (let index = 0; index < count; index += 1) {
+      const entryNode = entryNodes[index];
+      const cell = entryCells[index];
+      if (!entryNode || !cell) {
+        continue;
+      }
+
+      const span = spanByEntryNode.get(entryNode);
+      const rowSpan = Math.max(1, span?.rowSpan ?? 1);
+      const colSpan = Math.max(1, span?.colSpan ?? 1);
+
+      if (rowSpan > 1) {
+        cell.rowSpan = rowSpan;
+      } else {
+        cell.removeAttribute('rowspan');
+      }
+
+      if (colSpan > 1) {
+        cell.colSpan = colSpan;
+      } else {
+        cell.removeAttribute('colspan');
+      }
+    }
   }
 }

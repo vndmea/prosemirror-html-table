@@ -87,6 +87,55 @@ export function findS1000DEntryByPosition(
   return grid.slots[rowIndex]?.[columnIndex]?.entry;
 }
 
+export function findS1000DEntryByDocumentPosition(
+  context: S1000DTablePositionContext,
+  grid: S1000DTgroupGrid,
+  docPos: number,
+): S1000DEntryRef | undefined {
+  const tableMap = S1000DTableMap.get(context.table, context.activeTgroupIndex);
+
+  for (const entry of tableMap.grid.entries) {
+    const absolutePos = findS1000DEntryPosition(context, entry);
+    if (absolutePos === undefined) {
+      continue;
+    }
+
+    if (docPos >= absolutePos && docPos <= absolutePos + entry.node.nodeSize) {
+      return grid.entries.find((candidate) => (
+        candidate.section === entry.section
+        && candidate.rowIndex === entry.rowIndex
+        && candidate.rowIndexInSection === entry.rowIndexInSection
+        && candidate.columnIndex === entry.columnIndex
+        && candidate.entryIndex === entry.entryIndex
+      ));
+    }
+  }
+
+  return undefined;
+}
+
+export function findS1000DEntryByNodePosition(
+  doc: ProseMirrorNode,
+  grid: S1000DTgroupGrid,
+  docPos: number,
+): S1000DEntryRef | undefined {
+  let matchedNode: ProseMirrorNode | undefined;
+
+  doc.nodesBetween(docPos, docPos, (node) => {
+    if (node.type.name === s1000dTableNodeNames.entry) {
+      matchedNode = node;
+      return false;
+    }
+    return true;
+  });
+
+  if (matchedNode) {
+    return grid.entries.find((entry) => entry.node === matchedNode);
+  }
+
+  return undefined;
+}
+
 export function findS1000DEntryPosition(
   context: S1000DTablePositionContext,
   entry: S1000DEntryRef,

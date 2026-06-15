@@ -16,6 +16,7 @@ import { createEmptyS1000DEntryContent } from './normalize.js';
 import { s1000dTableNodeNames } from './names.js';
 import {
   findS1000DEntryByPosition,
+  findS1000DEntryByNodePosition,
   findS1000DEntryPosition,
 } from './position.js';
 import { S1000DCellSelection, isS1000DCellSelection } from './selection.js';
@@ -384,6 +385,11 @@ function findCurrentEntry(grid: S1000DTgroupGrid, selection: Selection): S1000DE
   const ancestorEntry = findS1000DAncestorNode(selection, s1000dTableNodeNames.entry);
   if (ancestorEntry) {
     return grid.entries.find((entry) => entry.node === ancestorEntry);
+  }
+
+  const selectedPositionEntry = findS1000DEntryByNodePosition(selection.$from.doc, grid, selection.from);
+  if (selectedPositionEntry) {
+    return selectedPositionEntry;
   }
 
   const ancestorRow = findS1000DAncestorNode(selection, s1000dTableNodeNames.row);

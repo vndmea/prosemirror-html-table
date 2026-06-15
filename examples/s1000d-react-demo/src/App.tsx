@@ -26,6 +26,9 @@ import {
 } from 'prosemirror-html-table-s1000d/clipboard';
 import { renderS1000DTableToHtml } from 'prosemirror-html-table-s1000d/renderer';
 import { createS1000DTableExtensions } from 'prosemirror-html-table-s1000d/tiptap';
+import {
+  getTableContextMenuPosition,
+} from 'tiptap-html-table/table-interaction';
 
 import {
   createDocFromS1000DXml,
@@ -83,8 +86,9 @@ type DemoSnapshot = {
 };
 
 type SelectionHandleMenuDetail = {
-  left: number;
-  top: number;
+  scope: 'table' | 'row' | 'column' | 'cell';
+  anchorLeft: number;
+  anchorTop: number;
 };
 
 type DemoApi = {
@@ -169,10 +173,10 @@ function getDemoSelectionScope(state: EditorState | null): DemoSelectionScope {
 
   const selectionInfo = getS1000DSelectionInfo(state);
   if (isS1000DCellSelection(state.selection)) {
-    if (state.selection.isRowSelection()) {
+    if (state.selection.isRowSelection() && selectionInfo && selectionInfo.top === selectionInfo.bottom) {
       return 'row';
     }
-    if (state.selection.isColSelection()) {
+    if (state.selection.isColSelection() && selectionInfo && selectionInfo.left === selectionInfo.right) {
       return 'column';
     }
     return (selectionInfo?.entries.length ?? 0) > 1 ? 'multi-cell' : 'cell';
@@ -328,6 +332,74 @@ export function App() {
     setSelectionMenuOpen(true);
   }
 
+  function openSelectionMenuForScope(
+    scope: SelectionHandleMenuDetail['scope'],
+    left: number,
+    top: number,
+  ) {
+    const hostRect = editor?.view.dom.getBoundingClientRect();
+    if (!hostRect || typeof window === 'undefined') {
+      openSelectionMenu(left, top);
+      return;
+    }
+
+    const viewportBounds = getOverlayViewportBounds(
+      hostRect,
+      window.innerWidth,
+      window.innerHeight,
+      12,
+    );
+    const position = getTableContextMenuPosition(
+      scope,
+      left - hostRect.left,
+      top - hostRect.top,
+      256,
+      320,
+      viewportBounds.left,
+      viewportBounds.top,
+      viewportBounds.right,
+      viewportBounds.bottom,
+    );
+
+    openSelectionMenu(hostRect.left + position.left, hostRect.top + position.top);
+  }
+
+  function getSelectionMenuAnchor(scope: SelectionHandleMenuDetail['scope']) {
+    const doc = editor?.view.dom.ownerDocument;
+    if (!doc) {
+      return null;
+    }
+
+    if (scope === 'table') {
+      const tableHandle = doc.querySelector('[data-testid="s1000d-table-handle"]') as HTMLElement | null;
+      if (!tableHandle) return null;
+      const rect = tableHandle.getBoundingClientRect();
+      return { left: rect.left, top: rect.top };
+    }
+
+    if (scope === 'row') {
+      const rowBand = doc.querySelector('[data-testid="s1000d-selection-row-band"]') as HTMLElement | null;
+      if (!rowBand) return null;
+      const rect = rowBand.getBoundingClientRect();
+      return { left: rect.left, top: rect.top + rect.height / 2 };
+    }
+
+    if (scope === 'column') {
+      const columnBand = doc.querySelector('[data-testid="s1000d-selection-column-band"]') as HTMLElement | null;
+      if (!columnBand) return null;
+      const rect = columnBand.getBoundingClientRect();
+      return { left: rect.left + rect.width / 2, top: rect.top };
+    }
+
+    const cellOutline = doc.querySelector('[data-testid="s1000d-selection-cell-outline"]') as HTMLElement | null;
+    if (!cellOutline) {
+      return null;
+    }
+
+    const rect = cellOutline.getBoundingClientRect();
+    return { left: rect.right, top: rect.top + rect.height / 2 };
+  }
+
   function copySelection() {
     if (!editor) return;
     const html = serializeS1000DCellSelectionToHtml(editor.state) ?? '';
@@ -393,11 +465,20 @@ export function App() {
   }
 
   function openSelectionMenuFromTrigger() {
-    const rect = selectionMenuTriggerRef.current?.getBoundingClientRect();
-    if (!rect || selectionScope === 'none') {
+    if (selectionScope === 'none') {
       return;
     }
-    openSelectionMenu(rect.left, rect.bottom + 8);
+
+    const anchor = getSelectionMenuAnchor(selectionScope === 'multi-cell' ? 'cell' : selectionScope);
+    if (anchor) {
+      openSelectionMenuForScope(selectionScope === 'multi-cell' ? 'cell' : selectionScope, anchor.left, anchor.top);
+      return;
+    }
+
+    const rect = selectionMenuTriggerRef.current?.getBoundingClientRect();
+    if (rect) {
+      openSelectionMenu(rect.left, rect.bottom + 8);
+    }
   }
 
   void toolbarRevision;
@@ -886,12 +967,12 @@ export function App() {
       if (!detail || currentScope === 'none') {
         return;
       }
-      openSelectionMenu(detail.left, detail.top);
+      openSelectionMenuForScope(detail.scope, detail.anchorLeft, detail.anchorTop);
     };
 
-    document.addEventListener('s1000d-selection-handle-menu', handleSelectionHandleMenu);
+    document.addEventListener('s1000d-selection-menu-request', handleSelectionHandleMenu);
     return () => {
-      document.removeEventListener('s1000d-selection-handle-menu', handleSelectionHandleMenu);
+      document.removeEventListener('s1000d-selection-menu-request', handleSelectionHandleMenu);
     };
   }, [editor]);
 
@@ -947,7 +1028,7 @@ export function App() {
               return;
             }
             event.preventDefault();
-            openSelectionMenu(event.clientX, event.clientY + 4);
+            openSelectionMenuForScope(selectionScope === 'multi-cell' ? 'cell' : selectionScope, event.clientX, event.clientY + 4);
           }}
         >
           {editor ? <EditorContent editor={editor} /> : null}
@@ -982,4 +1063,18 @@ export function App() {
       </section>
     </main>
   );
+}
+
+function getOverlayViewportBounds(
+  hostRect: DOMRect,
+  viewportWidth: number,
+  viewportHeight: number,
+  inset: number,
+) {
+  return {
+    left: inset - hostRect.left,
+    top: inset - hostRect.top,
+    right: viewportWidth - hostRect.left - inset,
+    bottom: viewportHeight - hostRect.top - inset,
+  };
 }

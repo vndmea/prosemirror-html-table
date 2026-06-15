@@ -23,6 +23,110 @@ import {
 } from './s1000d-demo-api';
 
 test.describe('S1000D React demo', () => {
+  test('column actions menu stays aligned to the visible handle after horizontal scroll', async ({ page }) => {
+    await page.goto('/');
+    await expectDemoApi(page);
+    await loadDemoSample(page, 'proced');
+
+    for (let index = 0; index < 5; index += 1) {
+      expect(await runDemoCommand(page, 'selectFirstBodyCell')).toBe(true);
+      expect(await runDemoCommand(page, 'addS1000DTableColumnAfter')).toBe(true);
+    }
+
+    await page.evaluate(() => {
+      const element = document.querySelector('[data-testid="s1000d-table-wrapper"]') as HTMLElement | null;
+      if (element) {
+        element.scrollLeft = element.scrollWidth;
+      }
+    });
+
+    const table = page.getByTestId('editor').getByTestId('s1000d-table');
+    const lastCell = table.locator('tbody[data-s1000d="tbody"] tr').first().locator('td').last();
+    await lastCell.hover();
+
+    const columnHandle = page.getByTestId('s1000d-column-handle').last();
+    await columnHandle.click();
+    await page.getByTestId('selection-actions-trigger').click();
+
+    const handleBox = await columnHandle.boundingBox();
+    const menuBox = await page.getByTestId('selection-menu').boundingBox();
+    const viewport = page.viewportSize();
+    expect(handleBox).toBeTruthy();
+    expect(menuBox).toBeTruthy();
+    expect(viewport).toBeTruthy();
+
+    const handleCenterX = handleBox!.x + handleBox!.width / 2;
+    const menuCenterX = menuBox!.x + menuBox!.width / 2;
+    expect(Math.abs(menuCenterX - handleCenterX)).toBeLessThan(48);
+    expect(menuBox!.x).toBeGreaterThanOrEqual(0);
+    expect(menuBox!.x + menuBox!.width).toBeLessThanOrEqual(viewport!.width);
+  });
+
+  test('caption stays centered for non-empty titles', async ({ page }) => {
+    await page.goto('/');
+    await expectDemoApi(page);
+    await loadDemoSample(page, 'proced');
+
+    const caption = page.getByTestId('editor').getByTestId('s1000d-table').locator('caption');
+    await expect(caption).toBeVisible();
+    await expect(caption).toHaveCSS('text-align', 'center');
+  });
+
+  test('row selection highlight remains clipped to the visible table bounds', async ({ page }) => {
+    await page.goto('/');
+    await expectDemoApi(page);
+    await loadDemoSample(page, 'extended');
+
+    const table = page.getByTestId('editor').getByTestId('s1000d-table');
+    await table.hover();
+    const rowHandle = page.getByTestId('s1000d-row-handle').nth(2);
+    await rowHandle.click();
+
+    const bandBox = await page.getByTestId('s1000d-selection-row-band').boundingBox();
+    const tableBox = await table.boundingBox();
+    expect(bandBox).toBeTruthy();
+    expect(tableBox).toBeTruthy();
+
+    expect(bandBox!.x).toBeGreaterThanOrEqual(tableBox!.x - 2);
+    expect(bandBox!.x + bandBox!.width).toBeLessThanOrEqual(tableBox!.x + tableBox!.width + 2);
+  });
+
+  test('rectangular drag selection does not leak into intermediate unrelated cells', async ({ page }) => {
+    await page.goto('/');
+    await expectDemoApi(page);
+    await loadDemoXml(page, `
+<table id="rect-select-table">
+  <tgroup cols="2">
+    <tbody>
+      <row><entry>1</entry><entry>2</entry></row>
+      <row><entry>3</entry><entry>4</entry></row>
+      <row><entry>5</entry><entry>6</entry></row>
+    </tbody>
+  </tgroup>
+</table>
+    `.trim(), 'extended');
+
+    const table = page.getByTestId('editor').getByTestId('s1000d-table');
+    const bodyRows = table.locator('tbody[data-s1000d="tbody"] tr');
+    const startCell = bodyRows.nth(0).locator('td').nth(1);
+    const endCell = bodyRows.nth(1).locator('td').nth(1);
+    const startBox = await startCell.boundingBox();
+    const endBox = await endCell.boundingBox();
+    expect(startBox).toBeTruthy();
+    expect(endBox).toBeTruthy();
+
+    await table.hover();
+    await page.mouse.move(startBox!.x + (startBox!.width / 2), startBox!.y + (startBox!.height / 2));
+    await page.mouse.down();
+    await page.mouse.move(endBox!.x + (endBox!.width / 2), endBox!.y + (endBox!.height / 2), { steps: 6 });
+    await page.mouse.up();
+
+    const snapshot = await getDemoSnapshot(page);
+    expect(snapshot.selectionSummary).toContain('Rows 0-1');
+    expect(snapshot.selectionSummary).toContain('Columns 1-1');
+    expect(snapshot.selectionSummary).not.toContain('Columns 0-1');
+  });
+
   test('demo loads with the required UI surface', async ({ page }) => {
     await page.goto('/');
     await expectDemoApi(page);
@@ -216,7 +320,7 @@ test.describe('S1000D React demo', () => {
 
     const table = page.getByTestId('editor').getByTestId('s1000d-table');
     const bodyRows = table.locator('tbody[data-s1000d="tbody"] tr');
-    await bodyRows.nth(0).locator('td').nth(1).click();
+    await bodyRows.nth(1).locator('td').first().click();
     await page.keyboard.press('Shift+ArrowRight');
 
     const cellHandle = page.getByTestId('s1000d-cell-handle');
@@ -588,6 +692,7 @@ test.describe('S1000D React demo', () => {
     const snapshot = await getDemoSnapshot(page);
     expect(snapshot.selectionSummary).toContain('Rows 2-2');
     expect(snapshot.selectionSummary).toContain('Columns 0-1');
+    expect(snapshot.selectionSummary).toContain('Entries 2');
 
     expect(await clearDemoSelection(page)).toBe(true);
     const clearedXml = await exportDemoXml(page);
@@ -872,7 +977,8 @@ test.describe('S1000D React demo', () => {
 
     const snapshot = await getDemoSnapshot(page);
     expect(snapshot.selectionSummary).toContain('Rows 2-3');
-    expect(snapshot.selectionSummary).toContain('Columns 0-1');
+    expect(snapshot.selectionSummary).toContain('Columns 0-2');
+    expect(snapshot.selectionSummary).toContain('Entries 4');
     expect(snapshot.selectionSummary).not.toContain('Cell selection: false');
     await expect(page.getByTestId('s1000d-selection-cell-fill')).toBeVisible();
   });

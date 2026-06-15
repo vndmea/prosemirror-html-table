@@ -21,6 +21,7 @@ import { s1000dTableNodeNames } from './names.js';
 import { createEmptyS1000DEntry, normalizeS1000DTgroup } from './normalize.js';
 import {
   findS1000DEntryByPosition,
+  findS1000DEntryByNodePosition,
 } from './position.js';
 import { isS1000DCellSelection } from './selection.js';
 
@@ -708,6 +709,11 @@ function createEmptyS1000DRow(schema: ProseMirrorNode['type']['schema'], width: 
 }
 
 function findRowRefBySelection(grid: S1000DTgroupGrid, selection: Selection): S1000DRowRef | undefined {
+  const directEntry = findEntryRefBySelection(grid, selection);
+  if (directEntry) {
+    return grid.rows.find((row) => row.rowIndex === directEntry.rowIndex);
+  }
+
   const selectedRow = findS1000DAncestorNode(selection, s1000dTableNodeNames.row);
   if (selectedRow) {
     return grid.rows.find((row) => row.node === selectedRow);
@@ -728,6 +734,11 @@ function findEntryRefBySelection(grid: S1000DTgroupGrid, selection: Selection): 
   const selectedEntry = findS1000DAncestorNode(selection, s1000dTableNodeNames.entry);
   if (selectedEntry) {
     return grid.entries.find((entry) => entry.node === selectedEntry);
+  }
+
+  const docPositionEntry = findS1000DEntryByNodePosition(selection.$from.doc, grid, selection.from);
+  if (docPositionEntry) {
+    return docPositionEntry;
   }
 
   const rowRef = findRowRefBySelection(grid, selection);
