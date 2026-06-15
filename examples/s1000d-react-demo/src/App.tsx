@@ -28,14 +28,13 @@ import { renderS1000DTableToHtml } from 'prosemirror-html-table-s1000d/renderer'
 import {
   closeS1000DTableContextMenu,
   createS1000DTableExtensions,
+  getS1000DContextMenuState,
+  getS1000DContextTriggerButtonState,
   getS1000DTableInteractionState,
   openS1000DTableContextMenu,
-  type S1000DTableInteractionState,
+  type S1000DContextMenuActionResolver,
   type S1000DTableMenuScope,
 } from 'prosemirror-html-table-s1000d/tiptap';
-import {
-  getTableContextMenuPosition,
-} from 'tiptap-html-table/table-interaction';
 
 import {
   createDocFromS1000DXml,
@@ -66,14 +65,6 @@ type ClipboardOutput = {
 };
 
 type DemoSelectionScope = 'none' | 'table' | 'row' | 'column' | 'cell' | 'multi-cell';
-
-type DemoMenuAction = {
-  id: string;
-  label: string;
-  disabled: boolean;
-  destructive?: boolean;
-  run: () => void;
-};
 
 type ValidationOutput = {
   valid: boolean;
@@ -252,16 +243,21 @@ export function App() {
   const [profile, setProfile] = useState<S1000DTableProfile>('proced');
   const [toolbarRevision, setToolbarRevision] = useState(0);
   const [clipboardOutput, setClipboardOutput] = useState<ClipboardOutput>({ html: '', text: '' });
-  const selectionMenuRef = useRef<HTMLDivElement | null>(null);
   const selectionMenuTriggerRef = useRef<HTMLButtonElement | null>(null);
   const clipboardOutputRef = useRef<ClipboardOutput>({ html: '', text: '' });
+  const contextMenuActionsRef = useRef<S1000DContextMenuActionResolver>(() => []);
 
   const extensions = useMemo(() => [
     Document,
     Paragraph,
     Text,
     HistoryExtension,
-    ...createS1000DTableExtensions({ profile: 'extended' }),
+    ...createS1000DTableExtensions({
+      profile: 'extended',
+      table: {
+        contextMenuActionResolver: (context) => contextMenuActionsRef.current(context),
+      },
+    }),
   ], []);
 
   const editor = useEditor({
@@ -436,12 +432,6 @@ export function App() {
     void pasteHtmlText(clipboardOutputRef.current.html);
   }
 
-  function clearSelectedCells() {
-    if (!editor) return;
-    clearS1000DSelectedCells(editor.state, editor.view.dispatch);
-    editor.commands.focus();
-  }
-
   function openSelectionMenuFromTrigger() {
     if (selectionScope === 'none') {
       return;
@@ -455,24 +445,11 @@ export function App() {
 
     const rect = selectionMenuTriggerRef.current?.getBoundingClientRect();
     if (rect) {
-      openSelectionMenu(rect.left, rect.bottom + 8);
+      openSelectionMenuForScope(selectionScope === 'multi-cell' ? 'cell' : selectionScope, rect.left, rect.bottom + 8);
     }
   }
 
   void toolbarRevision;
-  void profile;
-
-  function canRunCommand(name: string): boolean {
-    const canCommands = editor?.can() as unknown as Record<string, (() => boolean) | undefined> | undefined;
-    return Boolean(canCommands?.[name]?.());
-  }
-
-  function runNamedCommand(name: string): void {
-    runEditorCommand(() => {
-      const commands = editor?.commands as unknown as Record<string, (() => boolean) | undefined> | undefined;
-      return commands?.[name]?.() ?? false;
-    });
-  }
 
   function runHistoryCommand(command: typeof undo | typeof redo): void {
     if (!editor) return;
@@ -488,9 +465,70 @@ export function App() {
   const canRedo = Boolean(editor && redo(editor.state));
   const selectionScope = getDemoSelectionScope(editor?.state ?? null);
   const interaction = editor ? getS1000DTableInteractionState(editor.state) : null;
+  const triggerState = editor && interaction
+    ? getS1000DContextTriggerButtonState(editor.state, interaction, {
+      actionResolver: contextMenuActionsRef.current,
+      view: editor.view,
+    })
+    : null;
   const selectionMenuOpen = Boolean(interaction?.contextMenuOpen);
-  const selectionMenuPosition = getSelectionMenuPosition(editor, interaction);
-  const hasActionMenu = selectionScope !== 'none';
+  const hasActionMenu = Boolean(triggerState?.visible);
+
+  contextMenuActionsRef.current = ({ scope }) => [
+    ...(scope === 'table'
+      ? [
+        {
+          id: 'validate-table',
+          label: 'Validate table',
+          group: 'external' as const,
+          enabled: true,
+          run: () => {
+            void validateCurrentTable();
+          },
+        },
+        {
+          id: 'export-xml',
+          label: 'Export XML',
+          group: 'external' as const,
+          enabled: true,
+          run: () => {
+            void exportXml();
+          },
+        },
+        {
+          id: 'render-html',
+          label: 'Render HTML',
+          group: 'external' as const,
+          enabled: true,
+          run: () => {
+            void renderHtml(false);
+          },
+        },
+      ]
+      : []),
+    ...(scope === 'cell'
+      ? [
+        {
+          id: 'copy-selection',
+          label: 'Copy selection',
+          group: 'external' as const,
+          enabled: canCopySelection,
+          run: () => {
+            copySelection();
+          },
+        },
+        {
+          id: 'paste-html',
+          label: 'Paste copied HTML',
+          group: 'external' as const,
+          enabled: Boolean(clipboardOutputRef.current.html),
+          run: () => {
+            pasteCopiedHtml();
+          },
+        },
+      ]
+      : []),
+  ];
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -619,333 +657,31 @@ export function App() {
     };
   }, [editor, profile]);
 
-  const selectionMenuActions: DemoMenuAction[] = [
-    ...(selectionScope === 'table'
-      ? [
-        {
-          id: 'select-table',
-          label: 'Select table',
-          disabled: false,
-          run: () => {
-            if (!editor) return;
-            const tr = selectWholeTable(editor.state);
-            if (!tr) return;
-            editor.view.dispatch(tr);
-            editor.commands.focus();
-          },
-        },
-        {
-          id: 'delete-table',
-          label: 'Delete table',
-          disabled: false,
-          destructive: true,
-          run: () => {
-            if (!editor) return;
-            editor.commands.deleteSelection();
-            editor.commands.focus();
-          },
-        },
-        {
-          id: 'validate-table',
-          label: 'Validate table',
-          disabled: false,
-          run: () => {
-            void validateCurrentTable();
-          },
-        },
-        {
-          id: 'export-xml',
-          label: 'Export XML',
-          disabled: false,
-          run: () => {
-            void exportXml();
-          },
-        },
-        {
-          id: 'render-html',
-          label: 'Render HTML',
-          disabled: false,
-          run: () => {
-            void renderHtml(false);
-          },
-        },
-      ]
-      : []),
-    ...(selectionScope === 'row'
-      ? [
-        {
-          id: 'add-row-before',
-          label: 'Add row before',
-          disabled: !canRunCommand('addS1000DTableRowBefore'),
-          run: () => runNamedCommand('addS1000DTableRowBefore'),
-        },
-        {
-          id: 'add-row-after',
-          label: 'Add row after',
-          disabled: !canRunCommand('addS1000DTableRowAfter'),
-          run: () => runNamedCommand('addS1000DTableRowAfter'),
-        },
-        {
-          id: 'delete-row',
-          label: 'Delete row',
-          disabled: !canRunCommand('deleteS1000DTableRow'),
-          destructive: true,
-          run: () => runNamedCommand('deleteS1000DTableRow'),
-        },
-        {
-          id: 'move-row-up',
-          label: 'Move row up',
-          disabled: !canRunCommand('moveS1000DTableRowUp'),
-          run: () => runNamedCommand('moveS1000DTableRowUp'),
-        },
-        {
-          id: 'move-row-down',
-          label: 'Move row down',
-          disabled: !canRunCommand('moveS1000DTableRowDown'),
-          run: () => runNamedCommand('moveS1000DTableRowDown'),
-        },
-        {
-          id: 'clear-row-cells',
-          label: 'Clear row contents',
-          disabled: !canClearSelection,
-          run: clearSelectedCells,
-        },
-      ]
-      : []),
-    ...(selectionScope === 'column'
-      ? [
-        {
-          id: 'add-column-before',
-          label: 'Add column before',
-          disabled: !canRunCommand('addS1000DTableColumnBefore'),
-          run: () => runNamedCommand('addS1000DTableColumnBefore'),
-        },
-        {
-          id: 'add-column-after',
-          label: 'Add column after',
-          disabled: !canRunCommand('addS1000DTableColumnAfter'),
-          run: () => runNamedCommand('addS1000DTableColumnAfter'),
-        },
-        {
-          id: 'delete-column',
-          label: 'Delete column',
-          disabled: !canRunCommand('deleteS1000DTableColumn'),
-          destructive: true,
-          run: () => runNamedCommand('deleteS1000DTableColumn'),
-        },
-        {
-          id: 'move-column-left',
-          label: 'Move column left',
-          disabled: !canRunCommand('moveS1000DTableColumnLeft'),
-          run: () => runNamedCommand('moveS1000DTableColumnLeft'),
-        },
-        {
-          id: 'move-column-right',
-          label: 'Move column right',
-          disabled: !canRunCommand('moveS1000DTableColumnRight'),
-          run: () => runNamedCommand('moveS1000DTableColumnRight'),
-        },
-        {
-          id: 'clear-column-cells',
-          label: 'Clear column contents',
-          disabled: !canClearSelection,
-          run: clearSelectedCells,
-        },
-      ]
-      : []),
-    ...((selectionScope === 'cell' || selectionScope === 'multi-cell')
-      ? [
-        {
-          id: 'select-cell',
-          label: 'Select current cell',
-          disabled: !canRunCommand('selectS1000DTableCell'),
-          run: () => runNamedCommand('selectS1000DTableCell'),
-        },
-        {
-          id: 'merge-cells',
-          label: 'Merge cells',
-          disabled: !canRunCommand('mergeS1000DTableCells'),
-          run: () => runNamedCommand('mergeS1000DTableCells'),
-        },
-        {
-          id: 'split-cell',
-          label: 'Split cell',
-          disabled: !canRunCommand('splitS1000DTableCell'),
-          run: () => runNamedCommand('splitS1000DTableCell'),
-        },
-        {
-          id: 'merge-or-split-cell',
-          label: 'Merge or split',
-          disabled: !canRunCommand('mergeOrSplitS1000DTableCell'),
-          run: () => runNamedCommand('mergeOrSplitS1000DTableCell'),
-        },
-        {
-          id: 'copy-selection',
-          label: 'Copy selection',
-          disabled: !canCopySelection,
-          run: copySelection,
-        },
-        {
-          id: 'paste-html',
-          label: 'Paste copied HTML',
-          disabled: !clipboardOutput.html,
-          run: pasteCopiedHtml,
-        },
-        {
-          id: 'clear-selection',
-          label: 'Clear selected cells',
-          disabled: !canClearSelection,
-          destructive: true,
-          run: clearSelectedCells,
-        },
-        {
-          id: 'set-align-left',
-          label: 'Align left',
-          disabled: false,
-          run: () => {
-            if (!editor) return;
-            editor.commands.updateAttributes('entry', { align: 'left' });
-            editor.commands.focus();
-          },
-        },
-        {
-          id: 'set-align-center',
-          label: 'Align center',
-          disabled: false,
-          run: () => {
-            if (!editor) return;
-            editor.commands.updateAttributes('entry', { align: 'center' });
-            editor.commands.focus();
-          },
-        },
-        {
-          id: 'set-align-right',
-          label: 'Align right',
-          disabled: false,
-          run: () => {
-            if (!editor) return;
-            editor.commands.updateAttributes('entry', { align: 'right' });
-            editor.commands.focus();
-          },
-        },
-        {
-          id: 'set-valign-top',
-          label: 'Align top',
-          disabled: false,
-          run: () => {
-            if (!editor) return;
-            editor.commands.updateAttributes('entry', { valign: 'top' });
-            editor.commands.focus();
-          },
-        },
-        {
-          id: 'set-valign-middle',
-          label: 'Align middle',
-          disabled: false,
-          run: () => {
-            if (!editor) return;
-            editor.commands.updateAttributes('entry', { valign: 'middle' });
-            editor.commands.focus();
-          },
-        },
-        {
-          id: 'set-valign-bottom',
-          label: 'Align bottom',
-          disabled: false,
-          run: () => {
-            if (!editor) return;
-            editor.commands.updateAttributes('entry', { valign: 'bottom' });
-            editor.commands.focus();
-          },
-        },
-      ]
-      : []),
-  ];
-
   useEffect(() => {
-    if (!selectionMenuOpen || !selectionMenuRef.current) {
-      return;
-    }
-
-    const enabledButtons = Array.from(
-      selectionMenuRef.current.querySelectorAll<HTMLButtonElement>('button:not(:disabled)'),
-    );
-    enabledButtons[0]?.focus();
-
-    const handlePointerDown = (event: MouseEvent) => {
-      const target = event.target;
-      if (
-        target instanceof Node
-        && (
-          selectionMenuRef.current?.contains(target)
-          || selectionMenuTriggerRef.current?.contains(target)
-        )
-      ) {
-        return;
-      }
-
-      closeSelectionMenu(false);
+    const handleFocusRequest = () => {
+      selectionMenuTriggerRef.current?.focus();
     };
 
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (!selectionMenuRef.current) {
-        return;
-      }
-
-      const items = Array.from(
-        selectionMenuRef.current.querySelectorAll<HTMLButtonElement>('button:not(:disabled)'),
-      );
-      if (items.length === 0) {
-        return;
-      }
-
-      const activeIndex = items.findIndex((item) => item === document.activeElement);
-      if (event.key === 'Escape') {
-        event.preventDefault();
-        closeSelectionMenu(true);
-        return;
-      }
-
-      if (event.key === 'Tab') {
-        closeSelectionMenu(false);
-        return;
-      }
-
-      if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) {
-        return;
-      }
-
-      event.preventDefault();
-      let nextIndex = activeIndex < 0 ? 0 : activeIndex;
-      if (event.key === 'Home') {
-        nextIndex = 0;
-      } else if (event.key === 'End') {
-        nextIndex = items.length - 1;
-      } else if (event.key === 'ArrowDown') {
-        nextIndex = activeIndex < 0 ? 0 : (activeIndex + 1) % items.length;
-      } else if (event.key === 'ArrowUp') {
-        nextIndex = activeIndex < 0 ? items.length - 1 : (activeIndex - 1 + items.length) % items.length;
-      }
-
-      items[nextIndex]?.focus();
-    };
-
-    document.addEventListener('mousedown', handlePointerDown);
-    document.addEventListener('keydown', handleKeyDown);
+    document.addEventListener('s1000d-focus-selection-trigger', handleFocusRequest);
     return () => {
-      document.removeEventListener('mousedown', handlePointerDown);
-      document.removeEventListener('keydown', handleKeyDown);
+      document.removeEventListener('s1000d-focus-selection-trigger', handleFocusRequest);
     };
-  }, [selectionMenuOpen]);
+  }, []);
 
   useEffect(() => {
     if (!selectionMenuOpen) {
       return;
     }
-    if (selectionScope === 'none' || selectionMenuActions.every((action) => action.disabled)) {
+    const menuState = editor && interaction
+      ? getS1000DContextMenuState(editor.state, interaction, {
+        actionResolver: contextMenuActionsRef.current,
+        view: editor.view,
+      })
+      : null;
+    if (!menuState?.visible) {
       closeSelectionMenu(false);
     }
-  }, [selectionMenuActions, selectionMenuOpen, selectionScope]);
+  }, [editor, interaction, selectionMenuOpen]);
 
   return (
     <main className="s1000d-demo">
@@ -968,12 +704,28 @@ export function App() {
             disabled={!hasActionMenu}
             aria-haspopup="menu"
             aria-expanded={selectionMenuOpen}
+            aria-label={triggerState?.label ?? 'Actions'}
+            title={triggerState?.title ?? undefined}
             onClick={() => {
               if (selectionMenuOpen) {
                 closeSelectionMenu(true);
                 return;
               }
-              openSelectionMenuFromTrigger();
+              if (!editor || !interaction) {
+                return;
+              }
+              const menuState = getS1000DContextMenuState(editor.state, interaction, {
+                actionResolver: contextMenuActionsRef.current,
+                view: editor.view,
+              });
+              if (!menuState.scope || !menuState.anchor) {
+                openSelectionMenuFromTrigger();
+                return;
+              }
+              openS1000DTableContextMenu(editor.view, {
+                scope: menuState.scope,
+                anchor: menuState.anchor,
+              });
             }}
           >
             Actions
@@ -995,81 +747,7 @@ export function App() {
         >
           {editor ? <EditorContent editor={editor} /> : null}
         </div>
-
-        {selectionMenuOpen && selectionMenuPosition ? (
-          <div
-            ref={selectionMenuRef}
-            className="s1000d-demo__context-menu"
-            data-testid="selection-menu"
-            role="menu"
-            style={{ left: `${selectionMenuPosition.left}px`, top: `${selectionMenuPosition.top}px` }}
-          >
-            {selectionMenuActions.map((action) => (
-              <button
-                key={action.id}
-                data-testid={`selection-menu-item-${action.id}`}
-                className={action.destructive ? 'is-destructive' : undefined}
-                type="button"
-                role="menuitem"
-                disabled={action.disabled}
-                onClick={() => {
-                  action.run();
-                  closeSelectionMenu(false);
-                }}
-              >
-                {action.label}
-              </button>
-            ))}
-          </div>
-        ) : null}
       </section>
     </main>
   );
-}
-
-function getSelectionMenuPosition(
-  editor: TiptapEditor | null,
-  interaction: S1000DTableInteractionState | null,
-) {
-  if (!editor || !interaction?.contextMenuOpen || !interaction.menuScope || !interaction.menuAnchor || typeof window === 'undefined') {
-    return null;
-  }
-
-  const hostRect = editor.view.dom.getBoundingClientRect();
-  const viewportBounds = getOverlayViewportBounds(
-    hostRect,
-    window.innerWidth,
-    window.innerHeight,
-    12,
-  );
-  const position = getTableContextMenuPosition(
-    interaction.menuScope,
-    interaction.menuAnchor.left - hostRect.left,
-    interaction.menuAnchor.top - hostRect.top,
-    256,
-    320,
-    viewportBounds.left,
-    viewportBounds.top,
-    viewportBounds.right,
-    viewportBounds.bottom,
-  );
-
-  return {
-    left: hostRect.left + position.left,
-    top: hostRect.top + position.top,
-  };
-}
-
-function getOverlayViewportBounds(
-  hostRect: DOMRect,
-  viewportWidth: number,
-  viewportHeight: number,
-  inset: number,
-) {
-  return {
-    left: inset - hostRect.left,
-    top: inset - hostRect.top,
-    right: viewportWidth - hostRect.left - inset,
-    bottom: viewportHeight - hostRect.top - inset,
-  };
 }

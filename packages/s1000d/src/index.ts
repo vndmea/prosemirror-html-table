@@ -75,6 +75,14 @@ export type {
 export { resolveS1000DTableNodeNames, s1000dTableNodeNames } from './names.js';
 export type { S1000DTableNodeNameKey, S1000DTableNodeNames } from './names.js';
 export type {
+  S1000DContextMenuAction,
+  S1000DContextMenuActionContext,
+  S1000DContextMenuActionGroup,
+  S1000DContextMenuActionResolver,
+  S1000DContextMenuState,
+  S1000DContextTriggerButtonState,
+} from './menu.js';
+export type {
   NormalizedS1000DTableSchemaOptions,
   ParseS1000DTableXmlOptions,
   S1000DColspecAttrs,

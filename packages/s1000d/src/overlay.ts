@@ -14,6 +14,11 @@ import {
   type S1000DTableHoverState,
   type S1000DTableInteractionMeta,
 } from './interaction.js';
+import {
+  getS1000DContextMenuState,
+  type S1000DContextMenuAction,
+  type S1000DContextMenuActionResolver,
+} from './menu.js';
 import { replaceActiveS1000DTgroup, replaceS1000DTable } from './mutation.js';
 import { s1000dTableNodeNames } from './names.js';
 import { findS1000DEntryPosition } from './position.js';
@@ -21,6 +26,7 @@ import { S1000DCellSelection, isS1000DCellSelection } from './selection.js';
 import { ensureS1000DTableStyles } from './styles.js';
 import type { S1000DEntryRef, S1000DTgroupGrid } from './grid.js';
 import {
+  getTableContextMenuPosition,
   getVisibleTableRect,
   getTableOverlayPositionState,
   getVisibleTableSelectionRect,
@@ -28,6 +34,14 @@ import {
   TableResizeLifecycle,
   toTableRect,
   applyTableColumnPreviewWidths,
+  canRestoreMenuFocus,
+  getNextMenuActionIndex,
+  isMenuDismissKey,
+  isMenuExitKey,
+  isMenuNavigationKey,
+  isMenuTypeaheadKey,
+  MenuTypeaheadController,
+  shouldCloseMenuForTarget,
   type TableGeometry,
   type TableOverlayPositionState,
   type TableRect,
@@ -41,14 +55,26 @@ const RESIZE_HANDLE_WIDTH = 12;
 const MIN_COLUMN_WIDTH = 48;
 const DRAG_SELECTION_THRESHOLD = 4;
 const OVERLAY_SELECTOR = '[data-s1000d-table-overlay]';
+const CONTEXT_MENU_SCOPE_LABELS = {
+  table: 'Table actions',
+  row: 'Row actions',
+  column: 'Column actions',
+  cell: 'Cell actions',
+} as const;
 
 export const s1000dTableOverlayPluginKey = new PluginKey('s1000d-table-overlay');
 
-export function createS1000DTableOverlayPlugin(): Plugin {
+export interface S1000DTableOverlayPluginOptions {
+  contextMenuActionResolver?: S1000DContextMenuActionResolver | undefined;
+}
+
+export function createS1000DTableOverlayPlugin(
+  options: S1000DTableOverlayPluginOptions = {},
+): Plugin {
   return new Plugin({
     key: s1000dTableOverlayPluginKey,
     view(view) {
-      return new S1000DTableOverlayView(view);
+      return new S1000DTableOverlayView(view, options);
     },
   });
 }
@@ -106,6 +132,7 @@ export function applyS1000DColumnWidthsToTgroup(
 
 class S1000DTableOverlayView {
   private view: EditorView;
+  private readonly options: S1000DTableOverlayPluginOptions;
   private readonly root: HTMLDivElement;
   private readonly overlayHost: TableOverlayHost;
   private readonly rowHandlesParent: HTMLDivElement;
@@ -121,6 +148,10 @@ class S1000DTableOverlayView {
   private readonly hoverColumnBand: HTMLDivElement;
   private readonly hoverCellFill: HTMLDivElement;
   private readonly hoverCellOutline: HTMLDivElement;
+  private readonly contextMenu: HTMLDivElement;
+  private readonly typeahead = new MenuTypeaheadController();
+  private contextMenuActionElements: HTMLButtonElement[] = [];
+  private previousMenuOpen = false;
   private pendingCellDrag:
     | {
         tablePos: number;
@@ -160,9 +191,12 @@ class S1000DTableOverlayView {
   private readonly onResizeEnd = () => this.finishResize();
   private readonly onDocumentMouseMove = (event: MouseEvent) => this.handleDocumentMouseMove(event);
   private readonly onDocumentMouseUp = (event: MouseEvent) => this.finishCellDrag(event);
+  private readonly onDocumentPointerDown = (event: MouseEvent) => this.handleDocumentPointerDown(event);
+  private readonly onDocumentKeyDown = (event: KeyboardEvent) => this.handleDocumentKeyDown(event);
 
-  constructor(view: EditorView) {
+  constructor(view: EditorView, options: S1000DTableOverlayPluginOptions) {
     this.view = view;
+    this.options = options;
     ensureS1000DTableStyles(view.dom.ownerDocument);
     this.root = view.dom.ownerDocument.createElement('div');
     this.root.className = 's1000d-table-overlay';
@@ -197,6 +231,7 @@ class S1000DTableOverlayView {
     this.hoverCellFill.dataset.testid = 's1000d-hover-cell-fill';
     this.hoverCellOutline = createBox(this.root.ownerDocument, 's1000d-table-overlay__hover-cell-outline');
     this.hoverCellOutline.dataset.testid = 's1000d-hover-cell-outline';
+    this.contextMenu = this.createContextMenu();
     this.cellOutline.append(this.cellHandle);
 
     this.root.append(
@@ -212,6 +247,7 @@ class S1000DTableOverlayView {
       this.rowHandlesParent,
       this.columnHandlesParent,
       this.resizersParent,
+      this.contextMenu,
     );
 
     this.resizeLifecycle = new TableResizeLifecycle(this.root.ownerDocument, this.onResizeMove, this.onResizeEnd);
@@ -225,6 +261,8 @@ class S1000DTableOverlayView {
     this.root.ownerDocument.addEventListener('mouseover', this.onMouseMove);
     this.root.ownerDocument.defaultView?.addEventListener('resize', this.onViewportChange);
     this.root.ownerDocument.addEventListener('scroll', this.onViewportChange, true);
+    this.root.ownerDocument.addEventListener('mousedown', this.onDocumentPointerDown);
+    this.root.ownerDocument.addEventListener('keydown', this.onDocumentKeyDown);
     this.render();
   }
 
@@ -244,8 +282,11 @@ class S1000DTableOverlayView {
     this.root.ownerDocument.removeEventListener('mouseover', this.onMouseMove);
     this.root.ownerDocument.defaultView?.removeEventListener('resize', this.onViewportChange);
     this.root.ownerDocument.removeEventListener('scroll', this.onViewportChange, true);
+    this.root.ownerDocument.removeEventListener('mousedown', this.onDocumentPointerDown);
+    this.root.ownerDocument.removeEventListener('keydown', this.onDocumentKeyDown);
     this.stopCellDragListeners();
     this.restoreNativeSelectionSuppression();
+    this.typeahead.destroy();
     this.overlayHost.detach();
   }
 
@@ -292,6 +333,7 @@ class S1000DTableOverlayView {
     this.renderRowHandles(interaction, context, geometry, positionState, selectionInfo, rowSelection);
     this.renderColumnHandles(interaction, context, geometry, positionState, selectionInfo, columnSelection);
     this.renderResizeHandles(interaction, context, geometry, positionState);
+    this.renderContextMenu(interaction, context, overlayHost.getBoundingClientRect());
 
     this.root.hidden = false;
   }
@@ -576,6 +618,187 @@ class S1000DTableOverlayView {
     }
   }
 
+  private renderContextMenu(
+    interaction: ReturnType<typeof getS1000DTableInteractionState>,
+    context: S1000DTableDOMContext,
+    hostRect: DOMRect,
+  ): void {
+    const menu = getS1000DContextMenuState(this.view.state, interaction, {
+      actionResolver: this.options.contextMenuActionResolver,
+      view: this.view,
+    });
+
+    this.contextMenu.hidden = !menu.open;
+    this.contextMenu.setAttribute('aria-hidden', String(!menu.open));
+    this.contextMenu.setAttribute('aria-label', menu.scope ? CONTEXT_MENU_SCOPE_LABELS[menu.scope] : 'Table actions');
+    this.root.dataset.contextMenuOpen = String(menu.open);
+
+    if (!menu.open || !menu.anchor) {
+      this.contextMenu.replaceChildren();
+      this.contextMenuActionElements = [];
+      this.previousMenuOpen = false;
+      return;
+    }
+
+    const position = getMenuPosition(hostRect, menu.scope ?? 'cell', menu.anchor);
+    Object.assign(this.contextMenu.style, {
+      left: `${position.left}px`,
+      top: `${position.top}px`,
+      position: 'absolute',
+    });
+
+    const fragment = this.root.ownerDocument.createDocumentFragment();
+    const actionElements: HTMLButtonElement[] = [];
+
+    for (const group of menu.groups) {
+      const groupElement = this.root.ownerDocument.createElement('div');
+      groupElement.className = 's1000d-table-overlay__context-menu-group';
+      groupElement.dataset.menuGroup = group.id;
+      groupElement.setAttribute('role', 'group');
+      const labelId = `${this.contextMenu.id}-group-${group.id}`;
+      groupElement.setAttribute('aria-labelledby', labelId);
+      const groupLabel = this.root.ownerDocument.createElement('div');
+      groupLabel.id = labelId;
+      groupLabel.className = 's1000d-table-overlay__context-menu-group-title';
+      groupLabel.textContent = group.label;
+      groupElement.append(groupLabel);
+      for (const action of group.actions) {
+        const button = this.createContextMenuAction(action);
+        actionElements.push(button);
+        groupElement.append(button);
+      }
+      fragment.append(groupElement);
+    }
+
+    this.contextMenu.replaceChildren(fragment);
+    this.contextMenuActionElements = actionElements;
+
+    if (!this.previousMenuOpen) {
+      this.focusFirstContextMenuAction();
+      this.typeahead.reset();
+    }
+    this.previousMenuOpen = true;
+
+    void context;
+  }
+
+  private createContextMenuAction(action: S1000DContextMenuAction): HTMLButtonElement {
+    const button = this.root.ownerDocument.createElement('button');
+    button.type = 'button';
+    button.dataset.testid = `selection-menu-item-${action.id}`;
+    button.textContent = action.label;
+    button.disabled = !action.enabled;
+    button.className = 's1000d-table-overlay__context-menu-action';
+    button.classList.toggle('is-destructive', Boolean(action.destructive));
+    button.classList.toggle('is-active', Boolean(action.active));
+    button.setAttribute('role', 'menuitem');
+    button.tabIndex = action.enabled ? 0 : -1;
+    button.addEventListener('click', () => {
+      if (!action.enabled) {
+        return;
+      }
+      const result = action.run(this.view);
+      if (result !== false) {
+        this.closeContextMenu(false);
+      }
+    });
+    return button;
+  }
+
+  private focusFirstContextMenuAction(): void {
+    this.contextMenuActionElements.find((element) => !element.disabled)?.focus();
+  }
+
+  private handleDocumentPointerDown(event: MouseEvent): void {
+    const interaction = getS1000DTableInteractionState(this.view.state);
+    if (!interaction.contextMenuOpen) {
+      return;
+    }
+
+    const targetElement = event.target instanceof Element ? event.target : null;
+    if (targetElement?.closest('[data-testid="selection-actions-trigger"]')) {
+      return;
+    }
+
+    if (!shouldCloseMenuForTarget(event.target, this.contextMenu, this.cellHandle)) {
+      return;
+    }
+
+    this.closeContextMenu(false);
+  }
+
+  private handleDocumentKeyDown(event: KeyboardEvent): void {
+    const interaction = getS1000DTableInteractionState(this.view.state);
+    if (!interaction.contextMenuOpen) {
+      return;
+    }
+
+    const enabledButtons = this.contextMenuActionElements.filter((button) => !button.disabled);
+    if (enabledButtons.length === 0) {
+      return;
+    }
+
+    const activeIndex = enabledButtons.findIndex((button) => button === this.root.ownerDocument.activeElement);
+    if (isMenuDismissKey(event.key)) {
+      event.preventDefault();
+      this.closeContextMenu(true);
+      return;
+    }
+
+    if (isMenuExitKey(event.key)) {
+      this.closeContextMenu(false);
+      return;
+    }
+
+    if (isMenuNavigationKey(event.key)) {
+      event.preventDefault();
+      const nextIndex = getNextMenuActionIndex(activeIndex, enabledButtons.length, event.key);
+      enabledButtons[nextIndex]?.focus();
+      return;
+    }
+
+    if (event.key === 'Enter' || event.key === ' ') {
+      const target = this.root.ownerDocument.activeElement;
+      if (target instanceof HTMLButtonElement && !target.disabled) {
+        event.preventDefault();
+        target.click();
+      }
+      return;
+    }
+
+    if (isMenuTypeaheadKey(event)) {
+      const labels = enabledButtons.map((button) => button.textContent ?? '');
+      const nextIndex = this.typeahead.advance(labels, activeIndex, event.key);
+      if (nextIndex >= 0) {
+        event.preventDefault();
+        enabledButtons[nextIndex]?.focus();
+      }
+    }
+  }
+
+  private closeContextMenu(restoreFocus: boolean): void {
+    const interaction = getS1000DTableInteractionState(this.view.state);
+    if (!interaction.contextMenuOpen) {
+      return;
+    }
+
+    setS1000DTableInteractionMeta(this.view, {
+      contextMenuOpen: false,
+      menuScope: null,
+      menuAnchor: null,
+    });
+    this.previousMenuOpen = false;
+    this.typeahead.reset();
+
+    if (restoreFocus) {
+      if (canRestoreMenuFocus(this.cellHandle) && interaction.menuScope === 'cell') {
+        this.cellHandle.focus();
+      } else {
+        this.root.ownerDocument.dispatchEvent(new CustomEvent('s1000d-focus-selection-trigger'));
+      }
+    }
+  }
+
   private createTableHandle(): HTMLButtonElement {
     const handle = this.root.ownerDocument.createElement('button');
     handle.type = 'button';
@@ -621,6 +844,21 @@ class S1000DTableOverlayView {
     handle.addEventListener('mousedown', (event) => this.handleCellHandleMouseDown(event));
     handle.addEventListener('click', (event) => this.handleCellHandleClick(event));
     return handle;
+  }
+
+  private createContextMenu(): HTMLDivElement {
+    const menu = this.root.ownerDocument.createElement('div');
+    menu.className = 's1000d-table-overlay__context-menu';
+    menu.id = 's1000d-context-menu';
+    menu.dataset.testid = 'selection-menu';
+    menu.hidden = true;
+    menu.setAttribute('role', 'menu');
+    menu.setAttribute('aria-orientation', 'vertical');
+    Object.assign(menu.style, {
+      pointerEvents: 'auto',
+      zIndex: '6',
+    });
+    return menu;
   }
 
   private handleAxisMouseDown(event: MouseEvent, axis: 'row' | 'column'): void {
@@ -1574,6 +1812,30 @@ function findIndexByOffset(
 
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
+}
+
+function getMenuPosition(
+  hostRect: DOMRect,
+  scope: 'table' | 'row' | 'column' | 'cell',
+  anchor: { left: number; top: number },
+) {
+  const inset = 12;
+  const position = getTableContextMenuPosition(
+    scope,
+    anchor.left - hostRect.left,
+    anchor.top - hostRect.top,
+    256,
+    320,
+    inset - hostRect.left,
+    inset - hostRect.top,
+    window.innerWidth - hostRect.left - inset,
+    window.innerHeight - hostRect.top - inset,
+  );
+
+  return {
+    left: position.left,
+    top: position.top,
+  };
 }
 
 function isSameGeometry(current: TableGeometry | null, next: TableGeometry | null) {

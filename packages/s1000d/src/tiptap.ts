@@ -50,6 +50,7 @@ import {
   setS1000DTableInteractionMeta,
   s1000dTableInteractionPluginKey,
 } from './interaction.js';
+import type { S1000DContextMenuActionResolver } from './menu.js';
 import {
   normalizeS1000DTableSchemaOptions,
 } from './schema.js';
@@ -76,6 +77,18 @@ export {
   setS1000DTableInteractionMeta,
   s1000dTableInteractionPluginKey,
 } from './interaction.js';
+export {
+  getS1000DContextMenuState,
+  getS1000DContextTriggerButtonState,
+} from './menu.js';
+export type {
+  S1000DContextMenuAction,
+  S1000DContextMenuActionContext,
+  S1000DContextMenuActionGroup,
+  S1000DContextMenuActionResolver,
+  S1000DContextMenuState,
+  S1000DContextTriggerButtonState,
+} from './menu.js';
 export type {
   S1000DTableContextTriggerState,
   S1000DTableHoverControlKind,
@@ -101,6 +114,7 @@ export interface S1000DTableTiptapOptions {
   deleteTableOnAllCellsSelected: boolean;
   clearCellsOnDelete: boolean;
   selectedCellClassName: string;
+  contextMenuActionResolver?: S1000DContextMenuActionResolver;
 }
 
 export interface CreateS1000DTableExtensionsOptions extends Omit<S1000DTableSchemaOptions, 'names'> {
@@ -251,7 +265,9 @@ function createTableExtension(
       return [
         createS1000DTableEditingPlugin(this.options),
         createS1000DTableInteractionPlugin(),
-        createS1000DTableOverlayPlugin(),
+        createS1000DTableOverlayPlugin({
+          contextMenuActionResolver: this.options.contextMenuActionResolver,
+        }),
       ];
     },
 

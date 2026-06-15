@@ -69,8 +69,7 @@ button {
   background: rgba(255, 255, 255, 0.86);
 }
 
-.s1000d-demo__toolbar button,
-.s1000d-demo__context-menu button {
+.s1000d-demo__toolbar button {
   border: 1px solid #cbd5e1;
   border-radius: 8px;
   background: #ffffff;
@@ -85,15 +84,13 @@ button {
     transform 0.15s ease;
 }
 
-.s1000d-demo__toolbar button:hover:not(:disabled),
-.s1000d-demo__context-menu button:hover:not(:disabled) {
+.s1000d-demo__toolbar button:hover:not(:disabled) {
   background: #f1f5f9;
   border-color: #94a3b8;
   transform: translateY(-1px);
 }
 
-.s1000d-demo__toolbar button:disabled,
-.s1000d-demo__context-menu button:disabled {
+.s1000d-demo__toolbar button:disabled {
   border-color: #e2e8f0;
   background: #f8fafc;
   color: #94a3b8;
@@ -131,35 +128,6 @@ button {
 
 .s1000d-demo__editor p {
   margin: 0.35rem 0;
-}
-
-.s1000d-demo__context-menu {
-  position: fixed;
-  z-index: 40;
-  display: grid;
-  gap: 0.25rem;
-  min-width: 12rem;
-  max-width: 16rem;
-  padding: 0.4rem;
-  border: 1px solid rgba(148, 163, 184, 0.28);
-  border-radius: 0.7rem;
-  background: #ffffff;
-  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.12);
-}
-
-.s1000d-demo__context-menu button {
-  width: 100%;
-  text-align: left;
-}
-
-.s1000d-demo__context-menu button.is-destructive {
-  border-color: #fecaca;
-  color: #991b1b;
-}
-
-.s1000d-demo__context-menu button.is-destructive:hover:not(:disabled) {
-  background: #fef2f2;
-  border-color: #fca5a5;
 }
 
 @media (max-width: 960px) {
