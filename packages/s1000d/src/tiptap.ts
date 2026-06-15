@@ -41,6 +41,16 @@ import {
 import { normalizeS1000DTableProfile, type S1000DTableProfile } from './profile.js';
 import { S1000DCellSelection, isS1000DCellSelection } from './selection.js';
 import {
+  closeS1000DTableContextMenu,
+  createS1000DTableInteractionPlugin,
+  findSelectedS1000DTable,
+  getS1000DTableContextTriggerState,
+  getS1000DTableInteractionState,
+  openS1000DTableContextMenu,
+  setS1000DTableInteractionMeta,
+  s1000dTableInteractionPluginKey,
+} from './interaction.js';
+import {
   normalizeS1000DTableSchemaOptions,
 } from './schema.js';
 import { S1000DTableMap } from './table-map.js';
@@ -56,6 +66,30 @@ export type { S1000DTableDOMContext, S1000DTableDomAdapter } from './dom-adapter
 export { S1000DTableNodeView } from './view.js';
 import { S1000DTableNodeView } from './view.js';
 export { createS1000DTableOverlayPlugin } from './overlay.js';
+export {
+  closeS1000DTableContextMenu,
+  createS1000DTableInteractionPlugin,
+  findSelectedS1000DTable,
+  getS1000DTableContextTriggerState,
+  getS1000DTableInteractionState,
+  openS1000DTableContextMenu,
+  setS1000DTableInteractionMeta,
+  s1000dTableInteractionPluginKey,
+} from './interaction.js';
+export type {
+  S1000DTableContextTriggerState,
+  S1000DTableHoverControlKind,
+  S1000DTableHoverKind,
+  S1000DTableHoverState,
+  S1000DTableInteractionMeta,
+  S1000DTableInteractionState,
+  S1000DTableMenuAnchor,
+  S1000DTableMenuScope,
+  S1000DTableReference,
+  S1000DTableResizeState,
+  S1000DTableSelectedAxisKind,
+  S1000DTableSelectedAxisState,
+} from './interaction.js';
 
 export interface S1000DTableTiptapOptions {
   HTMLAttributes: Record<string, unknown>;
@@ -214,7 +248,11 @@ function createTableExtension(
     },
 
     addProseMirrorPlugins() {
-      return [createS1000DTableEditingPlugin(this.options), createS1000DTableOverlayPlugin()];
+      return [
+        createS1000DTableEditingPlugin(this.options),
+        createS1000DTableInteractionPlugin(),
+        createS1000DTableOverlayPlugin(),
+      ];
     },
 
     addNodeView() {

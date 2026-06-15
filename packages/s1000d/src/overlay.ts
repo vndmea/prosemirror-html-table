@@ -5,7 +5,15 @@ import type { EditorView } from 'prosemirror-view';
 import { createS1000DTableAdapter } from './adapter.js';
 import { resolveColspecs } from './cals/index.js';
 import { getS1000DSelectionInfo, isWholeS1000DTableSelection } from './clipboard.js';
-import { findS1000DTableAtDOM, getRenderedS1000DTableContext, getSelectedRenderedS1000DTableContext, type S1000DTableDOMContext } from './dom-adapter.js';
+import { findS1000DTableAtDOM, getRenderedS1000DTableContext, type S1000DTableDOMContext } from './dom-adapter.js';
+import {
+  getS1000DTableInteractionState,
+  openS1000DTableContextMenu,
+  setS1000DTableInteractionMeta,
+  type S1000DTableHoverControlKind,
+  type S1000DTableHoverState,
+  type S1000DTableInteractionMeta,
+} from './interaction.js';
 import { replaceActiveS1000DTgroup, replaceS1000DTable } from './mutation.js';
 import { s1000dTableNodeNames } from './names.js';
 import { findS1000DEntryPosition } from './position.js';
@@ -113,10 +121,6 @@ class S1000DTableOverlayView {
   private readonly hoverColumnBand: HTMLDivElement;
   private readonly hoverCellFill: HTMLDivElement;
   private readonly hoverCellOutline: HTMLDivElement;
-  private hoveredTablePos: number | null = null;
-  private hoveredRowIndex: number | null = null;
-  private hoveredColumnIndex: number | null = null;
-  private hoverMode: 'cell' | 'row-handle' | 'column-handle' | 'table-handle' | null = null;
   private pendingCellDrag:
     | {
         tablePos: number;
@@ -246,13 +250,23 @@ class S1000DTableOverlayView {
   }
 
   private render(): void {
-    const context = this.getActiveContext();
+    const interaction = getS1000DTableInteractionState(this.view.state);
+    const context = this.getActiveContext(interaction);
     if (!context?.activeTgroup) {
+      if (interaction.hovered || interaction.hoveredControl || interaction.geometry || interaction.resizing) {
+        this.syncInteractionMeta({
+          hovered: null,
+          hoveredControl: null,
+          geometry: null,
+          resizing: null,
+        });
+      }
       this.detach();
       return;
     }
 
     const geometry = measureS1000DRenderedTableGeometry(context.dom, context.wrapper);
+    this.syncInteractionGeometry(context, geometry);
     const overlayHost = this.overlayHost.attach(context.wrapper);
     const hostRect = overlayHost.getBoundingClientRect();
     const positionState = getTableOverlayPositionState(
@@ -270,19 +284,20 @@ class S1000DTableOverlayView {
     const columnSelection = isSingleColumnSelection(this.view.state.selection, selectionInfo);
 
     this.root.classList.toggle('s1000d-table-overlay--dragging', Boolean(this.activeCellDrag || this.pendingCellDrag));
-    this.root.classList.toggle('s1000d-table-overlay--resizing', Boolean(this.activeResize));
+    this.root.classList.toggle('s1000d-table-overlay--resizing', Boolean(interaction.resizing));
 
-    this.renderSelection(geometry, positionState, selectionInfo, rowSelection, columnSelection);
-    this.renderHoverFeedback(context, geometry, positionState, selectionInfo);
-    this.renderTableHandle(context, positionState, tableSelection);
-    this.renderRowHandles(context, geometry, positionState, selectionInfo, rowSelection);
-    this.renderColumnHandles(context, geometry, positionState, selectionInfo, columnSelection);
-    this.renderResizeHandles(context, geometry, positionState);
+    this.renderSelection(interaction, geometry, positionState, selectionInfo, rowSelection, columnSelection);
+    this.renderHoverFeedback(interaction, context, geometry, positionState, selectionInfo);
+    this.renderTableHandle(interaction, context, positionState, tableSelection);
+    this.renderRowHandles(interaction, context, geometry, positionState, selectionInfo, rowSelection);
+    this.renderColumnHandles(interaction, context, geometry, positionState, selectionInfo, columnSelection);
+    this.renderResizeHandles(interaction, context, geometry, positionState);
 
     this.root.hidden = false;
   }
 
   private renderSelection(
+    interaction: ReturnType<typeof getS1000DTableInteractionState>,
     geometry: TableGeometry,
     positionState: TableOverlayPositionState,
     selectionInfo: ReturnType<typeof getS1000DSelectionInfo> | undefined,
@@ -294,7 +309,7 @@ class S1000DTableOverlayView {
     this.cellFill.hidden = true;
     this.cellOutline.hidden = true;
     this.cellHandle.hidden = true;
-    this.cellHandle.classList.remove('is-menu-open');
+    this.cellHandle.classList.toggle('is-menu-open', interaction.contextMenuOpen && interaction.menuScope === 'cell');
     this.cellHandle.classList.remove('is-selected');
     this.hoverRowBand.hidden = true;
     this.hoverColumnBand.hidden = true;
@@ -352,6 +367,7 @@ class S1000DTableOverlayView {
   }
 
   private renderHoverFeedback(
+    interaction: ReturnType<typeof getS1000DTableInteractionState>,
     context: S1000DTableDOMContext,
     geometry: TableGeometry,
     positionState: TableOverlayPositionState,
@@ -362,12 +378,12 @@ class S1000DTableOverlayView {
     this.hoverCellFill.hidden = true;
     this.hoverCellOutline.hidden = true;
 
-    if (this.hoveredTablePos !== context.tablePos) {
+    if (interaction.hovered?.tablePos !== context.tablePos) {
       return;
     }
 
-    if (this.hoverMode === 'row-handle' && this.hoveredRowIndex !== null) {
-      const rect = getVisibleContentRowRect(geometry, positionState, this.hoveredRowIndex);
+    if (interaction.hoveredControl === 'row-handle' && interaction.hovered.rowIndex !== null) {
+      const rect = getVisibleContentRowRect(geometry, positionState, interaction.hovered.rowIndex);
       if (rect) {
         applyRect(this.hoverRowBand, rect);
         this.hoverRowBand.hidden = false;
@@ -375,8 +391,8 @@ class S1000DTableOverlayView {
       return;
     }
 
-    if (this.hoverMode === 'column-handle' && this.hoveredColumnIndex !== null) {
-      const rect = getVisibleContentColumnRect(geometry, positionState, this.hoveredColumnIndex);
+    if (interaction.hoveredControl === 'column-handle' && interaction.hovered.columnIndex !== null) {
+      const rect = getVisibleContentColumnRect(geometry, positionState, interaction.hovered.columnIndex);
       if (rect) {
         applyRect(this.hoverColumnBand, rect);
         this.hoverColumnBand.hidden = false;
@@ -384,8 +400,8 @@ class S1000DTableOverlayView {
       return;
     }
 
-    if (this.hoverMode === 'cell' && this.hoveredRowIndex !== null && this.hoveredColumnIndex !== null) {
-      const rect = getVisibleCellRect(geometry, positionState, this.hoveredRowIndex, this.hoveredColumnIndex);
+    if (interaction.hoveredControl === 'cell' && interaction.hovered.rowIndex !== null && interaction.hovered.columnIndex !== null) {
+      const rect = getVisibleCellRect(geometry, positionState, interaction.hovered.rowIndex, interaction.hovered.columnIndex);
       if (rect) {
         applyRect(this.hoverCellFill, rect);
         applyRect(this.hoverCellOutline, rect);
@@ -395,7 +411,7 @@ class S1000DTableOverlayView {
       }
     }
 
-    if (this.hoverMode === 'cell' && selectionInfo) {
+    if (interaction.hoveredControl === 'cell' && selectionInfo) {
       const rect = getVisibleTableSelectionRect(
         geometry,
         positionState.tableLeft,
@@ -415,6 +431,7 @@ class S1000DTableOverlayView {
   }
 
   private renderTableHandle(
+    interaction: ReturnType<typeof getS1000DTableInteractionState>,
     context: S1000DTableDOMContext,
     positionState: TableOverlayPositionState,
     tableSelection: boolean,
@@ -424,7 +441,7 @@ class S1000DTableOverlayView {
     this.tableHandle.classList.toggle('is-selected', tableSelection);
     this.tableHandle.classList.toggle(
       'is-hovered',
-      this.hoveredTablePos === context.tablePos && this.hoverMode === 'table-handle',
+      interaction.hovered?.tablePos === context.tablePos && interaction.hoveredControl === 'table-handle',
     );
     Object.assign(this.tableHandle.style, {
       left: `${positionState.rowHandleLeft}px`,
@@ -435,6 +452,7 @@ class S1000DTableOverlayView {
   }
 
   private renderRowHandles(
+    interaction: ReturnType<typeof getS1000DTableInteractionState>,
     context: S1000DTableDOMContext,
     geometry: TableGeometry,
     positionState: TableOverlayPositionState,
@@ -454,7 +472,12 @@ class S1000DTableOverlayView {
       handle.hidden = !rect;
       handle.dataset.tablePos = String(context.tablePos);
       handle.dataset.rowIndex = String(row.index);
-      handle.classList.toggle('is-hovered', this.hoveredTablePos === context.tablePos && this.hoveredRowIndex === row.index);
+      handle.classList.toggle(
+        'is-hovered',
+        interaction.hovered?.tablePos === context.tablePos
+        && interaction.hoveredControl === 'row-handle'
+        && interaction.hovered.rowIndex === row.index,
+      );
       handle.classList.toggle(
         'is-selected',
         Boolean(rowSelection && selectionInfo && row.index >= selectionInfo.top && row.index <= selectionInfo.bottom),
@@ -474,6 +497,7 @@ class S1000DTableOverlayView {
   }
 
   private renderColumnHandles(
+    interaction: ReturnType<typeof getS1000DTableInteractionState>,
     context: S1000DTableDOMContext,
     geometry: TableGeometry,
     positionState: TableOverlayPositionState,
@@ -493,7 +517,12 @@ class S1000DTableOverlayView {
       handle.hidden = !rect;
       handle.dataset.tablePos = String(context.tablePos);
       handle.dataset.columnIndex = String(column.index);
-      handle.classList.toggle('is-hovered', this.hoveredTablePos === context.tablePos && this.hoveredColumnIndex === column.index);
+      handle.classList.toggle(
+        'is-hovered',
+        interaction.hovered?.tablePos === context.tablePos
+        && interaction.hoveredControl === 'column-handle'
+        && interaction.hovered.columnIndex === column.index,
+      );
       handle.classList.toggle(
         'is-selected',
         Boolean(columnSelection && selectionInfo && column.index >= selectionInfo.left && column.index <= selectionInfo.right),
@@ -513,6 +542,7 @@ class S1000DTableOverlayView {
   }
 
   private renderResizeHandles(
+    interaction: ReturnType<typeof getS1000DTableInteractionState>,
     context: S1000DTableDOMContext,
     geometry: TableGeometry,
     positionState: TableOverlayPositionState,
@@ -535,7 +565,7 @@ class S1000DTableOverlayView {
       handle.dataset.columnIndex = String(column.index);
       handle.classList.toggle(
         'is-active',
-        Boolean(this.activeResize && this.activeResize.tablePos === context.tablePos && this.activeResize.columnIndex === column.index),
+        Boolean(interaction.resizing && interaction.resizing.tablePos === context.tablePos && interaction.resizing.columnIndex === column.index),
       );
       Object.assign(handle.style, {
         left: `${boundary}px`,
@@ -646,11 +676,21 @@ class S1000DTableOverlayView {
       return;
     }
 
-    this.hoveredTablePos = tablePos;
-    this.hoveredRowIndex = null;
-    this.hoveredColumnIndex = null;
-    this.hoverMode = 'table-handle';
-    this.render();
+    const context = getRenderedS1000DTableContext(this.view, tablePos);
+    if (!context) {
+      return;
+    }
+
+    this.syncHoverState(
+      context,
+      {
+        kind: 'table',
+        tablePos,
+        rowIndex: null,
+        columnIndex: null,
+      },
+      'table-handle',
+    );
   }
 
   private handleAxisHover(handle: HTMLButtonElement, axis: 'row' | 'column'): void {
@@ -660,16 +700,21 @@ class S1000DTableOverlayView {
       return;
     }
 
-    this.hoveredTablePos = tablePos;
-    this.hoverMode = axis === 'row' ? 'row-handle' : 'column-handle';
-    if (axis === 'row') {
-      this.hoveredRowIndex = axisIndex;
-      this.hoveredColumnIndex = null;
-    } else {
-      this.hoveredRowIndex = null;
-      this.hoveredColumnIndex = axisIndex;
+    const context = getRenderedS1000DTableContext(this.view, tablePos);
+    if (!context) {
+      return;
     }
-    this.render();
+
+    this.syncHoverState(
+      context,
+      {
+        kind: 'table',
+        tablePos,
+        rowIndex: axis === 'row' ? axisIndex : null,
+        columnIndex: axis === 'column' ? axisIndex : null,
+      },
+      axis === 'row' ? 'row-handle' : 'column-handle',
+    );
   }
 
   private handleAxisLeave(event: MouseEvent): void {
@@ -678,16 +723,12 @@ class S1000DTableOverlayView {
       return;
     }
 
-    this.hoveredRowIndex = null;
-    this.hoveredColumnIndex = null;
-    this.hoverMode = null;
-    this.render();
+    this.clearHoverState();
   }
 
   private handleCellHandleMouseDown(event: MouseEvent): void {
     event.preventDefault();
     event.stopPropagation();
-    this.cellHandle.classList.add('is-menu-open');
     this.openCellHandleMenu();
   }
 
@@ -698,7 +739,6 @@ class S1000DTableOverlayView {
 
     event.preventDefault();
     event.stopPropagation();
-    this.cellHandle.classList.add('is-menu-open');
     this.openCellHandleMenu();
   }
 
@@ -715,9 +755,12 @@ class S1000DTableOverlayView {
     }
 
     const rect = this.cellHandle.getBoundingClientRect();
-    this.requestSelectionMenu('cell', rect, {
-      left: rect.left + rect.width / 2,
-      top: rect.top + (rect.height / 2),
+    openS1000DTableContextMenu(this.view, {
+      scope: 'cell',
+      anchor: {
+        left: rect.left + rect.width / 2,
+        top: rect.top + (rect.height / 2),
+      },
     });
     this.view.focus();
   }
@@ -747,6 +790,15 @@ class S1000DTableOverlayView {
       startWidths: geometry.columns.map((column) => Math.max(MIN_COLUMN_WIDTH, Math.round(column.width))),
       currentWidths: geometry.columns.map((column) => Math.max(MIN_COLUMN_WIDTH, Math.round(column.width))),
     };
+    setS1000DTableInteractionMeta(this.view, {
+      resizing: {
+        tablePos,
+        columnIndex,
+      },
+      contextMenuOpen: false,
+      menuScope: null,
+      menuAnchor: null,
+    });
     this.resizeLifecycle.start();
     this.render();
   }
@@ -803,6 +855,9 @@ class S1000DTableOverlayView {
 
     this.resizeLifecycle.stop();
     this.activeResize = null;
+    this.syncInteractionMeta({
+      resizing: null,
+    });
     this.render();
   }
 
@@ -842,21 +897,16 @@ class S1000DTableOverlayView {
     const geometry = measureS1000DRenderedTableGeometry(hovered.dom, hovered.wrapper);
     const rowIndex = getHoveredRowIndex(geometry, event.clientY);
     const columnIndex = getHoveredColumnIndex(geometry, event.clientX);
-
-    if (
-      this.hoveredTablePos === hovered.tablePos
-      && this.hoveredRowIndex === rowIndex
-      && this.hoveredColumnIndex === columnIndex
-      && this.hoverMode === 'cell'
-    ) {
-      return;
-    }
-
-    this.hoveredTablePos = hovered.tablePos;
-    this.hoveredRowIndex = rowIndex;
-    this.hoveredColumnIndex = columnIndex;
-    this.hoverMode = 'cell';
-    this.render();
+    this.syncHoverState(
+      hovered,
+      {
+        kind: 'cell',
+        tablePos: hovered.tablePos,
+        rowIndex,
+        columnIndex,
+      },
+      'cell',
+    );
   }
 
   private handleMouseLeave(event: MouseEvent): void {
@@ -865,7 +915,8 @@ class S1000DTableOverlayView {
       return;
     }
 
-    if (this.hoveredTablePos === null && this.hoveredRowIndex === null && this.hoveredColumnIndex === null) {
+    const interaction = getS1000DTableInteractionState(this.view.state);
+    if (!interaction.hovered && !interaction.hoveredControl) {
       return;
     }
 
@@ -949,10 +1000,19 @@ class S1000DTableOverlayView {
       return;
     }
 
-    this.hoveredTablePos = dragContext.tablePos;
-    this.hoveredRowIndex = dragContext.rowIndex;
-    this.hoveredColumnIndex = dragContext.columnIndex;
-    this.hoverMode = 'cell';
+    const hoveredContext = getRenderedS1000DTableContext(this.view, dragContext.tablePos);
+    if (hoveredContext) {
+      this.syncHoverState(
+        hoveredContext,
+        {
+          kind: 'cell',
+          tablePos: dragContext.tablePos,
+          rowIndex: dragContext.rowIndex,
+          columnIndex: dragContext.columnIndex,
+        },
+        'cell',
+      );
+    }
 
     this.activeCellDrag.headEntryPos = dragContext.entryPos;
     if (this.activeCellDrag.anchorEntryPos === this.activeCellDrag.headEntryPos) {
@@ -1028,20 +1088,15 @@ class S1000DTableOverlayView {
   }
 
   private clearHoverState(): void {
-    if (
-      this.hoveredTablePos === null
-      && this.hoveredRowIndex === null
-      && this.hoveredColumnIndex === null
-      && this.hoverMode === null
-    ) {
+    const interaction = getS1000DTableInteractionState(this.view.state);
+    if (!interaction.hovered && !interaction.hoveredControl) {
       return;
     }
 
-    this.hoveredTablePos = null;
-    this.hoveredRowIndex = null;
-    this.hoveredColumnIndex = null;
-    this.hoverMode = null;
-    this.render();
+    this.syncInteractionMeta({
+      hovered: null,
+      hoveredControl: null,
+    });
   }
 
   private handleClickCapture(event: MouseEvent): void {
@@ -1080,35 +1135,73 @@ class S1000DTableOverlayView {
     this.previousWebkitUserSelect = null;
   }
 
-  private requestSelectionMenu(
-    scope: 'cell',
-    rect: DOMRect,
-    anchor: { left: number; top: number },
-  ): void {
-    this.root.ownerDocument.dispatchEvent(new CustomEvent('s1000d-selection-menu-request', {
-      detail: {
-        scope,
-        anchorLeft: anchor.left,
-        anchorTop: anchor.top,
-        rect: {
-          left: rect.left,
-          top: rect.top,
-          right: rect.right,
-          bottom: rect.bottom,
-          width: rect.width,
-          height: rect.height,
-        },
-      },
-    }));
+  private getActiveContext(
+    interaction = getS1000DTableInteractionState(this.view.state),
+  ): S1000DTableDOMContext | undefined {
+    const tablePos = interaction.activeTable?.tablePos;
+    return typeof tablePos === 'number' ? getRenderedS1000DTableContext(this.view, tablePos) : undefined;
   }
 
-  private getActiveContext(): S1000DTableDOMContext | undefined {
-    const selected = getSelectedRenderedS1000DTableContext(this.view);
-    if (selected?.activeTgroup) {
-      return selected;
+  private syncHoverState(
+    context: S1000DTableDOMContext,
+    hovered: S1000DTableHoverState,
+    hoveredControl: S1000DTableHoverControlKind,
+  ): void {
+    const interaction = getS1000DTableInteractionState(this.view.state);
+    if (
+      interaction.hovered?.tablePos === hovered.tablePos
+      && interaction.hovered.kind === hovered.kind
+      && interaction.hovered.rowIndex === hovered.rowIndex
+      && interaction.hovered.columnIndex === hovered.columnIndex
+      && interaction.hoveredControl === hoveredControl
+    ) {
+      return;
     }
 
-    return this.hoveredTablePos !== null ? getRenderedS1000DTableContext(this.view, this.hoveredTablePos) : undefined;
+    this.syncInteractionMeta({
+      hovered,
+      hoveredTable: {
+        tablePos: context.tablePos,
+        table: context.table,
+      },
+      hoveredControl,
+    });
+  }
+
+  private syncInteractionGeometry(
+    context: S1000DTableDOMContext,
+    geometry: TableGeometry,
+  ): void {
+    const interaction = getS1000DTableInteractionState(this.view.state);
+    if (
+      interaction.activeTable?.tablePos === context.tablePos
+      && isSameGeometry(interaction.geometry, geometry)
+    ) {
+      return;
+    }
+
+    const meta: S1000DTableInteractionMeta = {
+      geometry,
+    };
+    if (interaction.hovered) {
+      meta.hoveredTable = {
+        tablePos: context.tablePos,
+        table: context.table,
+      };
+    }
+
+    this.syncInteractionMeta(meta);
+  }
+
+  private syncInteractionMeta(meta: S1000DTableInteractionMeta): void {
+    const filteredMeta = Object.fromEntries(
+      Object.entries(meta).filter(([, value]) => value !== undefined),
+    );
+    if (Object.keys(filteredMeta).length === 0) {
+      return;
+    }
+
+    setS1000DTableInteractionMeta(this.view, filteredMeta);
   }
 
   private detach(): void {
@@ -1481,6 +1574,48 @@ function findIndexByOffset(
 
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
+}
+
+function isSameGeometry(current: TableGeometry | null, next: TableGeometry | null) {
+  if (!current || !next) return current === next;
+  if (
+    current.tableRect.left !== next.tableRect.left
+    || current.tableRect.top !== next.tableRect.top
+    || current.tableRect.width !== next.tableRect.width
+    || current.tableRect.height !== next.tableRect.height
+    || current.wrapperRect.left !== next.wrapperRect.left
+    || current.wrapperRect.top !== next.wrapperRect.top
+    || current.wrapperRect.width !== next.wrapperRect.width
+    || current.wrapperRect.height !== next.wrapperRect.height
+    || current.visibleTableRect.left !== next.visibleTableRect.left
+    || current.visibleTableRect.top !== next.visibleTableRect.top
+    || current.visibleTableRect.width !== next.visibleTableRect.width
+    || current.visibleTableRect.height !== next.visibleTableRect.height
+    || current.scrollLeft !== next.scrollLeft
+    || current.scrollTop !== next.scrollTop
+    || current.columns.length !== next.columns.length
+    || current.rows.length !== next.rows.length
+  ) {
+    return false;
+  }
+
+  for (let index = 0; index < current.columns.length; index += 1) {
+    const column = current.columns[index]!;
+    const nextColumn = next.columns[index]!;
+    if (column.left !== nextColumn.left || column.width !== nextColumn.width) {
+      return false;
+    }
+  }
+
+  for (let index = 0; index < current.rows.length; index += 1) {
+    const row = current.rows[index]!;
+    const nextRow = next.rows[index]!;
+    if (row.top !== nextRow.top || row.height !== nextRow.height) {
+      return false;
+    }
+  }
+
+  return true;
 }
 
 function resolveEntryPosFromCellDOM(view: EditorView, cell: HTMLElement): number | undefined {

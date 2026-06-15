@@ -25,7 +25,14 @@ import {
   serializeS1000DCellSelectionToText,
 } from 'prosemirror-html-table-s1000d/clipboard';
 import { renderS1000DTableToHtml } from 'prosemirror-html-table-s1000d/renderer';
-import { createS1000DTableExtensions } from 'prosemirror-html-table-s1000d/tiptap';
+import {
+  closeS1000DTableContextMenu,
+  createS1000DTableExtensions,
+  getS1000DTableInteractionState,
+  openS1000DTableContextMenu,
+  type S1000DTableInteractionState,
+  type S1000DTableMenuScope,
+} from 'prosemirror-html-table-s1000d/tiptap';
 import {
   getTableContextMenuPosition,
 } from 'tiptap-html-table/table-interaction';
@@ -83,12 +90,6 @@ type DemoSnapshot = {
   html: string;
   clipboard: ClipboardOutput;
   editorDomContainsDataAttrs: boolean;
-};
-
-type SelectionHandleMenuDetail = {
-  scope: 'table' | 'row' | 'column' | 'cell';
-  anchorLeft: number;
-  anchorTop: number;
 };
 
 type DemoApi = {
@@ -251,8 +252,6 @@ export function App() {
   const [profile, setProfile] = useState<S1000DTableProfile>('proced');
   const [toolbarRevision, setToolbarRevision] = useState(0);
   const [clipboardOutput, setClipboardOutput] = useState<ClipboardOutput>({ html: '', text: '' });
-  const [selectionMenuOpen, setSelectionMenuOpen] = useState(false);
-  const [selectionMenuPosition, setSelectionMenuPosition] = useState<{ left: number; top: number } | null>(null);
   const selectionMenuRef = useRef<HTMLDivElement | null>(null);
   const selectionMenuTriggerRef = useRef<HTMLButtonElement | null>(null);
   const clipboardOutputRef = useRef<ClipboardOutput>({ html: '', text: '' });
@@ -320,51 +319,30 @@ export function App() {
   }
 
   function closeSelectionMenu(restoreTriggerFocus = false) {
-    setSelectionMenuOpen(false);
-    setSelectionMenuPosition(null);
+    if (editor) {
+      closeS1000DTableContextMenu(editor.view);
+    }
     if (restoreTriggerFocus) {
       selectionMenuTriggerRef.current?.focus();
     }
   }
 
-  function openSelectionMenu(left: number, top: number) {
-    setSelectionMenuPosition({ left, top });
-    setSelectionMenuOpen(true);
-  }
-
   function openSelectionMenuForScope(
-    scope: SelectionHandleMenuDetail['scope'],
+    scope: S1000DTableMenuScope,
     left: number,
     top: number,
   ) {
-    const hostRect = editor?.view.dom.getBoundingClientRect();
-    if (!hostRect || typeof window === 'undefined') {
-      openSelectionMenu(left, top);
+    if (!editor) {
       return;
     }
 
-    const viewportBounds = getOverlayViewportBounds(
-      hostRect,
-      window.innerWidth,
-      window.innerHeight,
-      12,
-    );
-    const position = getTableContextMenuPosition(
+    openS1000DTableContextMenu(editor.view, {
       scope,
-      left - hostRect.left,
-      top - hostRect.top,
-      256,
-      320,
-      viewportBounds.left,
-      viewportBounds.top,
-      viewportBounds.right,
-      viewportBounds.bottom,
-    );
-
-    openSelectionMenu(hostRect.left + position.left, hostRect.top + position.top);
+      anchor: { left, top },
+    });
   }
 
-  function getSelectionMenuAnchor(scope: SelectionHandleMenuDetail['scope']) {
+  function getSelectionMenuAnchor(scope: S1000DTableMenuScope) {
     const doc = editor?.view.dom.ownerDocument;
     if (!doc) {
       return null;
@@ -509,6 +487,9 @@ export function App() {
   const canUndo = Boolean(editor && undo(editor.state));
   const canRedo = Boolean(editor && redo(editor.state));
   const selectionScope = getDemoSelectionScope(editor?.state ?? null);
+  const interaction = editor ? getS1000DTableInteractionState(editor.state) : null;
+  const selectionMenuOpen = Boolean(interaction?.contextMenuOpen);
+  const selectionMenuPosition = getSelectionMenuPosition(editor, interaction);
   const hasActionMenu = selectionScope !== 'none';
 
   useEffect(() => {
@@ -958,25 +939,6 @@ export function App() {
   }, [selectionMenuOpen]);
 
   useEffect(() => {
-    const handleSelectionHandleMenu = (event: Event) => {
-      if (!(event instanceof CustomEvent)) {
-        return;
-      }
-      const detail = event.detail as SelectionHandleMenuDetail | undefined;
-      const currentScope = getDemoSelectionScope(editor?.state ?? null);
-      if (!detail || currentScope === 'none') {
-        return;
-      }
-      openSelectionMenuForScope(detail.scope, detail.anchorLeft, detail.anchorTop);
-    };
-
-    document.addEventListener('s1000d-selection-menu-request', handleSelectionHandleMenu);
-    return () => {
-      document.removeEventListener('s1000d-selection-menu-request', handleSelectionHandleMenu);
-    };
-  }, [editor]);
-
-  useEffect(() => {
     if (!selectionMenuOpen) {
       return;
     }
@@ -1063,6 +1025,39 @@ export function App() {
       </section>
     </main>
   );
+}
+
+function getSelectionMenuPosition(
+  editor: TiptapEditor | null,
+  interaction: S1000DTableInteractionState | null,
+) {
+  if (!editor || !interaction?.contextMenuOpen || !interaction.menuScope || !interaction.menuAnchor || typeof window === 'undefined') {
+    return null;
+  }
+
+  const hostRect = editor.view.dom.getBoundingClientRect();
+  const viewportBounds = getOverlayViewportBounds(
+    hostRect,
+    window.innerWidth,
+    window.innerHeight,
+    12,
+  );
+  const position = getTableContextMenuPosition(
+    interaction.menuScope,
+    interaction.menuAnchor.left - hostRect.left,
+    interaction.menuAnchor.top - hostRect.top,
+    256,
+    320,
+    viewportBounds.left,
+    viewportBounds.top,
+    viewportBounds.right,
+    viewportBounds.bottom,
+  );
+
+  return {
+    left: hostRect.left + position.left,
+    top: hostRect.top + position.top,
+  };
 }
 
 function getOverlayViewportBounds(
