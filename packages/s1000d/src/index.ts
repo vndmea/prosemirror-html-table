@@ -10,6 +10,8 @@ export {
   canOperateOnS1000DTable,
   deleteS1000DColumn,
   deleteS1000DRow,
+  duplicateS1000DColumn,
+  duplicateS1000DRow,
   findS1000DEntryContext,
   findS1000DRowContext,
   findS1000DTableContext,
@@ -21,8 +23,14 @@ export {
   moveS1000DColumnLeft,
   moveS1000DColumnRight,
   moveS1000DRowDown,
+  moveS1000DRowToBody,
+  moveS1000DRowToFoot,
+  moveS1000DRowToHead,
   moveS1000DRowUp,
   rejectGraphicOnlyS1000DTable,
+  setS1000DSelectedEntryAttrs,
+  setS1000DSelectedEntryRawAttrs,
+  setS1000DTableColumnWidths,
   splitS1000DCell,
 } from './commands.js';
 export type {

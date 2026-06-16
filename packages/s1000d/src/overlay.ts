@@ -3,8 +3,8 @@ import { NodeSelection, Plugin, PluginKey, TextSelection } from 'prosemirror-sta
 import type { EditorView } from 'prosemirror-view';
 
 import { createS1000DTableAdapter } from './adapter.js';
-import { resolveColspecs } from './cals/index.js';
 import { getS1000DSelectionInfo, isWholeS1000DTableSelection } from './clipboard.js';
+import { applyS1000DColumnWidthsToTgroup } from './column-widths.js';
 import { findS1000DTableAtDOM, getRenderedS1000DTableContext, type S1000DTableDOMContext } from './dom-adapter.js';
 import {
   getS1000DTableInteractionState,
@@ -68,6 +68,8 @@ export interface S1000DTableOverlayPluginOptions {
   contextMenuActionResolver?: S1000DContextMenuActionResolver | undefined;
 }
 
+export { applyS1000DColumnWidthsToTgroup } from './column-widths.js';
+
 export function createS1000DTableOverlayPlugin(
   options: S1000DTableOverlayPluginOptions = {},
 ): Plugin {
@@ -77,57 +79,6 @@ export function createS1000DTableOverlayPlugin(
       return new S1000DTableOverlayView(view, options);
     },
   });
-}
-
-export function applyS1000DColumnWidthsToTgroup(
-  tgroup: ProseMirrorNode,
-  widths: readonly number[],
-): ProseMirrorNode {
-  const children: ProseMirrorNode[] = [];
-  tgroup.forEach((child) => children.push(child));
-
-  const colspecType = tgroup.type.schema.nodes[s1000dTableNodeNames.colspec];
-  if (!colspecType) {
-    throw new Error(`Missing node type in schema: ${s1000dTableNodeNames.colspec}`);
-  }
-
-  const resolvedColspecs = resolveColspecs(tgroup);
-  const preservedChildren = children.filter((child) => child.type.name !== s1000dTableNodeNames.colspec);
-  const targetCount = Math.max(
-    1,
-    widths.length,
-    resolvedColspecs.reduce((max, colspec) => Math.max(max, colspec.index + 1), 0),
-    Number.parseInt(String(tgroup.attrs.cols ?? '0'), 10) || 0,
-  );
-  const nextColspecs = Array.from({ length: targetCount }, (_value, index) => {
-    const existing = resolvedColspecs.find((colspec) => colspec.index === index)?.node;
-    const width = formatS1000DColumnWidth(widths[index]);
-
-    if (existing) {
-      return existing.type.create(
-        {
-          ...existing.attrs,
-          colwidth: width ?? existing.attrs.colwidth ?? null,
-        },
-        existing.content,
-        existing.marks,
-      );
-    }
-
-    return colspecType.create({
-      colname: `c${index + 1}`,
-      colwidth: width,
-    });
-  });
-
-  return tgroup.type.create(
-    {
-      ...tgroup.attrs,
-      cols: String(targetCount),
-    },
-    Fragment.fromArray([...nextColspecs, ...preservedChildren]),
-    tgroup.marks,
-  );
 }
 
 class S1000DTableOverlayView {

@@ -2,8 +2,10 @@ import { Fragment, type Node as ProseMirrorNode } from 'prosemirror-model';
 import { Selection, type Command, type EditorState } from 'prosemirror-state';
 
 import { createS1000DTableAdapter } from './adapter.js';
+import { isStringRecord } from './attrs.js';
 import { type ResolvedColspec, resolveColspecs } from './cals/colspec.js';
 import { type ResolvedSpanspec, resolveSpanspecs } from './cals/spanspec.js';
+import { applyS1000DColumnWidthsToTgroup } from './column-widths.js';
 import {
   findS1000DAncestorNode,
   resolveS1000DTableContext,
@@ -14,6 +16,8 @@ import {
   getS1000DNodeChildren,
   replaceActiveS1000DTgroup,
   replaceS1000DChildAt,
+  replaceS1000DEntries,
+  replaceS1000DTable,
   replaceS1000DTableAndSelectEntry,
   replaceS1000DTableAndSelectRow,
 } from './mutation.js';
@@ -198,6 +202,125 @@ export function deleteS1000DRow(options: S1000DTableCommandOptions = {}): Comman
   };
 }
 
+export function duplicateS1000DRow(options: S1000DTableCommandOptions = {}): Command {
+  return (state, dispatch) => {
+    const context = findS1000DRowContext(state, options);
+    if (!context?.activeTgroup) return false;
+
+    const grid = createS1000DTableAdapter().createGrid(context.activeTgroup, context.activeTgroupIndex);
+    if (!canOperateOnStandaloneS1000DRow(grid, context.rowRef.rowIndex)) {
+      return false;
+    }
+
+    const sectionChildren = getS1000DNodeChildren(context.section);
+    const nextRows = sectionChildren.slice();
+    nextRows.splice(context.rowRef.rowIndexInSection + 1, 0, cloneS1000DNodeWithoutIdentity(context.row));
+
+    const nextSection = context.section.copy(Fragment.fromArray(nextRows));
+    const nextTgroup = replaceS1000DChildAt(context.activeTgroup, context.sectionChildIndex, nextSection);
+    const normalizedTgroup = normalizeS1000DTgroup(nextTgroup);
+    const nextTable = replaceActiveS1000DTgroup(context.table, normalizedTgroup, context.activeTgroupIndex);
+
+    return replaceS1000DTableAndSelectRow(
+      state,
+      dispatch,
+      context,
+      nextTable,
+      context.rowRef.section,
+      context.rowRef.rowIndexInSection + 1,
+    );
+  };
+}
+
+export function moveS1000DRowToHead(options: S1000DTableCommandOptions = {}): Command {
+  return moveS1000DRowToSection('thead', options);
+}
+
+export function moveS1000DRowToBody(options: S1000DTableCommandOptions = {}): Command {
+  return moveS1000DRowToSection('tbody', options);
+}
+
+export function moveS1000DRowToFoot(options: S1000DTableCommandOptions = {}): Command {
+  return moveS1000DRowToSection('tfoot', options);
+}
+
+function moveS1000DRowToSection(
+  targetSection: 'thead' | 'tbody' | 'tfoot',
+  options: S1000DTableCommandOptions = {},
+): Command {
+  return (state, dispatch) => {
+    const context = findS1000DRowContext(state, options);
+    if (!context?.activeTgroup || context.rowRef.section === targetSection) {
+      return false;
+    }
+
+    const grid = createS1000DTableAdapter().createGrid(context.activeTgroup, context.activeTgroupIndex);
+    if (!canOperateOnStandaloneS1000DRow(grid, context.rowRef.rowIndex)) {
+      return false;
+    }
+
+    const sourceRows = getS1000DNodeChildren(context.section);
+    const movedRow = sourceRows[context.rowRef.rowIndexInSection];
+    if (!movedRow) {
+      return false;
+    }
+
+    const sourceWillBeEmpty = sourceRows.length <= 1;
+    if (sourceWillBeEmpty && context.rowRef.section === 'tbody') {
+      return false;
+    }
+
+    const targetTypeName = getSectionTypeName(targetSection);
+    const tgroupChildren = getS1000DNodeChildren(context.activeTgroup);
+    const nextTgroupChildren = tgroupChildren.slice();
+
+    let targetSectionChildIndex = findSectionChildIndex(context.activeTgroup, targetSection);
+    const insertedTargetSection = targetSectionChildIndex < 0;
+    if (targetSectionChildIndex < 0) {
+      const targetNodeType = context.activeTgroup.type.schema.nodes[targetTypeName];
+      if (!targetNodeType) {
+        return false;
+      }
+      targetSectionChildIndex = findSectionInsertIndex(nextTgroupChildren, targetSection);
+      nextTgroupChildren.splice(targetSectionChildIndex, 0, targetNodeType.create(null, Fragment.empty));
+    }
+
+    const nextSourceRows = sourceRows.slice();
+    nextSourceRows.splice(context.rowRef.rowIndexInSection, 1);
+
+    const nextSourceSectionChildIndex = insertedTargetSection && targetSectionChildIndex <= context.sectionChildIndex
+      ? context.sectionChildIndex + 1
+      : context.sectionChildIndex;
+    const targetSectionNode = nextTgroupChildren[targetSectionChildIndex];
+    if (!targetSectionNode || targetSectionNode.type.name !== targetTypeName) {
+      return false;
+    }
+
+    const targetRows = getS1000DNodeChildren(targetSectionNode);
+    const targetInsertIndex = targetRows.length;
+    targetRows.splice(targetInsertIndex, 0, movedRow);
+    nextTgroupChildren[targetSectionChildIndex] = targetSectionNode.copy(Fragment.fromArray(targetRows));
+
+    if (sourceWillBeEmpty) {
+      nextTgroupChildren.splice(nextSourceSectionChildIndex, 1);
+    } else {
+      nextTgroupChildren[nextSourceSectionChildIndex] = context.section.copy(Fragment.fromArray(nextSourceRows));
+    }
+
+    const normalizedTgroup = normalizeS1000DTgroup(context.activeTgroup.copy(Fragment.fromArray(nextTgroupChildren)));
+    const nextTable = replaceActiveS1000DTgroup(context.table, normalizedTgroup, context.activeTgroupIndex);
+
+    return replaceS1000DTableAndSelectRow(
+      state,
+      dispatch,
+      context,
+      nextTable,
+      targetSection,
+      targetInsertIndex,
+    );
+  };
+}
+
 export function mergeS1000DCells(options: S1000DTableCommandOptions = {}): Command {
   return (state, dispatch) => {
     const selectionInfo = getS1000DCellSelectionInfo(state, options);
@@ -326,6 +449,50 @@ export function mergeOrSplitS1000DCell(options: S1000DTableCommandOptions = {}):
   };
 }
 
+export function setS1000DSelectedEntryAttrs(
+  attrs: Record<string, unknown>,
+  options: S1000DTableCommandOptions = {},
+): Command {
+  return (state, dispatch) => updateS1000DSelectedEntries(state, dispatch, options, (entry) =>
+    entry.type.create(
+      {
+        ...entry.attrs,
+        ...attrs,
+      },
+      entry.content,
+      entry.marks,
+    ),
+  );
+}
+
+export function setS1000DSelectedEntryRawAttrs(
+  attrs: Record<string, string | null>,
+  options: S1000DTableCommandOptions = {},
+): Command {
+  return (state, dispatch) => updateS1000DSelectedEntries(state, dispatch, options, (entry) => {
+    const nextRawAttrs = {
+      ...(isStringRecord(entry.attrs.rawAttrs) ? entry.attrs.rawAttrs : {}),
+    };
+
+    for (const [name, value] of Object.entries(attrs)) {
+      if (!value) {
+        delete nextRawAttrs[name];
+      } else {
+        nextRawAttrs[name] = value;
+      }
+    }
+
+    return entry.type.create(
+      {
+        ...entry.attrs,
+        rawAttrs: nextRawAttrs,
+      },
+      entry.content,
+      entry.marks,
+    );
+  });
+}
+
 export function moveS1000DRowUp(options: S1000DTableCommandOptions = {}): Command {
   return moveS1000DRow('up', options);
 }
@@ -427,6 +594,68 @@ export function moveS1000DColumnRight(options: S1000DTableCommandOptions = {}): 
   return moveS1000DColumn('right', options);
 }
 
+export function duplicateS1000DColumn(options: S1000DTableCommandOptions = {}): Command {
+  return (state, dispatch) => {
+    const context = findS1000DEntryContext(state, options);
+    if (!context?.activeTgroup) return false;
+
+    const grid = createS1000DTableAdapter().createGrid(context.activeTgroup, context.activeTgroupIndex);
+    const columnEditing = analyzeColumnEditingSupport(context.activeTgroup, grid);
+    const targetColumn = context.entry.columnIndex;
+    if (!canDuplicateS1000DColumn(grid, targetColumn, columnEditing)) {
+      return false;
+    }
+
+    const insertIndex = targetColumn + 1;
+    const nextColspecTgroup = columnEditing.colspecs.length > 0
+      ? updateTgroupColspecsForInsertedColumn(context.activeTgroup, insertIndex, columnEditing.colspecs)
+      : context.activeTgroup;
+    const nextColumnEditing: ColumnEditingSupport = {
+      ...columnEditing,
+      colspecs: resolveColspecs(nextColspecTgroup),
+    };
+    const nextRowsTgroup = mapTgroupRowsWithGrid(nextColspecTgroup, grid, (row, rowRef) => {
+      const rowEntries = grid.entries
+        .filter((entry) => entry.rowIndex === rowRef.rowIndex)
+        .sort((left, right) => left.entryIndex - right.entryIndex);
+      const coveringEntry = rowEntries.find((entry) => entry.columnIndex === targetColumn);
+      if (!coveringEntry) {
+        return row;
+      }
+
+      const nextRowChildren: ProseMirrorNode[] = [];
+      for (const entry of rowEntries) {
+        const nextColumnIndex = entry.columnIndex >= insertIndex
+          ? entry.columnIndex + 1
+          : entry.columnIndex;
+        nextRowChildren.push(rewriteS1000DSingleColumnEntry(entry.node, nextColumnIndex, nextColumnEditing));
+        if (entry === coveringEntry) {
+          nextRowChildren.push(rewriteS1000DSingleColumnEntry(
+            cloneS1000DNodeWithoutIdentity(entry.node),
+            insertIndex,
+            nextColumnEditing,
+          ));
+        }
+      }
+
+      return row.copy(Fragment.fromArray(nextRowChildren));
+    });
+    const normalizedTgroup = normalizeS1000DTgroup(nextRowsTgroup);
+    const nextTable = replaceActiveS1000DTgroup(context.table, normalizedTgroup, context.activeTgroupIndex);
+
+    return replaceS1000DTableAndSelectEntry(
+      state,
+      dispatch,
+      context,
+      nextTable,
+      context.rowRef.section,
+      context.rowRef.rowIndexInSection,
+      insertIndex,
+      findBestEntryForSelection,
+    );
+  };
+}
+
 function addS1000DColumn(position: 'before' | 'after', options: S1000DTableCommandOptions = {}): Command {
   return (state, dispatch) => {
     const context = findS1000DEntryContext(state, options);
@@ -525,6 +754,56 @@ export function deleteS1000DColumn(options: S1000DTableCommandOptions = {}): Com
   };
 }
 
+export function setS1000DTableColumnWidths(
+  widths: readonly number[],
+  options: S1000DTableCommandOptions = {},
+): Command {
+  return (state, dispatch) => {
+    const context = findS1000DTableContext(state, options);
+    if (!context?.activeTgroup || widths.length === 0) {
+      return false;
+    }
+
+    const nextTgroup = applyS1000DColumnWidthsToTgroup(context.activeTgroup, widths);
+    const nextTable = replaceActiveS1000DTgroup(context.table, nextTgroup, context.activeTgroupIndex);
+    return replaceS1000DTable(state, dispatch, context, nextTable);
+  };
+}
+
+function updateS1000DSelectedEntries(
+  state: EditorState,
+  dispatch: Parameters<Command>[1],
+  options: S1000DTableCommandOptions,
+  updateEntry: (entry: ProseMirrorNode) => ProseMirrorNode,
+): boolean {
+  const context = findS1000DTableContext(state, options);
+  if (!context?.activeTgroup) {
+    return false;
+  }
+
+  const selectionInfo = getS1000DCellSelectionInfo(state, options);
+  const singleEntry = findS1000DEntryContext(state, options)?.entry;
+  const entries = selectionInfo?.entries ?? (singleEntry ? [singleEntry] : []);
+  if (entries.length === 0) {
+    return false;
+  }
+
+  const replacements = new Map(
+    entries.map((entry) => [entry, updateEntry(entry.node)] as const),
+  );
+  const nextTable = replaceS1000DEntries(
+    {
+      table: context.table,
+      tablePos: context.tablePos,
+      activeTgroup: context.activeTgroup,
+      activeTgroupIndex: context.activeTgroupIndex,
+    },
+    replacements,
+  );
+
+  return replaceS1000DTable(state, dispatch, context, nextTable);
+}
+
 function moveS1000DColumn(
   direction: 'left' | 'right',
   options: S1000DTableCommandOptions = {},
@@ -612,11 +891,7 @@ export function getActiveS1000DTgroup(
 }
 
 function findSectionChildIndex(tgroup: ProseMirrorNode, section: string): number {
-  const targetTypeName = section === 'thead'
-    ? s1000dTableNodeNames.thead
-    : section === 'tfoot'
-      ? s1000dTableNodeNames.tfoot
-      : s1000dTableNodeNames.tbody;
+  const targetTypeName = getSectionTypeName(section);
   let match = -1;
   tgroup.forEach((child, _offset, index) => {
     if (match >= 0) return;
@@ -625,6 +900,28 @@ function findSectionChildIndex(tgroup: ProseMirrorNode, section: string): number
     }
   });
   return match;
+}
+
+function getSectionTypeName(section: string): string {
+  return section === 'thead'
+    ? s1000dTableNodeNames.thead
+    : section === 'tfoot'
+      ? s1000dTableNodeNames.tfoot
+      : s1000dTableNodeNames.tbody;
+}
+
+function findSectionInsertIndex(children: readonly ProseMirrorNode[], section: 'thead' | 'tbody' | 'tfoot'): number {
+  if (section === 'thead') {
+    const firstSectionIndex = children.findIndex((child) => isSectionNode(child));
+    return firstSectionIndex >= 0 ? firstSectionIndex : children.length;
+  }
+
+  if (section === 'tbody') {
+    const tfootIndex = children.findIndex((child) => child.type.name === s1000dTableNodeNames.tfoot);
+    return tfootIndex >= 0 ? tfootIndex : children.length;
+  }
+
+  return children.length;
 }
 
 function mapTgroupRowsWithGrid(
@@ -907,6 +1204,31 @@ function canReorderS1000DRowPair(
     && canOperateOnStandaloneS1000DRow(grid, targetRowIndex);
 }
 
+function canDuplicateS1000DColumn(
+  grid: S1000DTgroupGrid,
+  targetColumn: number,
+  support: ColumnEditingSupport,
+): boolean {
+  if (!support.supported) {
+    return false;
+  }
+  if (support.spanspecs.length > 0) {
+    return false;
+  }
+  if (support.colspecs.length > 0 && support.colspecs.length !== grid.width) {
+    return false;
+  }
+
+  for (let rowIndex = 0; rowIndex < grid.height; rowIndex += 1) {
+    const entry = grid.slots[rowIndex]?.[targetColumn]?.entry;
+    if (!entry || entry.rowIndex !== rowIndex || entry.rowSpan !== 1 || entry.colSpan !== 1) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 function canReorderS1000DColumnPair(
   grid: S1000DTgroupGrid,
   sourceColumn: number,
@@ -1021,6 +1343,25 @@ function rewriteEntryForMovedColumn(
   );
 }
 
+function rewriteS1000DSingleColumnEntry(
+  entryNode: ProseMirrorNode,
+  columnIndex: number,
+  support: ColumnEditingSupport,
+): ProseMirrorNode {
+  if (support.colspecs.length === 0) {
+    return entryNode;
+  }
+
+  return entryNode.type.create(
+    {
+      ...entryNode.attrs,
+      ...createSingleColumnAttrs(columnIndex, support),
+    },
+    entryNode.content,
+    entryNode.marks,
+  );
+}
+
 function findBestEntryForSelection(
   grid: S1000DTgroupGrid,
   rowIndex: number,
@@ -1091,6 +1432,24 @@ function shrinkEntryForDeletedColumn(
 function resolveColspecIndexByName(colspecs: readonly ResolvedColspec[], colname: unknown): number | undefined {
   if (typeof colname !== 'string' || !colname) return undefined;
   return colspecs.find((colspec) => colspec.colname === colname)?.index;
+}
+
+function cloneS1000DNodeWithoutIdentity(node: ProseMirrorNode): ProseMirrorNode {
+  if (node.isText) {
+    return node.type.schema.text(node.text ?? '', node.marks);
+  }
+
+  const nextAttrs: Record<string, unknown> = { ...node.attrs };
+  if ('id' in nextAttrs) {
+    nextAttrs.id = null;
+  }
+
+  if (node.isLeaf) {
+    return node.type.create(nextAttrs, node.content, node.marks);
+  }
+
+  const children = getS1000DNodeChildren(node).map((child) => cloneS1000DNodeWithoutIdentity(child));
+  return node.type.create(nextAttrs, Fragment.fromArray(children), node.marks);
 }
 
 function resolveColnameByIndex(colspecs: readonly ResolvedColspec[], index: number): string | null {

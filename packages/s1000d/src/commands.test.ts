@@ -14,6 +14,8 @@ import {
   createS1000DTableGrid,
   deleteS1000DColumn,
   deleteS1000DRow,
+  duplicateS1000DColumn,
+  duplicateS1000DRow,
   findS1000DEntryContext,
   findS1000DRowContext,
   findS1000DTableContext,
@@ -24,10 +26,15 @@ import {
   moveS1000DColumnLeft,
   moveS1000DColumnRight,
   moveS1000DRowDown,
+  moveS1000DRowToBody,
+  moveS1000DRowToFoot,
+  moveS1000DRowToHead,
   moveS1000DRowUp,
   normalizeS1000DTgroup,
   parseS1000DTableXml,
   rejectGraphicOnlyS1000DTable,
+  setS1000DSelectedEntryRawAttrs,
+  setS1000DTableColumnWidths,
   splitS1000DCell,
 } from './index.js';
 import { s1000dTableNodeNames } from './names.js';
@@ -605,6 +612,71 @@ describe('S1000D table commands and adapters', () => {
     expect(findS1000DRowContext(nextState)?.row.textContent).toBe('A1A2');
   });
 
+  it('duplicates standalone rows and clears duplicated row ids', () => {
+    const table = parseS1000DTableXml(
+      '<table id="tab-1"><tgroup cols="2"><tbody><row id="row-1"><entry id="entry-1">A1</entry><entry>A2</entry></row><row id="row-2"><entry>B1</entry><entry>B2</entry></row></tbody></tgroup></table>',
+      extendedSchema,
+      { profile: 'extended' },
+    );
+    const doc = extendedSchema.nodes.doc!.create(null, [table]);
+    const state = EditorState.create({
+      doc,
+      selection: TextSelection.create(doc, findTextPosition(doc, 'A1')),
+    });
+
+    let nextState = state;
+    const result = duplicateS1000DRow()(state, (transaction) => {
+      nextState = nextState.apply(transaction);
+    });
+
+    expect(result).toBe(true);
+    const nextTbody = getTgroupBody(findS1000DTableContext(nextState)?.table.child(0));
+    expect(nextTbody?.childCount).toBe(3);
+    expect(nextTbody?.child(1)?.textContent).toBe('A1A2');
+    expect(nextTbody?.child(1)?.attrs.id).toBeNull();
+    expect(nextTbody?.child(1)?.child(0)?.attrs.id).toBeNull();
+    expect(findS1000DRowContext(nextState)?.rowRef.rowIndexInSection).toBe(1);
+  });
+
+  it('moves standalone rows into header, body, and footer sections', () => {
+    const table = parseS1000DTableXml(
+      '<table id="tab-1"><tgroup cols="2"><tbody><row id="body-row-1"><entry>A1</entry><entry>A2</entry></row><row id="body-row-2"><entry>B1</entry><entry>B2</entry></row></tbody></tgroup></table>',
+      extendedSchema,
+      { profile: 'extended' },
+    );
+    const doc = extendedSchema.nodes.doc!.create(null, [table]);
+    let state = EditorState.create({
+      doc,
+      selection: TextSelection.create(doc, findTextPosition(doc, 'A1')),
+    });
+
+    let result = moveS1000DRowToHead()(state, (transaction) => {
+      state = state.apply(transaction);
+    });
+    expect(result).toBe(true);
+    let nextTgroup = findS1000DTableContext(state)?.table.child(0);
+    expect(nextTgroup?.child(0)?.type.name).toBe('s1000dThead');
+    expect(nextTgroup?.child(0)?.child(0)?.textContent).toBe('A1A2');
+    expect(findS1000DRowContext(state)?.rowRef.section).toBe('thead');
+
+    result = moveS1000DRowToFoot()(state, (transaction) => {
+      state = state.apply(transaction);
+    });
+    expect(result).toBe(true);
+    nextTgroup = findS1000DTableContext(state)?.table.child(0);
+    expect(nextTgroup?.child(nextTgroup.childCount - 1)?.type.name).toBe('s1000dTfoot');
+    expect(nextTgroup?.child(nextTgroup.childCount - 1)?.child(0)?.textContent).toBe('A1A2');
+    expect(findS1000DRowContext(state)?.rowRef.section).toBe('tfoot');
+
+    result = moveS1000DRowToBody()(state, (transaction) => {
+      state = state.apply(transaction);
+    });
+    expect(result).toBe(true);
+    nextTgroup = findS1000DTableContext(state)?.table.child(0);
+    expect(getTgroupBody(nextTgroup)?.child(getTgroupBody(nextTgroup)!.childCount - 1)?.textContent).toBe('A1A2');
+    expect(findS1000DRowContext(state)?.rowRef.section).toBe('tbody');
+  });
+
   it('moves columns when morerows is involved but entries remain single-column', () => {
     const table = parseS1000DTableXml(
       '<table id="tab-1"><tgroup cols="3"><tbody><row id="row-1"><entry morerows="1">A</entry><entry>B</entry><entry>C</entry></row><row id="row-2"><entry>D</entry><entry>E</entry></row></tbody></tgroup></table>',
@@ -754,6 +826,61 @@ describe('S1000D table commands and adapters', () => {
     expect(findS1000DRowContext(nextState)?.rowRef.rowIndexInSection).toBe(0);
     expect(findS1000DEntryContext(nextState)?.entry.columnIndex).toBe(1);
     expect(findS1000DEntryContext(nextState)?.entry.node.textContent).toBe('');
+  });
+
+  it('duplicates supported columns and clears duplicated entry ids', () => {
+    const table = parseS1000DTableXml(
+      '<table id="tab-1"><tgroup cols="2"><colspec colname="c1" colnum="1"/><colspec colname="c2" colnum="2"/><tbody><row id="row-1"><entry id="entry-a" colname="c1">A</entry><entry colname="c2">B</entry></row><row id="row-2"><entry colname="c1">C</entry><entry colname="c2">D</entry></row></tbody></tgroup></table>',
+      extendedSchema,
+      { profile: 'extended' },
+    );
+    const doc = extendedSchema.nodes.doc!.create(null, [table]);
+    const state = EditorState.create({
+      doc,
+      selection: TextSelection.create(doc, findTextPosition(doc, 'A')),
+    });
+
+    let nextState = state;
+    const result = duplicateS1000DColumn()(state, (transaction) => {
+      nextState = nextState.apply(transaction);
+    });
+
+    expect(result).toBe(true);
+    const nextTgroup = findS1000DTableContext(nextState)?.table.child(0);
+    const nextTbody = getTgroupBody(nextTgroup);
+    expect(nextTgroup?.attrs.cols).toBe('3');
+    expect(nextTbody?.child(0)?.textContent).toBe('AAB');
+    expect(nextTbody?.child(1)?.textContent).toBe('CCD');
+    expect(nextTbody?.child(0)?.child(1)?.attrs.id).toBeNull();
+    expect(findS1000DEntryContext(nextState)?.entry.columnIndex).toBe(1);
+    expect(findS1000DEntryContext(nextState)?.entry.node.textContent).toBe('A');
+  });
+
+  it('writes raw bgcolor attrs and explicit colwidths through commands', () => {
+    const table = parseS1000DTableXml(
+      '<table id="tab-1"><tgroup cols="2"><colspec colname="c1" colnum="1"/><colspec colname="c2" colnum="2"/><tbody><row id="row-1"><entry colname="c1">A</entry><entry colname="c2">B</entry></row></tbody></tgroup></table>',
+      extendedSchema,
+      { profile: 'extended' },
+    );
+    const doc = extendedSchema.nodes.doc!.create(null, [table]);
+    let state = EditorState.create({
+      doc,
+      selection: TextSelection.create(doc, findTextPosition(doc, 'A')),
+    });
+
+    let result = setS1000DSelectedEntryRawAttrs({ bgcolor: '#dbeafe' })(state, (transaction) => {
+      state = state.apply(transaction);
+    });
+    expect(result).toBe(true);
+    expect(findS1000DEntryContext(state)?.entry.node.attrs.rawAttrs.bgcolor).toBe('#dbeafe');
+
+    result = setS1000DTableColumnWidths([180, 220])(state, (transaction) => {
+      state = state.apply(transaction);
+    });
+    expect(result).toBe(true);
+    const nextTgroup = findS1000DTableContext(state)?.table.child(0);
+    expect(nextTgroup?.child(0)?.attrs.colwidth).toBe('180px');
+    expect(nextTgroup?.child(1)?.attrs.colwidth).toBe('220px');
   });
 
   it('deletes a column covered by morerows and keeps the anchor entry intact', () => {
