@@ -43,6 +43,7 @@ describe('S1000D interaction plugin', () => {
     expect(interaction.activeTable?.tablePos).toBe(0);
     expect(interaction.tableSelected).toBe(false);
     expect(interaction.selectedAxis.kind).toBeNull();
+    expect(interaction.selectedAxis.tgroupIndex).toBeNull();
     expect(interaction.menuScope).toBeNull();
     expect(getS1000DSelectionInfo(state)?.entries.length).toBe(1);
   });
@@ -62,6 +63,7 @@ describe('S1000D interaction plugin', () => {
     expect(interaction.activeTable?.tablePos).toBe(0);
     expect(interaction.selectedAxis.kind).toBe('row');
     expect(interaction.selectedAxis.index).toBe(1);
+    expect(interaction.selectedAxis.tgroupIndex).toBe(0);
   });
 
   it('opens a cell menu through plugin meta and closes it on selection changes', () => {

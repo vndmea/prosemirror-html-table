@@ -45,10 +45,16 @@ export function findS1000DTableAtDOM(view: EditorView, target: EventTarget | nul
     return undefined;
   }
 
-  return getRenderedS1000DTableContext(view, tablePos);
+  return getRenderedS1000DTableContext(view, tablePos, {
+    preferredTgroupIndex: resolveRenderedTgroupIndex(table, targetElement),
+  });
 }
 
-export function getRenderedS1000DTableContext(view: EditorView, tablePos: number): S1000DTableDOMContext | undefined {
+export function getRenderedS1000DTableContext(
+  view: EditorView,
+  tablePos: number,
+  options: { preferredTgroupIndex?: number | null | undefined } = {},
+): S1000DTableDOMContext | undefined {
   const table = view.state.doc.nodeAt(tablePos);
   if (!table || table.type.name !== s1000dTableDomAdapter.nodeName) {
     return undefined;
@@ -66,13 +72,23 @@ export function getRenderedS1000DTableContext(view: EditorView, tablePos: number
   }
 
   const resolved = resolveActiveS1000DTableContext({ table, tablePos }, view.state.selection);
+  const preferredTgroupIndex = options.preferredTgroupIndex;
+  const tgroups: ProseMirrorNode[] = [];
+  table.forEach((child) => {
+    if (child.type.name === s1000dTableNodeNames.tgroup) {
+      tgroups.push(child);
+    }
+  });
+  const preferredTgroup = typeof preferredTgroupIndex === 'number' && preferredTgroupIndex >= 0
+    ? tgroups[preferredTgroupIndex] ?? null
+    : null;
   return {
     tablePos,
     table,
     dom: element,
     wrapper,
-    activeTgroup: resolved.activeTgroup,
-    activeTgroupIndex: resolved.activeTgroupIndex,
+    activeTgroup: preferredTgroup ?? resolved.activeTgroup,
+    activeTgroupIndex: preferredTgroup ? preferredTgroupIndex ?? -1 : resolved.activeTgroupIndex,
   };
 }
 
@@ -136,4 +152,19 @@ function resolveTablePos(view: EditorView, dom: HTMLElement, nodeName: string): 
   }
 
   return undefined;
+}
+
+function resolveRenderedTgroupIndex(table: HTMLTableElement, targetElement: Element | null): number | null {
+  const renderedTgroup = targetElement?.closest('tbody[data-s1000d="tgroup"]');
+  if (!(renderedTgroup instanceof HTMLElement)) {
+    return null;
+  }
+
+  const directTgroups = Array.from(table.children).filter(
+    (child): child is HTMLElement =>
+      child instanceof HTMLElement
+      && child.matches('tbody[data-s1000d="tgroup"]'),
+  );
+  const index = directTgroups.findIndex((candidate) => candidate === renderedTgroup);
+  return index >= 0 ? index : null;
 }

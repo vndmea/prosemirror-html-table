@@ -5,7 +5,9 @@ import {
   exportDemoXml,
   getDemoSnapshot,
   loadDemoSample,
+  loadDemoXml,
   runDemoCommand,
+  selectDemoRow,
 } from './s1000d-demo-api';
 
 async function gotoDemo(page: Page, sample: 'proced' | 'extended' = 'proced') {
@@ -489,5 +491,50 @@ test.describe('official s1000d parity', () => {
     await expect(contextMenuAction(page, 'Move row to head')).toBeVisible();
     await expect(contextMenuAction(page, 'Move row to body')).toBeVisible();
     await expect(contextMenuAction(page, 'Move row to foot')).toBeVisible();
+  });
+
+  test('multi-tgroup hover and row menu stay isolated to the hovered active tgroup', async ({ page }) => {
+    await page.goto('/');
+    await expectDemoApi(page);
+    await loadDemoXml(page, `
+<table id="multi-tgroup-scope">
+  <tgroup cols="2">
+    <tbody>
+      <row id="tg1-row"><entry>A1</entry><entry>A2</entry></row>
+      <row id="tg1-row-2"><entry>A3</entry><entry>A4</entry></row>
+    </tbody>
+  </tgroup>
+  <tgroup cols="2">
+    <tbody>
+      <row id="tg2-row"><entry>B1</entry><entry>B2</entry></row>
+      <row id="tg2-row-2"><entry>B3</entry><entry>B4</entry></row>
+    </tbody>
+  </tgroup>
+</table>
+    `.trim(), 'extended');
+
+    expect(await selectDemoRow(page, 0, 0)).toBe(true);
+    expect((await getDemoSnapshot(page)).selectionScope).toBe('row');
+
+    const secondTgroupCell = table(page).locator('td,th').filter({ hasText: /^B1$/ }).first();
+    await secondTgroupCell.hover();
+
+    const handleBox = await visibleRowHandle(page).boundingBox();
+    const rowBox = await secondTgroupCell.locator('xpath=ancestor::tr[1]').boundingBox();
+    if (!handleBox || !rowBox) {
+      throw new Error('Could not resolve multi-tgroup row handle geometry.');
+    }
+
+    expect(Math.abs(handleBox.y + handleBox.height / 2 - rowBox.y - rowBox.height / 2)).toBeLessThan(20);
+
+    await visibleRowHandle(page).click();
+    await expect(contextMenu(page)).toHaveAttribute('data-scope', 'row');
+    expect(await runDemoCommand(page, 'deleteS1000DTableRow')).toBe(true);
+
+    const xml = await exportDemoXml(page);
+    expect(xml).toContain('A1');
+    expect(xml).toContain('A2');
+    expect(xml).not.toContain('B1');
+    expect(xml).not.toContain('B2');
   });
 });

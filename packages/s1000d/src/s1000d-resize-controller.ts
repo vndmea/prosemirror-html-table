@@ -22,6 +22,7 @@ export class S1000DResizeController {
   private activeResize:
     | {
         tablePos: number;
+        tgroupIndex: number;
         columnIndex: number;
         startX: number;
         startWidths: number[];
@@ -84,6 +85,7 @@ export class S1000DResizeController {
 
       handle.hidden = axisDragHasDragged || boundary < visibleLeft || boundary > visibleRight;
       handle.dataset.tablePos = String(context.tablePos);
+      handle.dataset.tgroupIndex = String(context.activeTgroupIndex);
       handle.dataset.columnIndex = String(column.index);
       handle.classList.toggle(
         'is-active',
@@ -101,14 +103,19 @@ export class S1000DResizeController {
   handleResizeStart(event: MouseEvent): void {
     const handle = event.currentTarget as HTMLButtonElement | null;
     const tablePos = Number(handle?.dataset.tablePos);
+    const preferredTgroupIndex = Number(handle?.dataset.tgroupIndex);
     const columnIndex = Number(handle?.dataset.columnIndex);
-    const context = Number.isInteger(tablePos) ? getRenderedS1000DTableContext(this.view, tablePos) : undefined;
+    const context = Number.isInteger(tablePos)
+      ? getRenderedS1000DTableContext(this.view, tablePos, {
+        preferredTgroupIndex: Number.isInteger(preferredTgroupIndex) ? preferredTgroupIndex : null,
+      })
+      : undefined;
 
     if (!handle || !context?.activeTgroup || !Number.isInteger(columnIndex)) {
       return;
     }
 
-    const geometry = measureS1000DRenderedTableGeometry(context.dom, context.wrapper);
+    const geometry = measureS1000DRenderedTableGeometry(context.dom, context.wrapper, context.activeTgroupIndex);
     if (!geometry.columns[columnIndex]) {
       return;
     }
@@ -118,6 +125,7 @@ export class S1000DResizeController {
 
     this.activeResize = {
       tablePos,
+      tgroupIndex: context.activeTgroupIndex,
       columnIndex,
       startX: event.clientX,
       startWidths: geometry.columns.map((column) => Math.max(MIN_COLUMN_WIDTH, Math.round(column.width))),
@@ -142,7 +150,9 @@ export class S1000DResizeController {
       return;
     }
 
-    const context = getRenderedS1000DTableContext(this.view, activeResize.tablePos);
+    const context = getRenderedS1000DTableContext(this.view, activeResize.tablePos, {
+      preferredTgroupIndex: activeResize.tgroupIndex,
+    });
     if (!context) {
       return;
     }
@@ -164,7 +174,9 @@ export class S1000DResizeController {
       return;
     }
 
-    const context = getRenderedS1000DTableContext(this.view, activeResize.tablePos);
+    const context = getRenderedS1000DTableContext(this.view, activeResize.tablePos, {
+      preferredTgroupIndex: activeResize.tgroupIndex,
+    });
     if (!context?.activeTgroup) {
       this.clearResize(true);
       return;
@@ -180,7 +192,9 @@ export class S1000DResizeController {
 
   private clearResize(restorePreview: boolean): void {
     if (restorePreview && this.activeResize) {
-      const context = getRenderedS1000DTableContext(this.view, this.activeResize.tablePos);
+      const context = getRenderedS1000DTableContext(this.view, this.activeResize.tablePos, {
+        preferredTgroupIndex: this.activeResize.tgroupIndex,
+      });
       if (context) {
         applyTableColumnPreviewWidths(context.dom, this.activeResize.startWidths, MIN_COLUMN_WIDTH);
       }

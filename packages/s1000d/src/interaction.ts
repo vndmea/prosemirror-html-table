@@ -28,7 +28,9 @@ export type S1000DTableHoverKind = TableHoverKind;
 export type S1000DTableSelectedAxisKind = TableSelectedAxisKind;
 export type S1000DTableReference = TableReference<ProseMirrorNode>;
 export type S1000DTableHoverState = TableHoverState;
-export type S1000DTableSelectedAxisState = TableSelectedAxisState;
+export interface S1000DTableSelectedAxisState extends TableSelectedAxisState {
+  tgroupIndex: number | null;
+}
 export type S1000DTableResizeState = TableResizeState;
 export type S1000DTableContextTriggerState = TableContextTriggerState;
 export type S1000DTableMenuScope = 'table' | 'row' | 'column' | 'cell';
@@ -40,20 +42,29 @@ export interface S1000DTableMenuAnchor {
 }
 
 export interface S1000DTableInteractionState extends TableInteractionState<ProseMirrorNode, TableGeometry> {
+  selectedAxis: S1000DTableSelectedAxisState;
   hoveredControl: S1000DTableHoverControlKind;
+  hoveredTgroupIndex: number | null;
   menuScope: S1000DTableMenuScope | null;
   menuAnchor: S1000DTableMenuAnchor | null;
 }
 
 export interface S1000DTableInteractionMeta extends TableInteractionMeta<ProseMirrorNode, TableGeometry> {
+  selectedAxis?: S1000DTableSelectedAxisState | null;
   hoveredControl?: S1000DTableHoverControlKind | undefined;
+  hoveredTgroupIndex?: number | null | undefined;
   menuScope?: S1000DTableMenuScope | null | undefined;
   menuAnchor?: S1000DTableMenuAnchor | null | undefined;
 }
 
 const defaultInteractionState: S1000DTableInteractionState = {
   ...createDefaultTableInteractionState<ProseMirrorNode, TableGeometry>(),
+  selectedAxis: {
+    ...defaultTableSelectedAxisState,
+    tgroupIndex: null,
+  },
   hoveredControl: null,
+  hoveredTgroupIndex: null,
   menuScope: null,
   menuAnchor: null,
 };
@@ -86,7 +97,7 @@ export function findSelectedS1000DTable(selection: Selection): S1000DTableRefere
 export function getS1000DTableContextTriggerState(
   activeTable: S1000DTableReference | null,
   tableSelected: boolean,
-  selectedAxis: S1000DTableSelectedAxisState,
+  selectedAxis: TableSelectedAxisState,
   geometry: TableGeometry | null,
 ): S1000DTableContextTriggerState {
   return deriveTableContextTriggerState(activeTable, tableSelected, selectedAxis, geometry);
@@ -164,10 +175,25 @@ function buildS1000DTableInteractionState(
       : selectionChanged
         ? null
         : previous?.hoveredControl ?? null;
+  const nextHoveredTgroupIndex =
+    meta.hoveredTgroupIndex !== undefined
+      ? meta.hoveredTgroupIndex
+      : selectionChanged
+        ? null
+        : previous?.hoveredTgroupIndex ?? null;
 
   return {
     ...shared,
+    selectedAxis: {
+      ...shared.selectedAxis,
+      tgroupIndex:
+        meta.selectedAxis?.tgroupIndex
+        ?? (shared.selectedAxis as S1000DTableSelectedAxisState).tgroupIndex
+        ?? previous?.selectedAxis.tgroupIndex
+        ?? null,
+    },
     hoveredControl: shared.hovered ? nextHoveredControl : null,
+    hoveredTgroupIndex: shared.hovered ? nextHoveredTgroupIndex : null,
     menuScope: shared.contextMenuOpen ? nextMenuScope : null,
     menuAnchor: shared.contextMenuOpen ? nextMenuAnchor : null,
   };
@@ -188,12 +214,18 @@ function getSelectedAxisState(
   tableReference: S1000DTableReference,
 ): S1000DTableSelectedAxisState {
   if (!isS1000DCellSelection(selection)) {
-    return defaultTableSelectedAxisState;
+    return {
+      ...defaultTableSelectedAxisState,
+      tgroupIndex: null,
+    };
   }
 
   const selectionInfo = getS1000DSelectionInfo(state, { tablePos: tableReference.tablePos });
   if (!selectionInfo) {
-    return defaultTableSelectedAxisState;
+    return {
+      ...defaultTableSelectedAxisState,
+      tgroupIndex: null,
+    };
   }
 
   if (selection.isRowSelection() && selectionInfo.top === selectionInfo.bottom) {
@@ -201,6 +233,7 @@ function getSelectedAxisState(
       kind: 'row',
       index: selectionInfo.top,
       tablePos: tableReference.tablePos,
+      tgroupIndex: selectionInfo.activeTgroupIndex,
     };
   }
 
@@ -209,10 +242,14 @@ function getSelectedAxisState(
       kind: 'column',
       index: selectionInfo.left,
       tablePos: tableReference.tablePos,
+      tgroupIndex: selectionInfo.activeTgroupIndex,
     };
   }
 
-  return defaultTableSelectedAxisState;
+  return {
+    ...defaultTableSelectedAxisState,
+    tgroupIndex: null,
+  };
 }
 
 function hasSelectionMenuContext(state: EditorState, tablePos: number | null): boolean {

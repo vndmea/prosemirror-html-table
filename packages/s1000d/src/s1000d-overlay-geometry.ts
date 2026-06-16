@@ -52,22 +52,25 @@ export interface S1000DAxisDragState {
   startX: number;
   startY: number;
   tablePos: number;
+  tgroupIndex: number;
   targetIndex: number | null;
 }
 
 export function shouldToggleContextMenuFromAxisHandle(
   interaction: {
     selectedAxisExplicit?: boolean;
-    selectedAxis: { kind: 'row' | 'column' | null; index: number | null; tablePos: number | null };
+    selectedAxis: { kind: 'row' | 'column' | null; index: number | null; tablePos: number | null; tgroupIndex?: number | null };
   },
   axis: 'row' | 'column',
   index: number,
   tablePos: number,
+  tgroupIndex?: number | null,
 ): boolean {
   return Boolean(interaction.selectedAxisExplicit)
     && interaction.selectedAxis.kind === axis
     && interaction.selectedAxis.index === index
-    && interaction.selectedAxis.tablePos === tablePos;
+    && interaction.selectedAxis.tablePos === tablePos
+    && (tgroupIndex == null || interaction.selectedAxis.tgroupIndex === tgroupIndex);
 }
 
 export function shouldToggleContextMenuFromTableHandle(
@@ -100,16 +103,18 @@ export function isAxisHandleHovered(
 export function isAxisHandleSelected(
   interaction: {
     selectedAxisExplicit?: boolean;
-    selectedAxis: { kind: 'row' | 'column' | null; index: number | null; tablePos: number | null };
+    selectedAxis: { kind: 'row' | 'column' | null; index: number | null; tablePos: number | null; tgroupIndex?: number | null };
   },
   axis: 'row' | 'column',
   tablePos: number,
   index: number,
+  tgroupIndex?: number | null,
 ): boolean {
   return Boolean(interaction.selectedAxisExplicit)
     && interaction.selectedAxis.kind === axis
     && interaction.selectedAxis.index === index
-    && interaction.selectedAxis.tablePos === tablePos;
+    && interaction.selectedAxis.tablePos === tablePos
+    && (tgroupIndex == null || interaction.selectedAxis.tgroupIndex === tgroupIndex);
 }
 
 export function getExtendRowIndex(
@@ -352,7 +357,7 @@ export function getGridHitAtPoint(
     return undefined;
   }
 
-  const geometry = measureS1000DRenderedTableGeometry(context.dom, context.wrapper);
+  const geometry = measureS1000DRenderedTableGeometry(context.dom, context.wrapper, context.activeTgroupIndex);
   const localX = clampToTable
     ? clamp(clientX - geometry.tableRect.left, 0, Math.max(0, geometry.tableRect.width - 1))
     : clientX - geometry.tableRect.left;
@@ -534,19 +539,24 @@ export function hitTestRenderedTablePoint(
   clientX: number,
   clientY: number,
 ): boolean {
-  const geometry = measureS1000DRenderedTableGeometry(context.dom, context.wrapper);
+  const geometry = measureS1000DRenderedTableGeometry(context.dom, context.wrapper, context.activeTgroupIndex);
   return clientX >= geometry.tableRect.left
     && clientX <= geometry.tableRect.right
     && clientY >= geometry.tableRect.top
     && clientY <= geometry.tableRect.bottom;
 }
 
-export function measureS1000DRenderedTableGeometry(table: HTMLTableElement, wrapper?: HTMLElement): TableGeometry {
+export function measureS1000DRenderedTableGeometry(
+  table: HTMLTableElement,
+  wrapper?: HTMLElement,
+  activeTgroupIndex?: number | null,
+): TableGeometry {
   const tableRect = measureS1000DTableRect(table);
   const wrapperRect = wrapper ? toTableRect(wrapper.getBoundingClientRect()) : tableRect;
   const visibleTableRect = getVisibleTableRect(tableRect, wrapperRect);
   const columnBoundaries = measureS1000DColumnBoundaries(table, tableRect);
-  const rows = Array.from(table.querySelectorAll('tr')).map((row, index) => {
+  const rowElements = getRenderedRowElements(table, activeTgroupIndex);
+  const rows = rowElements.map((row, index) => {
     const rect = row.getBoundingClientRect();
     return {
       index,
@@ -568,6 +578,28 @@ export function measureS1000DRenderedTableGeometry(table: HTMLTableElement, wrap
     })),
     rows,
   };
+}
+
+function getRenderedRowElements(table: HTMLTableElement, activeTgroupIndex?: number | null): HTMLTableRowElement[] {
+  const renderedTgroup = getRenderedTgroupElement(table, activeTgroupIndex);
+  const rowRoot = renderedTgroup ?? table;
+  return Array.from(rowRoot.querySelectorAll('tr'));
+}
+
+function getRenderedTgroupElement(
+  table: HTMLTableElement,
+  activeTgroupIndex?: number | null,
+): HTMLElement | null {
+  if (typeof activeTgroupIndex !== 'number' || activeTgroupIndex < 0) {
+    return null;
+  }
+
+  const directTgroups = Array.from(table.children).filter(
+    (child): child is HTMLElement =>
+      child instanceof HTMLElement
+      && child.matches('tbody[data-s1000d="tgroup"]'),
+  );
+  return directTgroups[activeTgroupIndex] ?? null;
 }
 
 export function measureS1000DTableRect(table: HTMLTableElement): TableRect {

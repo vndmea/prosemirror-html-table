@@ -130,6 +130,7 @@ export class S1000DTableOverlayView {
   private extendTarget:
     | {
         tablePos: number;
+        tgroupIndex: number;
         geometry: TableGeometry;
       }
     | null = null;
@@ -282,6 +283,7 @@ export class S1000DTableOverlayView {
         this.syncInteractionMeta({
           hovered: null,
           hoveredControl: null,
+          hoveredTgroupIndex: null,
           geometry: null,
           resizing: null,
         });
@@ -290,7 +292,7 @@ export class S1000DTableOverlayView {
       return;
     }
 
-    const geometry = measureS1000DRenderedTableGeometry(context.dom, context.wrapper);
+    const geometry = measureS1000DRenderedTableGeometry(context.dom, context.wrapper, context.activeTgroupIndex);
     this.syncInteractionGeometry(context, geometry);
     const overlayHost = this.overlayHost.attach(context.wrapper);
     const hostRect = overlayHost.getBoundingClientRect();
@@ -309,6 +311,7 @@ export class S1000DTableOverlayView {
     };
     this.extendTarget = {
       tablePos: context.tablePos,
+      tgroupIndex: context.activeTgroupIndex,
       geometry,
     };
     const selectionInfo =
@@ -528,14 +531,15 @@ export class S1000DTableOverlayView {
 
       const rect = getVisibleRowRect(geometry, positionState, row.index);
       const isHovered = isAxisHandleHovered(interaction, 'row', context.tablePos, row.index);
-      const isSelected = isAxisHandleSelected(interaction, 'row', context.tablePos, row.index)
+      const isSelected = isAxisHandleSelected(interaction, 'row', context.tablePos, row.index, context.activeTgroupIndex)
         || Boolean(rowSelection && selectionInfo && row.index >= selectionInfo.top && row.index <= selectionInfo.bottom);
-      const isMenuOpen = isAxisHandleSelected(interaction, 'row', context.tablePos, row.index)
+      const isMenuOpen = isAxisHandleSelected(interaction, 'row', context.tablePos, row.index, context.activeTgroupIndex)
         && interaction.contextMenuOpen
         && interaction.menuScope === 'row';
-      handle.hidden = !rect || !this.isAxisHandleVisible(interaction, 'row', context.tablePos, row.index);
+      handle.hidden = !rect || !this.isAxisHandleVisible(interaction, 'row', context.tablePos, row.index, context.activeTgroupIndex);
       handle.tabIndex = handle.hidden ? -1 : 0;
       handle.dataset.tablePos = String(context.tablePos);
+      handle.dataset.tgroupIndex = String(context.activeTgroupIndex);
       handle.dataset.rowIndex = String(row.index);
       handle.setAttribute('aria-label', `Row ${row.index + 1} actions`);
       handle.setAttribute('aria-haspopup', 'menu');
@@ -581,14 +585,15 @@ export class S1000DTableOverlayView {
 
       const rect = getVisibleColumnRect(geometry, positionState, column.index);
       const isHovered = isAxisHandleHovered(interaction, 'column', context.tablePos, column.index);
-      const isSelected = isAxisHandleSelected(interaction, 'column', context.tablePos, column.index)
+      const isSelected = isAxisHandleSelected(interaction, 'column', context.tablePos, column.index, context.activeTgroupIndex)
         || Boolean(columnSelection && selectionInfo && column.index >= selectionInfo.left && column.index <= selectionInfo.right);
-      const isMenuOpen = isAxisHandleSelected(interaction, 'column', context.tablePos, column.index)
+      const isMenuOpen = isAxisHandleSelected(interaction, 'column', context.tablePos, column.index, context.activeTgroupIndex)
         && interaction.contextMenuOpen
         && interaction.menuScope === 'column';
-      handle.hidden = !rect || !this.isAxisHandleVisible(interaction, 'column', context.tablePos, column.index);
+      handle.hidden = !rect || !this.isAxisHandleVisible(interaction, 'column', context.tablePos, column.index, context.activeTgroupIndex);
       handle.tabIndex = handle.hidden ? -1 : 0;
       handle.dataset.tablePos = String(context.tablePos);
+      handle.dataset.tgroupIndex = String(context.activeTgroupIndex);
       handle.dataset.columnIndex = String(column.index);
       handle.setAttribute('aria-label', `Column ${column.index + 1} actions`);
       handle.setAttribute('aria-haspopup', 'menu');
@@ -675,6 +680,11 @@ export class S1000DTableOverlayView {
     if (!target) {
       return;
     }
+
+    this.addRowButton.dataset.tablePos = String(target.tablePos);
+    this.addRowButton.dataset.tgroupIndex = String(target.tgroupIndex);
+    this.addColumnButton.dataset.tablePos = String(target.tablePos);
+    this.addColumnButton.dataset.tgroupIndex = String(target.tgroupIndex);
 
     Object.assign(this.addRowButton.style, {
       left: `${positionState.visibleTableLeft + positionState.visibleTableWidth / 2}px`,
@@ -880,8 +890,13 @@ export class S1000DTableOverlayView {
   private handleAxisMouseDown(event: MouseEvent, axis: 'row' | 'column'): void {
     const handle = event.currentTarget as HTMLButtonElement | null;
     const tablePos = Number(handle?.dataset.tablePos);
+    const preferredTgroupIndex = Number(handle?.dataset.tgroupIndex);
     const axisIndex = Number(handle?.dataset[axis === 'row' ? 'rowIndex' : 'columnIndex']);
-    const context = Number.isInteger(tablePos) ? getRenderedS1000DTableContext(this.view, tablePos) : undefined;
+    const context = Number.isInteger(tablePos)
+      ? getRenderedS1000DTableContext(this.view, tablePos, {
+        preferredTgroupIndex: Number.isInteger(preferredTgroupIndex) ? preferredTgroupIndex : null,
+      })
+      : undefined;
 
     if (
       !handle
@@ -904,6 +919,7 @@ export class S1000DTableOverlayView {
       startX: event.clientX,
       startY: event.clientY,
       tablePos,
+      tgroupIndex: context.activeTgroupIndex,
       targetIndex: null,
     };
     this.startAxisDragListeners();
@@ -1019,7 +1035,7 @@ export class S1000DTableOverlayView {
       return;
     }
 
-    const context = getRenderedS1000DTableContext(this.view, tablePos);
+    const context = handle ? this.getContextFromDataset(handle) : getRenderedS1000DTableContext(this.view, tablePos);
     if (!context) {
       return;
     }
@@ -1043,7 +1059,7 @@ export class S1000DTableOverlayView {
       return;
     }
 
-    const context = getRenderedS1000DTableContext(this.view, tablePos);
+    const context = handle ? this.getContextFromDataset(handle) : getRenderedS1000DTableContext(this.view, tablePos);
     if (!context) {
       return;
     }
@@ -1175,7 +1191,14 @@ export class S1000DTableOverlayView {
       return false;
     }
 
-    return this.simulateAxisReorder(dragState.axis, dragState.tablePos, dragState.index, targetIndex, false);
+    return this.simulateAxisReorder(
+      dragState.axis,
+      dragState.tablePos,
+      dragState.tgroupIndex,
+      dragState.index,
+      targetIndex,
+      false,
+    );
   }
 
   private finishAxisDrag(dragState: S1000DAxisDragState): void {
@@ -1185,7 +1208,14 @@ export class S1000DTableOverlayView {
       return;
     }
 
-    this.simulateAxisReorder(dragState.axis, dragState.tablePos, dragState.index, targetIndex, true);
+    this.simulateAxisReorder(
+      dragState.axis,
+      dragState.tablePos,
+      dragState.tgroupIndex,
+      dragState.index,
+      targetIndex,
+      true,
+    );
     this.cancelAxisDrag();
     this.render();
   }
@@ -1209,13 +1239,19 @@ export class S1000DTableOverlayView {
     handle: HTMLButtonElement | null,
   ): void {
     const interaction = getS1000DTableInteractionState(this.view.state);
-    if (shouldToggleContextMenuFromAxisHandle(interaction, axis, axisIndex, tablePos)) {
+    if (shouldToggleContextMenuFromAxisHandle(
+      interaction,
+      axis,
+      axisIndex,
+      tablePos,
+      handle ? Number(handle.dataset.tgroupIndex) : null,
+    )) {
       this.toggleContextMenuFromControl(axis, handle);
       return;
     }
 
-    const context = getRenderedS1000DTableContext(this.view, tablePos);
-    const transaction = context ? this.createAxisSelectionTransaction(context, axis, axisIndex) : null;
+      const context = handle ? this.getContextFromDataset(handle) : getRenderedS1000DTableContext(this.view, tablePos);
+      const transaction = context ? this.createAxisSelectionTransaction(context, axis, axisIndex) : null;
     if (!transaction) {
       return;
     }
@@ -1291,7 +1327,9 @@ export class S1000DTableOverlayView {
       return;
     }
 
-    const context = getRenderedS1000DTableContext(this.view, target.tablePos);
+    const context = getRenderedS1000DTableContext(this.view, target.tablePos, {
+      preferredTgroupIndex: target.tgroupIndex,
+    });
     if (!context?.activeTgroup) {
       return;
     }
@@ -1316,7 +1354,9 @@ export class S1000DTableOverlayView {
       return;
     }
 
-    const nextContext = getRenderedS1000DTableContext(this.view, target.tablePos);
+    const nextContext = getRenderedS1000DTableContext(this.view, target.tablePos, {
+      preferredTgroupIndex: target.tgroupIndex,
+    });
     const nextSelection = nextContext
       ? this.createAxisSelectionTransaction(
           nextContext,
@@ -1393,16 +1433,19 @@ export class S1000DTableOverlayView {
       return;
     }
 
+    const domContext = findS1000DTableAtDOM(this.view, eventElement ?? event.target);
     const activeContext = this.getActiveContext();
-    const hovered = activeContext && hitTestRenderedTablePoint(activeContext, event.clientX, event.clientY)
-      ? activeContext
-      : findS1000DTableAtDOM(this.view, eventElement ?? event.target);
+    const hovered = domContext ?? (
+      activeContext && hitTestRenderedTablePoint(activeContext, event.clientX, event.clientY)
+        ? activeContext
+        : undefined
+    );
     if (!hovered) {
       this.clearHoverState();
       return;
     }
 
-    const geometry = measureS1000DRenderedTableGeometry(hovered.dom, hovered.wrapper);
+    const geometry = measureS1000DRenderedTableGeometry(hovered.dom, hovered.wrapper, hovered.activeTgroupIndex);
     const rowIndex = getHoveredRowIndex(geometry, event.clientY);
     const columnIndex = getHoveredColumnIndex(geometry, event.clientX);
     this.syncHoverState(
@@ -1604,6 +1647,7 @@ export class S1000DTableOverlayView {
     this.syncInteractionMeta({
       hovered: null,
       hoveredControl: null,
+      hoveredTgroupIndex: null,
     });
   }
 
@@ -1632,6 +1676,7 @@ export class S1000DTableOverlayView {
         kind: axis,
         index: axisIndex,
         tablePos: context.tablePos,
+        tgroupIndex: context.activeTgroupIndex,
       },
       selectedAxisExplicit: true,
     });
@@ -1640,11 +1685,14 @@ export class S1000DTableOverlayView {
   private simulateAxisReorder(
     axis: 'row' | 'column',
     tablePos: number,
+    tgroupIndex: number,
     fromIndex: number,
     toIndex: number,
     apply: boolean,
   ): boolean {
-    const context = getRenderedS1000DTableContext(this.view, tablePos);
+    const context = getRenderedS1000DTableContext(this.view, tablePos, {
+      preferredTgroupIndex: tgroupIndex,
+    });
     const selectionTransaction = context ? this.createAxisSelectionTransaction(context, axis, fromIndex) : null;
     if (!selectionTransaction) {
       return false;
@@ -1687,7 +1735,9 @@ export class S1000DTableOverlayView {
       return true;
     }
 
-    const nextContext = getRenderedS1000DTableContext(this.view, tablePos);
+    const nextContext = getRenderedS1000DTableContext(this.view, tablePos, {
+      preferredTgroupIndex: tgroupIndex,
+    });
     const finalSelection = nextContext ? this.createAxisSelectionTransaction(nextContext, axis, toIndex) : null;
     if (finalSelection) {
       this.view.dispatch(finalSelection.scrollIntoView());
@@ -1702,16 +1752,19 @@ export class S1000DTableOverlayView {
     axis: 'row' | 'column',
     tablePos: number,
     index: number,
+    tgroupIndex: number,
   ): boolean {
     if (this.axisDrag?.hasDragged && this.axisDrag.tablePos === tablePos) {
-      return this.axisDrag.axis === axis && this.axisDrag.index === index;
+      return this.axisDrag.axis === axis
+        && this.axisDrag.index === index
+        && this.axisDrag.tgroupIndex === tgroupIndex;
     }
 
     if (interaction.resizing?.tablePos === tablePos || interaction.tableSelected) {
       return false;
     }
 
-    const selected = isAxisHandleSelected(interaction, axis, tablePos, index);
+    const selected = isAxisHandleSelected(interaction, axis, tablePos, index, tgroupIndex);
     if (interaction.contextMenuOpen && !selected) {
       return false;
     }
@@ -1776,7 +1829,26 @@ export class S1000DTableOverlayView {
     interaction = getS1000DTableInteractionState(this.view.state),
   ): S1000DTableDOMContext | undefined {
     const tablePos = interaction.activeTable?.tablePos;
-    return typeof tablePos === 'number' ? getRenderedS1000DTableContext(this.view, tablePos) : undefined;
+    if (typeof tablePos !== 'number') {
+      return undefined;
+    }
+
+    const preferredTgroupIndex = interaction.hovered?.tablePos === tablePos
+      ? interaction.hoveredTgroupIndex
+      : null;
+    return getRenderedS1000DTableContext(this.view, tablePos, { preferredTgroupIndex });
+  }
+
+  private getContextFromDataset(element: HTMLElement): S1000DTableDOMContext | undefined {
+    const tablePos = Number(element.dataset.tablePos);
+    const preferredTgroupIndex = Number(element.dataset.tgroupIndex);
+    if (!Number.isInteger(tablePos)) {
+      return undefined;
+    }
+
+    return getRenderedS1000DTableContext(this.view, tablePos, {
+      preferredTgroupIndex: Number.isInteger(preferredTgroupIndex) ? preferredTgroupIndex : null,
+    });
   }
 
   private syncHoverState(
@@ -1802,6 +1874,7 @@ export class S1000DTableOverlayView {
         table: context.table,
       },
       hoveredControl,
+      hoveredTgroupIndex: context.activeTgroupIndex,
     });
   }
 
