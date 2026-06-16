@@ -304,6 +304,28 @@ const s1000dTableStyles = `
   cursor: grabbing;
 }
 
+.s1000d-table-overlay .s1000d-table-overlay__drop-indicator {
+  position: absolute;
+  z-index: 3;
+  pointer-events: none;
+  background: var(--s1000d-table-dnd-indicator-color);
+  box-shadow: 0 0 0 1px rgb(255 255 255 / 0.92);
+}
+
+.s1000d-table-overlay .s1000d-table-overlay__drop-indicator--row {
+  min-height: 2px;
+  transform: translateY(-50%);
+}
+
+.s1000d-table-overlay .s1000d-table-overlay__drop-indicator--column {
+  min-width: 2px;
+  transform: translateX(-50%);
+}
+
+.s1000d-table-overlay .s1000d-table-overlay__drop-indicator--invalid {
+  background: var(--s1000d-table-dnd-indicator-invalid-color);
+}
+
 .s1000d-table-overlay .s1000d-table-overlay__handle--table {
   min-width: 0.95rem;
   min-height: 0.95rem;
