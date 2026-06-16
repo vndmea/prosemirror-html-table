@@ -1,4 +1,4 @@
-import { NodeSelection, TextSelection, type EditorState } from 'prosemirror-state';
+import { NodeSelection, type EditorState } from 'prosemirror-state';
 import type { EditorView } from 'prosemirror-view';
 
 import {
@@ -8,20 +8,26 @@ import {
   addS1000DRowBefore,
   deleteS1000DColumn,
   deleteS1000DRow,
-  findS1000DTableContext,
+  duplicateS1000DColumn,
+  duplicateS1000DRow,
   mergeOrSplitS1000DCell,
   mergeS1000DCells,
   moveS1000DColumnLeft,
   moveS1000DColumnRight,
+  moveS1000DRowToBody,
+  moveS1000DRowToFoot,
+  moveS1000DRowToHead,
   moveS1000DRowDown,
   moveS1000DRowUp,
+  setS1000DSelectedEntryAttrs,
+  setS1000DSelectedEntryRawAttrs,
+  setS1000DTableColumnWidths,
   splitS1000DCell,
 } from './commands.js';
 import { clearS1000DSelectedCells, getS1000DSelectionInfo, isWholeS1000DTableSelection } from './clipboard.js';
-import type { S1000DActiveTableContext } from './context.js';
-import { replaceS1000DEntries, replaceS1000DTable } from './mutation.js';
+import { distributeS1000DColumnWidths } from './column-widths.js';
+import { getRenderedS1000DTableContext } from './dom-adapter.js';
 import { s1000dTableNodeNames } from './names.js';
-import { findS1000DEntryPosition } from './position.js';
 import {
   getS1000DTableInteractionState,
   type S1000DTableInteractionState,
@@ -278,6 +284,20 @@ function getBuiltInContextMenuActions(
         view.focus();
         return true;
       }),
+      createAction(
+        'fit-table-to-width',
+        'Fit table to width',
+        'table',
+        Boolean(interaction.activeTable && interaction.geometry?.columns.length),
+        (view) => runMeasuredTableWidthAction(view, 'fit'),
+      ),
+      createAction(
+        'distribute-columns',
+        'Distribute columns',
+        'table',
+        Boolean(interaction.activeTable && interaction.geometry?.columns.length),
+        (view) => runMeasuredTableWidthAction(view, 'distribute'),
+      ),
       createAction('delete-table', 'Delete table', 'danger', true, (view) => {
         const interactionState = getS1000DTableInteractionState(view.state);
         const activeTable = interactionState.activeTable;
@@ -297,8 +317,13 @@ function getBuiltInContextMenuActions(
     return [
       commandAction(state, 'add-row-before', 'Add row before', 'insert', addS1000DRowBefore()),
       commandAction(state, 'add-row-after', 'Add row after', 'insert', addS1000DRowAfter()),
+      ...getBackgroundColorActions(state, 'row', selectionInfo),
       commandAction(state, 'move-row-up', 'Move row up', 'reorder', moveS1000DRowUp()),
       commandAction(state, 'move-row-down', 'Move row down', 'reorder', moveS1000DRowDown()),
+      commandAction(state, 'duplicate-row', 'Duplicate row', 'reorder', duplicateS1000DRow()),
+      commandAction(state, 'move-row-to-head', 'Move row to head', 'structure', moveS1000DRowToHead()),
+      commandAction(state, 'move-row-to-body', 'Move row to body', 'structure', moveS1000DRowToBody()),
+      commandAction(state, 'move-row-to-foot', 'Move row to foot', 'structure', moveS1000DRowToFoot()),
       createAction('clear-row-cells', 'Clear row contents', 'content', canClearSelection(state), (view) =>
         clearS1000DSelectedCells(view.state, view.dispatch),
       ),
@@ -313,25 +338,18 @@ function getBuiltInContextMenuActions(
       commandAction(state, 'add-column-after', 'Add column after', 'insert', addS1000DColumnAfter()),
       commandAction(state, 'move-column-left', 'Move column left', 'reorder', moveS1000DColumnLeft()),
       commandAction(state, 'move-column-right', 'Move column right', 'reorder', moveS1000DColumnRight()),
+      ...getBackgroundColorActions(state, 'column', selectionInfo),
       createAction('clear-column-cells', 'Clear column contents', 'content', canClearSelection(state), (view) =>
         clearS1000DSelectedCells(view.state, view.dispatch),
       ),
+      commandAction(state, 'duplicate-column', 'Duplicate column', 'reorder', duplicateS1000DColumn()),
       commandAction(state, 'delete-column', 'Delete column', 'danger', deleteS1000DColumn(), { destructive: true }),
       ...getAlignmentActions(state, 'column', selectionInfo),
     ];
   }
 
   return [
-    createAction('select-cell', 'Select current cell', 'structure', true, (view) => {
-      const tableContext = findS1000DTableContext(view.state);
-      if (!tableContext?.activeTgroup) return false;
-      const info = getS1000DSelectionInfo(view.state, { tablePos: tableContext.tablePos }) ?? getS1000DSelectionInfo(view.state);
-      const entryPos = info?.anchorEntry ? findS1000DEntryPosition(tableContext, info.anchorEntry) : null;
-      if (typeof entryPos !== 'number') return false;
-      view.dispatch(view.state.tr.setSelection(TextSelection.near(view.state.doc.resolve(entryPos + 1))).scrollIntoView());
-      view.focus();
-      return true;
-    }),
+    ...getBackgroundColorActions(state, 'cell', selectionInfo),
     commandAction(state, 'merge-cells', 'Merge cells', 'structure', mergeS1000DCells()),
     commandAction(state, 'split-cell', 'Split cell', 'structure', splitS1000DCell()),
     commandAction(state, 'merge-or-split-cell', 'Merge or split', 'structure', mergeOrSplitS1000DCell()),
@@ -345,66 +363,55 @@ function getBuiltInContextMenuActions(
 
 function getAlignmentActions(
   state: EditorState,
-  scope: S1000DTableMenuScope,
+  _scope: S1000DTableMenuScope,
   selectionInfo: ReturnType<typeof getS1000DSelectionInfo> | undefined,
 ): S1000DContextMenuAction[] {
   const align = getCommonSelectedAttribute(selectionInfo, 'align');
   const valign = getCommonSelectedAttribute(selectionInfo, 'valign');
 
   return [
-    createAction('set-align-left', 'Align left', 'format', scope === 'cell' || scope === 'row' || scope === 'column', (view) =>
-      updateSelectedEntriesAttributes(view, { align: 'left' }),
-      { active: align === 'left' },
-    ),
-    createAction('set-align-center', 'Align center', 'format', scope === 'cell' || scope === 'row' || scope === 'column', (view) =>
-      updateSelectedEntriesAttributes(view, { align: 'center' }),
-      { active: align === 'center' },
-    ),
-    createAction('set-align-right', 'Align right', 'format', scope === 'cell' || scope === 'row' || scope === 'column', (view) =>
-      updateSelectedEntriesAttributes(view, { align: 'right' }),
-      { active: align === 'right' },
-    ),
-    createAction('set-valign-top', 'Align top', 'format', scope === 'cell' || scope === 'row' || scope === 'column', (view) =>
-      updateSelectedEntriesAttributes(view, { valign: 'top' }),
-      { active: valign === 'top' },
-    ),
-    createAction('set-valign-middle', 'Align middle', 'format', scope === 'cell' || scope === 'row' || scope === 'column', (view) =>
-      updateSelectedEntriesAttributes(view, { valign: 'middle' }),
-      { active: valign === 'middle' },
-    ),
-    createAction('set-valign-bottom', 'Align bottom', 'format', scope === 'cell' || scope === 'row' || scope === 'column', (view) =>
-      updateSelectedEntriesAttributes(view, { valign: 'bottom' }),
-      { active: valign === 'bottom' },
-    ),
+    commandAction(state, 'set-align-left', 'Align left', 'format', setS1000DSelectedEntryAttrs({ align: 'left' }), {
+      active: align === 'left',
+    }),
+    commandAction(state, 'set-align-center', 'Align center', 'format', setS1000DSelectedEntryAttrs({ align: 'center' }), {
+      active: align === 'center',
+    }),
+    commandAction(state, 'set-align-right', 'Align right', 'format', setS1000DSelectedEntryAttrs({ align: 'right' }), {
+      active: align === 'right',
+    }),
+    commandAction(state, 'set-valign-top', 'Align top', 'format', setS1000DSelectedEntryAttrs({ valign: 'top' }), {
+      active: valign === 'top',
+    }),
+    commandAction(state, 'set-valign-middle', 'Align middle', 'format', setS1000DSelectedEntryAttrs({ valign: 'middle' }), {
+      active: valign === 'middle',
+    }),
+    commandAction(state, 'set-valign-bottom', 'Align bottom', 'format', setS1000DSelectedEntryAttrs({ valign: 'bottom' }), {
+      active: valign === 'bottom',
+    }),
   ];
 }
 
-function updateSelectedEntriesAttributes(
-  view: EditorView,
-  attrs: Record<string, unknown>,
-): boolean {
-  const context = findS1000DTableContext(view.state);
-  if (!context?.activeTgroup) {
-    return false;
-  }
-  const activeContext = context as S1000DActiveTableContext;
+function getBackgroundColorActions(
+  state: EditorState,
+  _scope: S1000DTableMenuScope,
+  selectionInfo: ReturnType<typeof getS1000DSelectionInfo> | undefined,
+): S1000DContextMenuAction[] {
+  const backgroundColor = getCommonSelectedRawAttribute(selectionInfo, 'bgcolor');
 
-  const selectionInfo = getS1000DSelectionInfo(view.state, { tablePos: context.tablePos }) ?? getS1000DSelectionInfo(view.state);
-  if (!selectionInfo) {
-    return false;
-  }
-
-  const replacements = new Map(
-    selectionInfo.entries.map((entry) => [
-      entry,
-      entry.node.type.create({
-        ...entry.node.attrs,
-        ...attrs,
-      }, entry.node.content, entry.node.marks),
-    ]),
-  );
-  const nextTable = replaceS1000DEntries(activeContext, replacements);
-  return replaceS1000DTable(view.state, view.dispatch, activeContext, nextTable);
+  return [
+    commandAction(state, 'set-background-blue', 'Background blue', 'format', setS1000DSelectedEntryRawAttrs({ bgcolor: '#dbeafe' }), {
+      active: backgroundColor === '#dbeafe',
+    }),
+    commandAction(state, 'set-background-green', 'Background green', 'format', setS1000DSelectedEntryRawAttrs({ bgcolor: '#dcfce7' }), {
+      active: backgroundColor === '#dcfce7',
+    }),
+    commandAction(state, 'set-background-yellow', 'Background yellow', 'format', setS1000DSelectedEntryRawAttrs({ bgcolor: '#fef3c7' }), {
+      active: backgroundColor === '#fef3c7',
+    }),
+    commandAction(state, 'clear-background', 'Clear background', 'format', setS1000DSelectedEntryRawAttrs({ bgcolor: null }), {
+      active: backgroundColor == null,
+    }),
+  ];
 }
 
 function getCommonSelectedAttribute(
@@ -417,6 +424,77 @@ function getCommonSelectedAttribute(
 
   const value = selectionInfo.entries[0]?.node.attrs[name];
   return selectionInfo.entries.every((entry) => entry.node.attrs[name] === value) ? value : undefined;
+}
+
+function getCommonSelectedRawAttribute(
+  selectionInfo: ReturnType<typeof getS1000DSelectionInfo> | undefined,
+  name: string,
+): string | null | undefined {
+  if (!selectionInfo || selectionInfo.entries.length === 0) {
+    return undefined;
+  }
+
+  const value = readEntryRawAttribute(selectionInfo.entries[0]?.node.attrs.rawAttrs, name);
+  return selectionInfo.entries.every((entry) => readEntryRawAttribute(entry.node.attrs.rawAttrs, name) === value)
+    ? value
+    : undefined;
+}
+
+function readEntryRawAttribute(rawAttrs: unknown, name: string): string | null {
+  if (!rawAttrs || typeof rawAttrs !== 'object' || Array.isArray(rawAttrs)) {
+    return null;
+  }
+
+  const value = (rawAttrs as Record<string, unknown>)[name];
+  return typeof value === 'string' && value.length > 0 ? value : null;
+}
+
+function runMeasuredTableWidthAction(
+  view: EditorView,
+  mode: 'fit' | 'distribute',
+): boolean {
+  const interaction = getS1000DTableInteractionState(view.state);
+  const tablePos = interaction.activeTable?.tablePos;
+  const columnCount = interaction.geometry?.columns.length ?? 0;
+  if (tablePos == null || columnCount <= 0) {
+    return false;
+  }
+
+  const measuredWidth = measureTableContentWidth(view, tablePos);
+  if (measuredWidth == null) {
+    return false;
+  }
+
+  const currentWidths = interaction.geometry?.columns.map((column) => column.width);
+  const widths = mode === 'fit'
+    ? distributeS1000DColumnWidths(measuredWidth, columnCount, 48, currentWidths)
+    : distributeS1000DColumnWidths(measuredWidth, columnCount, 48);
+  if (widths.length === 0) {
+    return false;
+  }
+
+  return setS1000DTableColumnWidths(widths, { tablePos })(view.state, view.dispatch);
+}
+
+function measureTableContentWidth(view: EditorView, tablePos: number): number | null {
+  const context = getRenderedS1000DTableContext(view, tablePos);
+  if (!context) {
+    return null;
+  }
+
+  const measuredElement = context.wrapper.parentElement ?? context.wrapper;
+  const styles = measuredElement.ownerDocument.defaultView?.getComputedStyle(measuredElement);
+  const paddingLeft = styles ? Number.parseFloat(styles.paddingLeft) || 0 : 0;
+  const paddingRight = styles ? Number.parseFloat(styles.paddingRight) || 0 : 0;
+  const borderLeft = styles ? Number.parseFloat(styles.borderLeftWidth) || 0 : 0;
+  const borderRight = styles ? Number.parseFloat(styles.borderRightWidth) || 0 : 0;
+  const contentWidth = measuredElement.clientWidth - paddingLeft - paddingRight - borderLeft - borderRight;
+  if (contentWidth > 0) {
+    return contentWidth;
+  }
+
+  const fallbackWidth = context.dom.getBoundingClientRect().width;
+  return fallbackWidth > 0 ? fallbackWidth : null;
 }
 
 function canClearSelection(state: EditorState) {

@@ -423,25 +423,33 @@ const s1000dTableStyles = `
   position: absolute;
   z-index: 6;
   display: grid;
-  gap: 0.5rem;
-  min-width: 13rem;
-  max-width: 16rem;
-  padding: 0.5rem;
+  gap: 0.38rem;
+  min-width: 12rem;
+  max-width: min(20rem, calc(100vw - 2rem));
+  padding: 0.55rem;
   border: 1px solid var(--s1000d-table-overlay-border);
-  border-radius: 0.75rem;
-  background: var(--s1000d-table-overlay-surface);
+  border-radius: 0.7rem;
+  background: #ffffff;
   box-shadow: var(--s1000d-table-overlay-shadow-strong);
+  overflow-y: auto;
   pointer-events: auto;
+}
+
+.s1000d-table-overlay .s1000d-table-overlay__context-menu--submenu {
+  z-index: 7;
+}
+
+.s1000d-table-overlay .s1000d-table-overlay__context-menu--submenu::before {
+  content: none;
 }
 
 .s1000d-table-overlay .s1000d-table-overlay__context-menu-group {
   display: grid;
-  gap: 0.25rem;
+  gap: 0.28rem;
 }
 
-.s1000d-table-overlay .s1000d-table-overlay__context-menu-group:not(:last-child) {
-  padding-bottom: 0.4rem;
-  border-bottom: 1px solid rgba(226, 232, 240, 0.9);
+.s1000d-table-overlay .s1000d-table-overlay__context-menu-group--stack {
+  gap: 0.22rem;
 }
 
 .s1000d-table-overlay .s1000d-table-overlay__context-menu-group-title {
@@ -454,58 +462,71 @@ const s1000dTableStyles = `
 }
 
 .s1000d-table-overlay .s1000d-table-overlay__context-menu-action {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0.55rem;
   width: 100%;
   min-width: 0;
-  padding: 0.38rem 0.58rem;
-  border: 1px solid #cbd5e1;
+  padding: 0.48rem 0.6rem;
+  border: 0;
   border-radius: 0.55rem;
-  background: #ffffff;
+  background: transparent;
   color: #0f172a;
-  font-size: 0.82rem;
-  line-height: 1.15;
+  font-size: 0.78rem;
+  font-weight: 500;
+  line-height: 1.2;
   text-align: left;
   cursor: pointer;
+  transform: none;
   transition:
     background 0.15s ease,
-    border-color 0.15s ease,
     box-shadow 0.15s ease,
-    transform 0.15s ease;
+    color 0.15s ease;
+}
+
+.s1000d-table-overlay .s1000d-table-overlay__context-menu-action.has-submenu::after {
+  content: "›";
+  margin-left: auto;
+  color: #94a3b8;
+  font-size: 0.95rem;
+  line-height: 1;
+}
+
+.s1000d-table-overlay .s1000d-table-overlay__context-menu-action:focus-visible {
+  outline: none;
+  background: #eff6ff;
+  box-shadow: inset 0 0 0 1px rgba(37, 99, 235, 0.18);
+  color: #0f172a;
 }
 
 .s1000d-table-overlay .s1000d-table-overlay__context-menu-action:hover:not(:disabled),
-.s1000d-table-overlay .s1000d-table-overlay__context-menu-action:focus-visible {
+.s1000d-table-overlay .s1000d-table-overlay__context-menu-action[aria-expanded="true"] {
   background: #f8fafc;
-  border-color: #94a3b8;
-  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.12);
-  transform: translateY(-1px);
-  outline: none;
+  color: #0f172a;
 }
 
 .s1000d-table-overlay .s1000d-table-overlay__context-menu-action:disabled {
-  border-color: #e2e8f0;
-  background: #f8fafc;
   color: #94a3b8;
-  cursor: not-allowed;
-  opacity: 0.72;
-  transform: none;
+  background: transparent;
+  cursor: default;
 }
 
 .s1000d-table-overlay .s1000d-table-overlay__context-menu-action.is-active {
-  border-color: rgba(37, 99, 235, 0.45);
   background: rgba(37, 99, 235, 0.08);
   color: #1d4ed8;
 }
 
 .s1000d-table-overlay .s1000d-table-overlay__context-menu-action.is-destructive {
-  border-color: #fecaca;
   color: var(--s1000d-table-overlay-danger);
 }
 
 .s1000d-table-overlay .s1000d-table-overlay__context-menu-action.is-destructive:hover:not(:disabled),
 .s1000d-table-overlay .s1000d-table-overlay__context-menu-action.is-destructive:focus-visible {
   background: var(--s1000d-table-overlay-danger-bg);
-  border-color: #fca5a5;
-  box-shadow: 0 0 0 2px rgba(220, 38, 38, 0.12);
+  box-shadow: none;
+  color: #991b1b;
 }
 
 .s1000d-table-overlay.s1000d-table-overlay--resizing,

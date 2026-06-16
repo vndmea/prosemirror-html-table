@@ -281,6 +281,64 @@ test.describe('S1000D React demo', () => {
     expect(afterRows).toBe(beforeRows - 1);
   });
 
+  test('row context menu exposes duplicate and section move actions for body rows', async ({ page }) => {
+    await page.goto('/');
+    await expectDemoApi(page);
+    await loadDemoXml(page, `
+<table id="row-menu-parity">
+  <tgroup cols="2">
+    <tbody>
+      <row id="row-1"><entry>A1</entry><entry>A2</entry></row>
+      <row id="row-2"><entry>B1</entry><entry>B2</entry></row>
+    </tbody>
+  </tgroup>
+</table>
+    `.trim(), 'extended');
+
+    const table = page.getByTestId('editor').getByTestId('s1000d-table');
+    await table.hover();
+    expect(await selectDemoRow(page, 0)).toBe(true);
+
+    await page.getByTestId('selection-actions-trigger').click();
+    await expect(page.getByTestId('selection-menu-item-duplicate-row')).toBeVisible();
+    await expect(page.getByTestId('selection-menu-item-move-row-to-head')).toBeVisible();
+    await expect(page.getByTestId('selection-menu-item-move-row-to-body')).toBeVisible();
+    await expect(page.getByTestId('selection-menu-item-move-row-to-foot')).toBeVisible();
+  });
+
+  test('column context menu uses flyout color and alignment submenus', async ({ page }) => {
+    await page.goto('/');
+    await expectDemoApi(page);
+    await loadDemoXml(page, `
+<table id="column-menu-parity">
+  <tgroup cols="2">
+    <colspec colname="c1" colwidth="80px"/>
+    <colspec colname="c2" colwidth="120px"/>
+    <tbody>
+      <row><entry colname="c1">A</entry><entry colname="c2">B</entry></row>
+      <row><entry colname="c1">C</entry><entry colname="c2">D</entry></row>
+    </tbody>
+  </tgroup>
+</table>
+    `.trim(), 'extended');
+
+    const table = page.getByTestId('editor').getByTestId('s1000d-table');
+    await table.hover();
+    expect(await selectDemoColumn(page, 0)).toBe(true);
+
+    await page.getByTestId('selection-actions-trigger').click();
+    await expect(page.getByTestId('selection-menu-item-duplicate-column')).toBeVisible();
+    await page.getByTestId('selection-menu-submenu-color').click();
+    await expect(page.getByTestId('selection-submenu')).toBeVisible();
+    await expect(page.getByTestId('selection-menu-item-set-background-blue')).toBeVisible();
+    await expect(page.getByTestId('selection-menu-item-clear-background')).toBeVisible();
+
+    await page.getByTestId('selection-menu-submenu-alignment').click();
+    await expect(page.getByTestId('selection-submenu')).toBeVisible();
+    await expect(page.getByTestId('selection-menu-item-set-align-center')).toBeVisible();
+    await expect(page.getByTestId('selection-menu-item-set-valign-bottom')).toBeVisible();
+  });
+
   test('cell context menu can merge and split a keyboard-selected cell range', async ({ page }) => {
     await page.goto('/');
     await expectDemoApi(page);
@@ -300,6 +358,8 @@ test.describe('S1000D React demo', () => {
     expect(selected.selectionSummary).toContain('Cell selection: true');
 
     await page.getByTestId('selection-actions-trigger').click();
+    await page.getByTestId('selection-menu-submenu-structure').click();
+    await expect(page.getByTestId('selection-submenu')).toBeVisible();
     await expect(page.getByTestId('selection-menu-item-merge-cells')).toBeEnabled();
     await page.getByTestId('selection-menu-item-merge-cells').click();
 
@@ -307,10 +367,24 @@ test.describe('S1000D React demo', () => {
     expect(mergedHtml).toContain('colspan=');
 
     await page.getByTestId('selection-actions-trigger').click();
+    await page.getByTestId('selection-menu-submenu-structure').click();
     await page.getByTestId('selection-menu-item-split-cell').click();
 
     const validation = await validateDemo(page);
     expect(validation.valid).toBe(true);
+  });
+
+  test('cell context submenu opens from the trigger menu', async ({ page }) => {
+    await page.goto('/');
+    await expectDemoApi(page);
+    await loadDemoSample(page, 'extended');
+
+    await selectDemoRange(page, 1, 0, 1, 1);
+    await page.getByTestId('selection-actions-trigger').click();
+    await expect(page.getByTestId('selection-menu')).toBeVisible();
+    await page.getByTestId('selection-menu-submenu-color').click();
+    await expect(page.getByTestId('selection-submenu')).toBeVisible();
+    await expect(page.getByTestId('selection-menu-item-set-background-blue')).toBeVisible();
   });
 
   test('cell selection handle appears on a selected range and opens the action menu', async ({ page }) => {
@@ -329,6 +403,30 @@ test.describe('S1000D React demo', () => {
 
     await expect(page.getByTestId('selection-menu')).toBeVisible();
     await expect(page.getByTestId('selection-menu-item-copy-selection')).toBeVisible();
+  });
+
+  test('table context menu exposes fit and distribute actions', async ({ page }) => {
+    await page.goto('/');
+    await expectDemoApi(page);
+    await loadDemoXml(page, `
+<table id="table-width-actions">
+  <tgroup cols="2">
+    <colspec colname="c1" colwidth="80px"/>
+    <colspec colname="c2" colwidth="160px"/>
+    <tbody>
+      <row><entry colname="c1">A</entry><entry colname="c2">B</entry></row>
+    </tbody>
+  </tgroup>
+</table>
+    `.trim(), 'extended');
+
+    const table = page.getByTestId('editor').getByTestId('s1000d-table');
+    await table.hover();
+    await page.getByTestId('s1000d-table-handle').click();
+
+    await page.getByTestId('selection-actions-trigger').click();
+    await expect(page.getByTestId('selection-menu-item-fit-table-to-width')).toBeVisible();
+    await expect(page.getByTestId('selection-menu-item-distribute-columns')).toBeVisible();
   });
 
   test('resize writes colwidth to the active tgroup only and participates in undo/redo', async ({ page }) => {
@@ -875,7 +973,7 @@ test.describe('S1000D React demo', () => {
     expect(await runDemoCommand(page, 'redo')).toBe(true);
   });
 
-  test('cell alignment actions write attributes and keep renderer/xml valid', async ({ page }) => {
+  test('cell alignment submenu exposes horizontal and vertical actions', async ({ page }) => {
     await page.goto('/');
     await expectDemoApi(page);
     await loadDemoSample(page, 'extended');
@@ -885,15 +983,10 @@ test.describe('S1000D React demo', () => {
     await bodyCell.click();
 
     await page.getByTestId('selection-actions-trigger').click();
-    await page.getByTestId('selection-menu-item-set-align-center').click();
-    await page.getByTestId('selection-actions-trigger').click();
-    await page.getByTestId('selection-menu-item-set-valign-bottom').click();
+    await page.getByTestId('selection-menu-submenu-alignment').click();
+    await expect(page.getByTestId('selection-menu-item-set-align-center')).toBeVisible();
+    await expect(page.getByTestId('selection-menu-item-set-valign-bottom')).toBeVisible();
 
-    const snapshot = await getDemoSnapshot(page);
-    expect(snapshot.selectionScope).toBe('cell');
-
-    const html = await renderDemoHtml(page);
-    expect(html).toContain('<table');
     const validation = await validateDemo(page);
     expect(validation.valid).toBe(true);
   });

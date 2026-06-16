@@ -638,6 +638,28 @@ describe('S1000D table commands and adapters', () => {
     expect(findS1000DRowContext(nextState)?.rowRef.rowIndexInSection).toBe(1);
   });
 
+  it('duplicates standalone rows from a row selection', () => {
+    const table = parseS1000DTableXml(
+      '<table id="tab-1"><tgroup cols="2"><tbody><row id="row-1"><entry><para>A1</para></entry><entry><para>A2</para></entry></row><row id="row-2"><entry><para>B1</para></entry><entry><para>B2</para></entry></row></tbody></tgroup></table>',
+      extendedSchema,
+      { profile: 'extended' },
+    );
+    const doc = extendedSchema.nodes.doc!.create(null, [table]);
+    const entryPositions = findNodePositions(doc, 's1000dEntry');
+    const state = EditorState.create({
+      doc,
+      selection: S1000DCellSelection.rowSelection(doc.resolve(entryPositions[0]! + 1)),
+    });
+
+    let nextState = state;
+    const result = duplicateS1000DRow()(state, (transaction) => {
+      nextState = nextState.apply(transaction);
+    });
+
+    expect(result).toBe(true);
+    expect(getTgroupBody(findS1000DTableContext(nextState)?.table.child(0))?.childCount).toBe(3);
+  });
+
   it('moves standalone rows into header, body, and footer sections', () => {
     const table = parseS1000DTableXml(
       '<table id="tab-1"><tgroup cols="2"><tbody><row id="body-row-1"><entry>A1</entry><entry>A2</entry></row><row id="body-row-2"><entry>B1</entry><entry>B2</entry></row></tbody></tgroup></table>',
@@ -854,6 +876,32 @@ describe('S1000D table commands and adapters', () => {
     expect(nextTbody?.child(0)?.child(1)?.attrs.id).toBeNull();
     expect(findS1000DEntryContext(nextState)?.entry.columnIndex).toBe(1);
     expect(findS1000DEntryContext(nextState)?.entry.node.textContent).toBe('A');
+  });
+
+  it('duplicates supported columns and writes raw attrs from a column selection', () => {
+    const table = parseS1000DTableXml(
+      '<table id="tab-1"><tgroup cols="2"><colspec colname="c1" colnum="1"/><colspec colname="c2" colnum="2"/><tbody><row id="row-1"><entry colname="c1"><para>A</para></entry><entry colname="c2"><para>B</para></entry></row><row id="row-2"><entry colname="c1"><para>C</para></entry><entry colname="c2"><para>D</para></entry></row></tbody></tgroup></table>',
+      extendedSchema,
+      { profile: 'extended' },
+    );
+    const doc = extendedSchema.nodes.doc!.create(null, [table]);
+    const entryPositions = findNodePositions(doc, 's1000dEntry');
+    let state = EditorState.create({
+      doc,
+      selection: S1000DCellSelection.colSelection(doc.resolve(entryPositions[0]! + 1)),
+    });
+
+    let result = setS1000DSelectedEntryRawAttrs({ bgcolor: '#dbeafe' })(state, (transaction) => {
+      state = state.apply(transaction);
+    });
+    expect(result).toBe(true);
+    expect(findS1000DEntryContext(state)?.entry.node.attrs.rawAttrs.bgcolor).toBe('#dbeafe');
+
+    result = duplicateS1000DColumn()(state, (transaction) => {
+      state = state.apply(transaction);
+    });
+    expect(result).toBe(true);
+    expect(createS1000DTableAdapter().createGrid(findS1000DTableContext(state)!.activeTgroup!, 0).width).toBe(3);
   });
 
   it('writes raw bgcolor attrs and explicit colwidths through commands', () => {
