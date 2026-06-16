@@ -5,7 +5,7 @@ const E2E_BASE_URL = `http://127.0.0.1:${E2E_PORT}`;
 
 export default defineConfig({
   testDir: './tests/e2e',
-  testMatch: 's1000d-react-demo.spec.ts',
+  testMatch: 's1000d-*.spec.ts',
   timeout: 30_000,
   workers: 1,
   fullyParallel: false,
