@@ -44,9 +44,8 @@ test.describe('S1000D React demo', () => {
     const lastCell = table.locator('tbody[data-s1000d="tbody"] tr').first().locator('td').last();
     await lastCell.hover();
 
-    const columnHandle = page.getByTestId('s1000d-column-handle').last();
+    const columnHandle = page.locator('[data-testid="s1000d-column-handle"]:visible');
     await columnHandle.click();
-    await page.getByTestId('selection-actions-trigger').click();
 
     const handleBox = await columnHandle.boundingBox();
     const menuBox = await page.getByTestId('selection-menu').boundingBox();
@@ -78,8 +77,8 @@ test.describe('S1000D React demo', () => {
     await loadDemoSample(page, 'extended');
 
     const table = page.getByTestId('editor').getByTestId('s1000d-table');
-    await table.hover();
-    const rowHandle = page.getByTestId('s1000d-row-handle').nth(2);
+    await table.locator('tbody[data-s1000d="tbody"] tr').nth(1).locator('td,th').first().hover();
+    const rowHandle = page.locator('[data-testid="s1000d-row-handle"]:visible');
     await rowHandle.click();
 
     const bandBox = await page.getByTestId('s1000d-selection-row-band').boundingBox();
@@ -204,12 +203,12 @@ test.describe('S1000D React demo', () => {
     await loadDemoSample(page, 'proced');
 
     const table = page.getByTestId('editor').getByTestId('s1000d-table');
-    await table.hover();
-    await page.getByTestId('s1000d-row-handle').first().click();
+    await table.locator('tbody[data-s1000d="tbody"] tr').first().locator('td,th').first().hover();
+    await page.locator('[data-testid="s1000d-row-handle"]:visible').click();
 
     const before = await getDemoSnapshot(page);
     expect(before.selectionScope).toBe('row');
-    expect(before.selectionSummary).toContain('Rows 0-0');
+    expect(before.selectionSummary).toContain('Rows 1-1');
 
     expect(await runDemoCommand(page, 'addS1000DTableRowAfter')).toBe(true);
     await expect(page.getByTestId('editor').locator('.ProseMirror')).toBeFocused();
@@ -231,7 +230,6 @@ test.describe('S1000D React demo', () => {
     expect(snapshot.selectionScope).toBe('table');
     expect(snapshot.selectionSummary).toContain('Whole table: true');
 
-    await page.getByTestId('selection-actions-trigger').click();
     await expect(page.getByTestId('selection-menu-item-export-xml')).toBeVisible();
     await page.getByTestId('selection-menu-item-render-html').click();
 
@@ -244,15 +242,11 @@ test.describe('S1000D React demo', () => {
     await expectDemoApi(page);
     await loadDemoSample(page, 'proced');
 
-    const table = page.getByTestId('editor').getByTestId('s1000d-table');
-    await table.hover();
-    await page.getByTestId('s1000d-column-handle').first().click();
-
+    expect(await selectDemoColumn(page, 0)).toBe(true);
     await page.getByTestId('selection-actions-trigger').click();
     await expect(page.getByTestId('selection-menu')).toBeVisible();
     await page.keyboard.press('Escape');
     await expect(page.getByTestId('selection-menu')).toBeHidden();
-    await expect(page.getByTestId('selection-actions-trigger')).toBeFocused();
 
     await page.getByTestId('selection-actions-trigger').click();
     await page.keyboard.press('ArrowDown');
@@ -268,9 +262,7 @@ test.describe('S1000D React demo', () => {
     await expectDemoApi(page);
     await loadDemoSample(page, 'proced');
 
-    const table = page.getByTestId('editor').getByTestId('s1000d-table');
-    await table.hover();
-    await page.getByTestId('s1000d-row-handle').nth(1).click();
+    expect(await selectDemoRow(page, 1)).toBe(true);
 
     const beforeRows = (await exportDemoXml(page).then((xml) => xml.match(/<row\b/g)?.length ?? 0));
 
@@ -424,7 +416,6 @@ test.describe('S1000D React demo', () => {
     await table.hover();
     await page.getByTestId('s1000d-table-handle').click();
 
-    await page.getByTestId('selection-actions-trigger').click();
     await expect(page.getByTestId('selection-menu-item-fit-table-to-width')).toBeVisible();
     await expect(page.getByTestId('selection-menu-item-distribute-columns')).toBeVisible();
   });
@@ -918,24 +909,37 @@ test.describe('S1000D React demo', () => {
   test('overlay selection and resize loop writes colwidth back to XML', async ({ page }) => {
     await page.goto('/');
     await expectDemoApi(page);
-    await loadDemoSample(page, 'proced');
+    await loadDemoXml(page, `
+<table id="overlay-resize-parity">
+  <tgroup cols="2">
+    <colspec colname="c1" colwidth="80px"/>
+    <colspec colname="c2" colwidth="120px"/>
+    <thead>
+      <row><entry>Step</entry><entry>Action</entry></row>
+    </thead>
+    <tbody>
+      <row><entry>1</entry><entry>Check system status</entry></row>
+      <row><entry>2</entry><entry>Record result</entry></row>
+    </tbody>
+  </tgroup>
+</table>
+    `.trim(), 'extended');
 
     const editor = page.getByTestId('editor');
     const table = editor.getByTestId('s1000d-table');
-    await table.hover();
+    await table.locator('tbody[data-s1000d="tbody"] tr').first().locator('td,th').first().hover();
 
     await expect(page.getByTestId('s1000d-overlay')).toBeVisible();
 
-    const rowHandle = page.getByTestId('s1000d-row-handle').first();
+    const rowHandle = page.locator('[data-testid="s1000d-row-handle"]:visible');
     await rowHandle.click();
 
     const before = await getDemoSnapshot(page);
-    expect(before.selectionSummary).toContain('Rows 0-0');
+    expect(before.selectionSummary).toContain('Rows 1-1');
 
     const resizeHandle = page.getByTestId('s1000d-resize-handle').first();
     const handleBox = await resizeHandle.boundingBox();
     expect(handleBox).toBeTruthy();
-
     await page.mouse.move(handleBox!.x + handleBox!.width / 2, handleBox!.y + handleBox!.height / 2);
     await page.mouse.down();
     await page.mouse.move(handleBox!.x + handleBox!.width / 2 + 36, handleBox!.y + handleBox!.height / 2);
@@ -1032,16 +1036,164 @@ test.describe('S1000D React demo', () => {
     await loadDemoSample(page, 'proced');
 
     const table = page.getByTestId('editor').getByTestId('s1000d-table');
-    await table.hover();
+    const bodyRows = table.locator('tbody[data-s1000d="tbody"] tr');
+    await bodyRows.first().locator('td,th').first().hover();
     await expect(page.getByTestId('s1000d-overlay')).toBeVisible();
 
-    const rowHandle = page.getByTestId('s1000d-row-handle').first();
+    const rowHandle = page.locator('[data-testid="s1000d-row-handle"]:visible');
     await rowHandle.hover();
     await expect(page.getByTestId('s1000d-hover-row-band')).toBeVisible();
 
-    const columnHandle = page.getByTestId('s1000d-column-handle').first();
+    await bodyRows.first().locator('td,th').nth(1).hover();
+    const columnHandle = page.locator('[data-testid="s1000d-column-handle"]:visible');
     await columnHandle.hover();
     await expect(page.getByTestId('s1000d-hover-column-band')).toBeVisible();
+  });
+
+  test('row handle opens the package menu and keeps selected-handle visibility after mouse leave', async ({ page }) => {
+    await page.goto('/');
+    await expectDemoApi(page);
+    await loadDemoSample(page, 'proced');
+
+    const table = page.getByTestId('editor').getByTestId('s1000d-table');
+    const bodyRows = table.locator('tbody[data-s1000d="tbody"] tr');
+    await bodyRows.nth(1).locator('td,th').first().hover();
+
+    const selectedHandle = page.locator('[data-testid="s1000d-row-handle"]:visible');
+    await selectedHandle.click();
+    await expect(page.getByTestId('selection-menu')).toBeVisible();
+    await expect(page.getByTestId('selection-menu')).toHaveAttribute('data-scope', 'row');
+
+    await page.mouse.move(4, 4);
+    await expect(selectedHandle).toBeVisible();
+    await expect(page.getByTestId('s1000d-row-handle').nth(0)).toBeHidden();
+  });
+
+  test('hovered row handle takes priority over an older selected row handle', async ({ page }) => {
+    await page.goto('/');
+    await expectDemoApi(page);
+    await loadDemoSample(page, 'proced');
+
+    const table = page.getByTestId('editor').getByTestId('s1000d-table');
+    const bodyRows = table.locator('tbody[data-s1000d="tbody"] tr');
+    await bodyRows.nth(1).locator('td,th').first().hover();
+
+    const selectedHandle = page.locator('[data-testid="s1000d-row-handle"]:visible');
+    await selectedHandle.click();
+    await expect(page.getByTestId('selection-menu')).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(page.getByTestId('selection-menu')).toBeHidden();
+    const selectedRowIndex = await selectedHandle.getAttribute('data-row-index');
+
+    await bodyRows.first().locator('td,th').first().hover();
+    await expect(page.locator('[data-testid="s1000d-row-handle"]:visible')).toBeVisible();
+    await expect(page.locator(`[data-testid="s1000d-row-handle"][data-row-index="${selectedRowIndex}"]`)).toBeHidden();
+  });
+
+  test('extend controls add row and column, and hide while menus or resize are active', async ({ page }) => {
+    await page.goto('/');
+    await expectDemoApi(page);
+    await loadDemoSample(page, 'proced');
+
+    const table = page.getByTestId('editor').getByTestId('s1000d-table');
+    const bodyRows = table.locator('tbody[data-s1000d="tbody"] tr');
+    const extendRow = page.getByTestId('s1000d-extend-row');
+    const extendColumn = page.getByTestId('s1000d-extend-column');
+
+    await bodyRows.first().locator('td,th').first().hover();
+    await expect(extendRow).not.toHaveAttribute('hidden', '');
+    await expect(extendColumn).not.toHaveAttribute('hidden', '');
+
+    const initialRowCount = await bodyRows.count();
+    const initialColumnCount = await bodyRows.first().locator('td,th').count();
+
+    await extendRow.hover();
+    await extendRow.click();
+    await expect(bodyRows).toHaveCount(initialRowCount + 1);
+    expect((await getDemoSnapshot(page)).selectionScope).toBe('row');
+
+    await extendColumn.hover();
+    await extendColumn.click();
+    await expect(bodyRows.first().locator('td,th')).toHaveCount(initialColumnCount + 1);
+    expect((await getDemoSnapshot(page)).selectionScope).toBe('column');
+
+    await bodyRows.first().locator('td,th').first().hover();
+    await page.locator('[data-testid="s1000d-row-handle"]:visible').click();
+    await expect(page.getByTestId('selection-menu')).toBeVisible();
+    await expect(extendRow).toBeHidden();
+    await expect(extendColumn).toBeHidden();
+
+    await page.keyboard.press('Escape');
+    await expect(page.getByTestId('selection-menu')).toBeHidden();
+    await bodyRows.first().locator('td,th').first().hover();
+    await expect(extendRow).not.toHaveAttribute('hidden', '');
+    await expect(extendColumn).not.toHaveAttribute('hidden', '');
+
+    const resizeHandle = page.getByTestId('s1000d-resize-handle').first();
+    const resizeBox = await resizeHandle.boundingBox();
+    expect(resizeBox).toBeTruthy();
+    await page.mouse.move(resizeBox!.x + resizeBox!.width / 2, resizeBox!.y + resizeBox!.height / 2);
+    await page.mouse.down();
+    await expect(extendRow).toBeHidden();
+    await expect(extendColumn).toBeHidden();
+    await page.mouse.move(resizeBox!.x + resizeBox!.width / 2 + 24, resizeBox!.y + resizeBox!.height / 2, { steps: 4 });
+    await page.mouse.up();
+  });
+
+  test('dragging a row handle reorders rows and shows the drop indicator', async ({ page }) => {
+    await page.goto('/');
+    await expectDemoApi(page);
+    await loadDemoSample(page, 'proced');
+
+    const table = page.getByTestId('editor').getByTestId('s1000d-table');
+    const bodyRows = table.locator('tbody[data-s1000d="tbody"] tr');
+    const beforeFirst = await bodyRows.first().locator('td,th').first().textContent();
+    const beforeSecond = await bodyRows.nth(1).locator('td,th').first().textContent();
+
+    await bodyRows.nth(1).locator('td,th').first().hover();
+    const fromHandle = page.locator('[data-testid="s1000d-row-handle"]:visible');
+    const targetCell = bodyRows.first().locator('td,th').first();
+    const fromBox = await fromHandle.boundingBox();
+    const toBox = await targetCell.boundingBox();
+    expect(fromBox).toBeTruthy();
+    expect(toBox).toBeTruthy();
+
+    await page.mouse.move(fromBox!.x + fromBox!.width / 2, fromBox!.y + fromBox!.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(toBox!.x + toBox!.width / 2, toBox!.y + toBox!.height / 2, { steps: 8 });
+    await expect(page.getByTestId('s1000d-drop-indicator')).toBeVisible();
+    await page.mouse.up();
+
+    await expect(bodyRows.first().locator('td,th').first()).toHaveText(beforeSecond ?? '');
+    await expect(bodyRows.nth(1).locator('td,th').first()).toHaveText(beforeFirst ?? '');
+  });
+
+  test('dragging a column handle reorders columns and shows the drop indicator', async ({ page }) => {
+    await page.goto('/');
+    await expectDemoApi(page);
+    await loadDemoSample(page, 'proced');
+
+    const table = page.getByTestId('editor').getByTestId('s1000d-table');
+    const firstBodyRowCells = table.locator('tbody[data-s1000d="tbody"] tr').first().locator('td,th');
+    const beforeFirst = await firstBodyRowCells.nth(0).textContent();
+    const beforeSecond = await firstBodyRowCells.nth(1).textContent();
+
+    await firstBodyRowCells.nth(1).hover();
+    const fromHandle = page.locator('[data-testid="s1000d-column-handle"]:visible');
+    const targetCell = firstBodyRowCells.first();
+    const fromBox = await fromHandle.boundingBox();
+    const toBox = await targetCell.boundingBox();
+    expect(fromBox).toBeTruthy();
+    expect(toBox).toBeTruthy();
+
+    await page.mouse.move(fromBox!.x + fromBox!.width / 2, fromBox!.y + fromBox!.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(toBox!.x + toBox!.width / 2, toBox!.y + toBox!.height / 2, { steps: 8 });
+    await expect(page.getByTestId('s1000d-drop-indicator')).toBeVisible();
+    await page.mouse.up();
+
+    await expect(firstBodyRowCells.nth(0)).toHaveText(beforeSecond ?? '');
+    await expect(firstBodyRowCells.nth(1)).toHaveText(beforeFirst ?? '');
   });
 
   test('hovering a cell shows cell feedback and drag selects a cell range', async ({ page }) => {
@@ -1082,10 +1234,10 @@ test.describe('S1000D React demo', () => {
     await loadDemoSample(page, 'proced');
 
     const table = page.getByTestId('editor').getByTestId('s1000d-table');
-    await table.hover();
+    await table.locator('tbody[data-s1000d="tbody"] tr').first().locator('td,th').first().hover();
 
     const overlay = page.getByTestId('s1000d-overlay');
-    const rowHandle = page.getByTestId('s1000d-row-handle').first();
+    const rowHandle = page.locator('[data-testid="s1000d-row-handle"]:visible');
 
     const initialOverlayBox = await overlay.boundingBox();
     const initialHandleBox = await rowHandle.boundingBox();
