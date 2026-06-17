@@ -7,6 +7,7 @@ import {
   loadDemoSample,
   loadDemoXml,
   runDemoCommand,
+  selectDemoRange,
   selectDemoRow,
 } from './s1000d-demo-api';
 
@@ -14,6 +15,7 @@ async function gotoDemo(page: Page, sample: 'proced' | 'extended' = 'proced') {
   await page.goto('/');
   await expectDemoApi(page);
   await loadDemoSample(page, sample);
+  await expect.poll(async () => (await getDemoSnapshot(page)).profile).toBe(sample);
   await expect(page.getByTestId('editor')).toBeVisible();
   await expect(page.getByTestId('s1000d-table')).toBeVisible();
 }
@@ -119,19 +121,6 @@ async function clickCenter(page: Page, target: Locator) {
   await page.mouse.up();
 }
 
-async function dragBetween(page: Page, start: Locator, end: Locator) {
-  const startBox = await start.boundingBox();
-  const endBox = await end.boundingBox();
-  if (!startBox || !endBox) {
-    throw new Error('Could not resolve bounding boxes for drag selection.');
-  }
-
-  await page.mouse.move(startBox.x + startBox.width / 2, startBox.y + startBox.height / 2);
-  await page.mouse.down();
-  await page.mouse.move(endBox.x + endBox.width / 2, endBox.y + endBox.height / 2, { steps: 8 });
-  await page.mouse.up();
-}
-
 async function openRowMenu(page: Page, index: number) {
   await clickCenter(page, rowHandle(page, index));
   await expect(rowSelectionBand(page)).toBeVisible();
@@ -146,7 +135,7 @@ async function openColumnMenu(page: Page, index: number) {
 
 async function clickMenuAction(page: Page, label: string) {
   const action = contextMenuAction(page, label);
-  await action.scrollIntoViewIfNeeded();
+  await expect(action).toBeVisible();
   await action.click();
 }
 
@@ -313,13 +302,25 @@ test.describe('official s1000d parity', () => {
   });
 
   test('cell menu actions keep the rectangular selection active and submenu flyouts stay anchored', async ({ page }) => {
-    await gotoDemo(page, 'extended');
+    await gotoDemo(page);
+    expect(await loadDemoXml(page, `
+<table id="cell-menu-parity">
+  <tgroup cols="3">
+    <tbody>
+      <row><entry>A1</entry><entry>A2</entry><entry>A3</entry></row>
+      <row><entry>B1</entry><entry>B2</entry><entry>B3</entry></row>
+    </tbody>
+  </tgroup>
+</table>
+    `.trim(), 'extended')).toBe(true);
 
-    await dragBetween(page, firstBodyCell(page), bodyRowCell(page, 1, 1));
+    expect(await selectDemoRange(page, 0, 0, 1, 1)).toBe(true);
+    await expect.poll(async () => (await getDemoSnapshot(page)).selectionScope).toBe('multi-cell');
     const before = await getDemoSnapshot(page);
     expect(before.selectionSummary).toContain('Entries 4');
 
-    await clickCenter(page, cellHandle(page));
+    await expect(cellHandle(page)).toBeVisible();
+    await cellHandle(page).click();
     await expect(contextMenu(page)).toBeVisible();
     await expect(contextMenu(page)).toHaveAttribute('data-scope', 'cell');
 
@@ -336,10 +337,22 @@ test.describe('official s1000d parity', () => {
   });
 
   test('cell structure submenu exposes merge and split actions for cell selections', async ({ page }) => {
-    await gotoDemo(page, 'extended');
+    await gotoDemo(page);
+    expect(await loadDemoXml(page, `
+<table id="cell-structure-parity">
+  <tgroup cols="3">
+    <tbody>
+      <row><entry>A1</entry><entry>A2</entry><entry>A3</entry></row>
+      <row><entry>B1</entry><entry>B2</entry><entry>B3</entry></row>
+    </tbody>
+  </tgroup>
+</table>
+    `.trim(), 'extended')).toBe(true);
 
-    await dragBetween(page, firstBodyCell(page), bodyRowCell(page, 1, 1));
-    await clickCenter(page, cellHandle(page));
+    expect(await selectDemoRange(page, 0, 0, 1, 1)).toBe(true);
+    await expect.poll(async () => (await getDemoSnapshot(page)).selectionScope).toBe('multi-cell');
+    await expect(cellHandle(page)).toBeVisible();
+    await cellHandle(page).click();
     await openSubmenu(page, 'Structure');
     await expect(contextMenuAction(page, 'Merge cells')).toBeVisible();
     await expect(contextMenuAction(page, 'Split cell')).toBeVisible();

@@ -463,7 +463,7 @@ export class S1000DMenuAdapter {
     button.classList.toggle('is-active', Boolean(action.active));
     button.setAttribute('role', 'menuitem');
     button.tabIndex = action.enabled ? 0 : -1;
-    button.addEventListener('mousedown', (event) => {
+    const executeAction = (event: Event) => {
       if (!action.enabled) {
         return;
       }
@@ -476,6 +476,15 @@ export class S1000DMenuAdapter {
           this.onRender();
         }
       });
+    };
+    button.addEventListener('mousedown', (event) => {
+      executeAction(event);
+    });
+    button.addEventListener('click', (event) => {
+      if ((event as MouseEvent).detail !== 0) {
+        return;
+      }
+      executeAction(event);
     });
     return button;
   }

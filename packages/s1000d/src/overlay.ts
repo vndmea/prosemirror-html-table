@@ -4,6 +4,7 @@ import {
   S1000DTableOverlayView,
   type S1000DTableOverlayPluginOptions,
 } from './s1000d-overlay-view.js';
+export type { TableGeometry, TableOverlayPositionState } from 'tiptap-html-table/table-interaction';
 
 export const s1000dTableOverlayPluginKey = new PluginKey('s1000d-table-overlay');
 
