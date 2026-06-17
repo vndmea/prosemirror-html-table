@@ -1,6 +1,5 @@
 import { Plugin, PluginKey } from 'prosemirror-state';
 
-import { applyS1000DColumnWidthsToTgroup } from './column-widths.js';
 import {
   S1000DTableOverlayView,
   type S1000DTableOverlayPluginOptions,

@@ -29,7 +29,6 @@ import {
 import { findS1000DEntryPosition } from './position.js';
 import { S1000DCellSelection, isS1000DCellSelection } from './selection.js';
 import { S1000DMenuAdapter } from './s1000d-menu-adapter.js';
-import type { S1000DEntryRef, S1000DTgroupGrid } from './grid.js';
 import {
   applyRect,
   AXIS_DRAG_THRESHOLD,

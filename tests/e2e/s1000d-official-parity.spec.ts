@@ -66,10 +66,6 @@ function columnSelectionBand(page: Page) {
   return page.getByTestId('s1000d-selection-column-band');
 }
 
-function cellFill(page: Page) {
-  return page.getByTestId('s1000d-selection-cell-fill');
-}
-
 function cellHandle(page: Page) {
   return page.getByTestId('s1000d-cell-handle');
 }
@@ -121,15 +117,6 @@ async function clickCenter(page: Page, target: Locator) {
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
   await page.mouse.down();
   await page.mouse.up();
-}
-
-async function hoverCenter(page: Page, target: Locator) {
-  const box = await target.boundingBox();
-  if (!box) {
-    throw new Error('Could not resolve target bounding box for pointer hover.');
-  }
-
-  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
 }
 
 async function dragBetween(page: Page, start: Locator, end: Locator) {
