@@ -29,7 +29,9 @@ import { distributeS1000DColumnWidths } from './column-widths.js';
 import { getRenderedS1000DTableContext } from './dom-adapter.js';
 import { s1000dTableNodeNames } from './names.js';
 import {
+  closeS1000DTableContextMenu,
   getS1000DTableInteractionState,
+  s1000dTableInteractionPluginKey,
   type S1000DTableInteractionState,
   type S1000DTableMenuAnchor,
   type S1000DTableMenuScope,
@@ -97,6 +99,7 @@ export type S1000DContextMenuActionResolver = (
 
 export interface S1000DContextMenuOptions {
   actionResolver?: S1000DContextMenuActionResolver | undefined;
+  geometry?: S1000DTableInteractionState['geometry'] | undefined;
   view?: EditorView | null | undefined;
 }
 
@@ -109,7 +112,7 @@ export function getS1000DContextMenuState(
   const selectionInfo = interaction.activeTable
     ? getS1000DSelectionInfo(state, { tablePos: interaction.activeTable.tablePos }) ?? getS1000DSelectionInfo(state)
     : getS1000DSelectionInfo(state);
-  const anchor = getS1000DContextMenuAnchor(state, interaction, scope, selectionInfo);
+  const anchor = getS1000DContextMenuAnchor(state, interaction, scope, selectionInfo, options.geometry);
   const builtInActions = scope ? getBuiltInContextMenuActions(scope, state, interaction, selectionInfo) : [];
   const extraActions = scope && options.actionResolver
     ? options.actionResolver({
@@ -207,9 +210,66 @@ function getS1000DContextMenuAnchor(
   interaction: S1000DTableInteractionState,
   scope: S1000DTableMenuScope | null,
   selectionInfo: ReturnType<typeof getS1000DSelectionInfo> | undefined,
+  geometryOverride?: S1000DTableInteractionState['geometry'],
 ): S1000DTableMenuAnchor | null {
   if (!scope) {
     return null;
+  }
+
+  const geometry = geometryOverride ?? interaction.geometry;
+
+  if (geometry && scope === 'table') {
+    return {
+      left: geometry.visibleTableRect.left,
+      top: geometry.visibleTableRect.top,
+    };
+  }
+
+  const selectedRowIndex = interaction.selectedAxis.index ?? (
+    scope === 'row' && selectionInfo && selectionInfo.top === selectionInfo.bottom
+      ? selectionInfo.top
+      : null
+  );
+  if (geometry && scope === 'row' && selectedRowIndex !== null) {
+    const row = geometry.rows[selectedRowIndex];
+    if (!row) {
+      return null;
+    }
+    const rowTop = geometry.tableRect.top + row.top;
+    const rowBottom = rowTop + row.height;
+    const visibleTop = Math.max(rowTop, geometry.visibleTableRect.top);
+    const visibleBottom = Math.min(rowBottom, geometry.visibleTableRect.bottom);
+    return {
+      left: geometry.visibleTableRect.left,
+      top: visibleTop + Math.max(0, visibleBottom - visibleTop) / 2,
+    };
+  }
+
+  const selectedColumnIndex = interaction.selectedAxis.index ?? (
+    scope === 'column' && selectionInfo && selectionInfo.left === selectionInfo.right
+      ? selectionInfo.left
+      : null
+  );
+  if (geometry && scope === 'column' && selectedColumnIndex !== null) {
+    const column = geometry.columns[selectedColumnIndex];
+    if (!column) {
+      return null;
+    }
+    const columnLeft = geometry.tableRect.left + column.left;
+    const columnRight = columnLeft + column.width;
+    const visibleLeft = Math.max(columnLeft, geometry.visibleTableRect.left);
+    const visibleRight = Math.min(columnRight, geometry.visibleTableRect.right);
+    return {
+      left: visibleLeft + Math.max(0, visibleRight - visibleLeft) / 2,
+      top: geometry.visibleTableRect.top,
+    };
+  }
+
+  if (geometry && scope === 'cell' && selectionInfo) {
+    return {
+      left: geometry.tableRect.left + ((geometry.columns[selectionInfo.right]?.left ?? 0) + (geometry.columns[selectionInfo.right]?.width ?? 0)),
+      top: geometry.tableRect.top + (geometry.rows[selectionInfo.top]?.top ?? 0) + (((geometry.rows[selectionInfo.bottom]?.top ?? 0) + (geometry.rows[selectionInfo.bottom]?.height ?? 0) - (geometry.rows[selectionInfo.top]?.top ?? 0)) / 2),
+    };
   }
 
   if (interaction.menuAnchor) {
@@ -227,45 +287,6 @@ function getS1000DContextMenuAnchor(
     };
   }
 
-  if (!interaction.geometry) {
-    return null;
-  }
-
-  if (scope === 'table') {
-    return {
-      left: interaction.geometry.visibleTableRect.left,
-      top: interaction.geometry.visibleTableRect.top,
-    };
-  }
-
-  if (scope === 'row' && interaction.selectedAxis.index !== null) {
-    const row = interaction.geometry.rows[interaction.selectedAxis.index];
-    if (!row) {
-      return null;
-    }
-    return {
-      left: interaction.geometry.visibleTableRect.left,
-      top: interaction.geometry.tableRect.top + row.top + (row.height / 2),
-    };
-  }
-
-  if (scope === 'column' && interaction.selectedAxis.index !== null) {
-    const column = interaction.geometry.columns[interaction.selectedAxis.index];
-    if (!column) {
-      return null;
-    }
-    return {
-      left: interaction.geometry.tableRect.left + column.left + (column.width / 2),
-      top: interaction.geometry.visibleTableRect.top,
-    };
-  }
-
-  if (scope === 'cell' && selectionInfo) {
-    return {
-      left: interaction.geometry.tableRect.left + ((interaction.geometry.columns[selectionInfo.right]?.left ?? 0) + (interaction.geometry.columns[selectionInfo.right]?.width ?? 0)),
-      top: interaction.geometry.tableRect.top + (interaction.geometry.rows[selectionInfo.top]?.top ?? 0) + (((interaction.geometry.rows[selectionInfo.bottom]?.top ?? 0) + (interaction.geometry.rows[selectionInfo.bottom]?.height ?? 0) - (interaction.geometry.rows[selectionInfo.top]?.top ?? 0)) / 2),
-    };
-  }
   return null;
 }
 
@@ -473,7 +494,21 @@ function runMeasuredTableWidthAction(
     return false;
   }
 
-  return setS1000DTableColumnWidths(widths, { tablePos })(view.state, view.dispatch);
+  const applied = setS1000DTableColumnWidths(widths, { tablePos })(
+    view.state,
+    (transaction) => view.dispatch(
+      transaction.setMeta(s1000dTableInteractionPluginKey, {
+        contextMenuOpen: false,
+        menuScope: null,
+        menuAnchor: null,
+      }),
+    ),
+  );
+  if (!applied) {
+    closeS1000DTableContextMenu(view);
+  }
+  view.focus();
+  return true;
 }
 
 function measureTableContentWidth(view: EditorView, tablePos: number): number | null {

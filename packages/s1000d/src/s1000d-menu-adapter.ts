@@ -10,14 +10,9 @@ import {
   getS1000DContextMenuState,
   type S1000DContextMenuAction,
   type S1000DContextMenuActionResolver,
+  type S1000DContextMenuOptions,
 } from './menu.js';
-import {
-  clamp,
-  CONTEXT_MENU_SCOPE_LABELS,
-  getMenuPosition,
-  OVERLAY_SELECTOR,
-  SUBMENU_GAP,
-} from './s1000d-overlay-geometry.js';
+import { clamp, CONTEXT_MENU_SCOPE_LABELS, OVERLAY_SELECTOR, SUBMENU_GAP } from './s1000d-overlay-geometry.js';
 import {
   canRestoreMenuFocus,
   getNextMenuActionIndex,
@@ -86,6 +81,8 @@ export class S1000DMenuAdapter {
   private previousMenuOpen = false;
   private openContextSubmenuId: string | null = null;
   private focusFirstSubmenuActionOnOpen = false;
+  private pendingRepositionFrame: number | null = null;
+  private forceClosed = false;
 
   constructor(view: EditorView, options: S1000DMenuAdapterOptions) {
     this.view = view;
@@ -101,23 +98,37 @@ export class S1000DMenuAdapter {
     this.view = view;
   }
 
+  prepareOpen(): void {
+    this.forceClosed = false;
+  }
+
   destroy(): void {
+    if (this.pendingRepositionFrame !== null) {
+      cancelAnimationFrame(this.pendingRepositionFrame);
+      this.pendingRepositionFrame = null;
+    }
     this.typeahead.destroy();
   }
 
-  render(interaction: S1000DTableInteractionState, hostRect: DOMRect): void {
+  render(
+    interaction: S1000DTableInteractionState,
+    hostRect: DOMRect,
+    options: { geometry?: S1000DContextMenuOptions['geometry'] } = {},
+  ): void {
     const menu = getS1000DContextMenuState(this.view.state, interaction, {
       actionResolver: this.contextMenuActionResolver,
+      geometry: options.geometry,
       view: this.view,
     });
+    const menuOpen = menu.open && !this.forceClosed;
 
-    this.contextMenu.hidden = !menu.open;
-    this.contextMenu.setAttribute('aria-hidden', String(!menu.open));
+    this.contextMenu.hidden = !menuOpen;
+    this.contextMenu.setAttribute('aria-hidden', String(!menuOpen));
     this.contextMenu.setAttribute('aria-label', menu.scope ? CONTEXT_MENU_SCOPE_LABELS[menu.scope] : 'Table actions');
     this.contextMenu.dataset.scope = menu.scope ?? '';
-    this.root.dataset.contextMenuOpen = String(menu.open);
+    this.root.dataset.contextMenuOpen = String(menuOpen);
 
-    if (!menu.open || !menu.anchor) {
+    if (!menuOpen || !menu.anchor) {
       this.contextMenu.replaceChildren();
       this.contextSubmenu.replaceChildren();
       this.contextSubmenu.hidden = true;
@@ -127,23 +138,31 @@ export class S1000DMenuAdapter {
       this.previousMenuOpen = false;
       this.openContextSubmenuId = null;
       this.focusFirstSubmenuActionOnOpen = false;
+      if (this.pendingRepositionFrame !== null) {
+        cancelAnimationFrame(this.pendingRepositionFrame);
+        this.pendingRepositionFrame = null;
+      }
       return;
     }
 
-    const position = getMenuPosition(hostRect, menu.scope ?? 'cell', menu.anchor);
-    Object.assign(this.contextMenu.style, {
-      left: `${position.left}px`,
-      top: `${position.top}px`,
-      position: 'absolute',
-    });
     const entries = this.buildContextMenuEntries(menu.scope ?? 'cell', menu.actions);
     this.contextMenu.replaceChildren(this.createContextMenuPanel(entries));
     this.contextMenuActionElements = Array.from(this.contextMenu.querySelectorAll('button'));
+    this.positionContextMenu(hostRect, menu.scope ?? 'cell', menu.anchor);
     this.renderContextSubmenu(entries, hostRect);
 
     if (!this.previousMenuOpen) {
       this.focusFirstContextMenuAction(this.contextMenuActionElements);
       this.typeahead.reset();
+      if (this.pendingRepositionFrame !== null) {
+        cancelAnimationFrame(this.pendingRepositionFrame);
+      }
+      this.pendingRepositionFrame = this.root.ownerDocument.defaultView?.requestAnimationFrame(() => {
+        this.pendingRepositionFrame = null;
+        if (getS1000DTableInteractionState(this.view.state).contextMenuOpen) {
+          this.onRender();
+        }
+      }) ?? null;
     }
     this.previousMenuOpen = true;
   }
@@ -238,6 +257,15 @@ export class S1000DMenuAdapter {
   }
 
   closeContextMenu(restoreFocus: boolean): void {
+    this.forceClosed = true;
+    this.contextMenu.hidden = true;
+    this.contextMenu.setAttribute('aria-hidden', 'true');
+    this.contextSubmenu.hidden = true;
+    this.contextSubmenu.setAttribute('aria-hidden', 'true');
+    this.root.dataset.contextMenuOpen = 'false';
+    this.previousMenuOpen = false;
+    this.openContextSubmenuId = null;
+    this.focusFirstSubmenuActionOnOpen = false;
     const interaction = getS1000DTableInteractionState(this.view.state);
     if (!interaction.contextMenuOpen) {
       return;
@@ -248,9 +276,6 @@ export class S1000DMenuAdapter {
       menuScope: null,
       menuAnchor: null,
     });
-    this.previousMenuOpen = false;
-    this.openContextSubmenuId = null;
-    this.focusFirstSubmenuActionOnOpen = false;
     this.typeahead.reset();
 
     if (restoreFocus) {
@@ -438,20 +463,98 @@ export class S1000DMenuAdapter {
     button.classList.toggle('is-active', Boolean(action.active));
     button.setAttribute('role', 'menuitem');
     button.tabIndex = action.enabled ? 0 : -1;
-    button.addEventListener('click', () => {
+    button.addEventListener('mousedown', (event) => {
       if (!action.enabled) {
         return;
       }
-      const result = action.run(this.view);
-      if (result !== false) {
-        this.closeContextMenu(false);
-      }
+      event.preventDefault();
+      event.stopPropagation();
+      this.closeContextMenu(false);
+      queueMicrotask(() => {
+        const result = action.run(this.view);
+        if (result === false) {
+          this.onRender();
+        }
+      });
     });
     return button;
   }
 
   private focusFirstContextMenuAction(buttons: readonly HTMLButtonElement[]): void {
     buttons.find((element) => !element.disabled)?.focus();
+  }
+
+  private positionContextMenu(
+    hostRect: DOMRect,
+    scope: S1000DTableMenuScope,
+    fallback: { left: number; top: number },
+  ): void {
+    const anchor = this.getLiveAnchor(scope, fallback);
+    const menuWidth = this.contextMenu.offsetWidth || 192;
+    const menuHeight = this.contextMenu.offsetHeight || 320;
+    const inset = 12;
+    let left = anchor.left - hostRect.left + inset;
+    let top = scope === 'row' || scope === 'cell'
+      ? anchor.top - hostRect.top - (menuHeight / 2)
+      : anchor.top - hostRect.top + inset;
+
+    if (scope === 'column') {
+      left = anchor.left - hostRect.left - (menuWidth / 2);
+    }
+
+    if (scope !== 'column' && scope !== 'table' && left + menuWidth > hostRect.width - inset) {
+      left = anchor.left - hostRect.left - menuWidth - inset;
+    }
+
+    left = clamp(left, inset, Math.max(inset, hostRect.width - menuWidth - inset));
+    top = clamp(top, inset, Math.max(inset, hostRect.height - menuHeight - inset));
+
+    Object.assign(this.contextMenu.style, {
+      left: `${left}px`,
+      top: `${top}px`,
+      position: 'absolute',
+    });
+  }
+
+  private getLiveAnchor(
+    scope: S1000DTableMenuScope,
+    fallback: { left: number; top: number },
+  ): { left: number; top: number } {
+    const selectors = scope === 'row'
+      ? [
+        '[data-testid="s1000d-row-handle"].is-menu-open',
+        '[data-testid="s1000d-row-handle"].is-selected:not([hidden])',
+        '[data-testid="s1000d-row-handle"][aria-expanded="true"]',
+      ]
+      : scope === 'column'
+        ? [
+          '[data-testid="s1000d-column-handle"].is-menu-open',
+          '[data-testid="s1000d-column-handle"].is-selected:not([hidden])',
+          '[data-testid="s1000d-column-handle"][aria-expanded="true"]',
+        ]
+        : scope === 'table'
+          ? [
+            '[data-testid="s1000d-table-handle"].is-menu-open',
+            '[data-testid="s1000d-table-handle"].is-selected',
+            '[data-testid="s1000d-table-handle"][aria-expanded="true"]',
+          ]
+          : [
+            '[data-testid="s1000d-cell-handle"].is-menu-open',
+            '[data-testid="s1000d-cell-handle"].is-selected:not([hidden])',
+            '[data-testid="s1000d-cell-handle"][aria-expanded="true"]',
+          ];
+    const activeHandle = selectors
+      .map((selector) => this.root.querySelector(selector))
+      .find((element): element is HTMLElement => element instanceof HTMLElement);
+    if (!(activeHandle instanceof HTMLElement)) {
+      return fallback;
+    }
+
+    const rect = activeHandle.getBoundingClientRect();
+    return {
+      left: rect.left + rect.width / 2,
+      top: rect.top + rect.height / 2,
+    };
   }
 
   private openContextSubmenu(submenuId: string, focusFirstAction: boolean): void {

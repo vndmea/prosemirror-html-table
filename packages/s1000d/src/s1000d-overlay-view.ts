@@ -72,6 +72,7 @@ import {
 import { S1000DResizeController } from './s1000d-resize-controller.js';
 import { ensureS1000DTableStyles } from './styles.js';
 import {
+  getTableOverlayMount,
   getTableOverlayPositionState,
   getVisibleTableSelectionRect,
   TableOverlayHost,
@@ -294,7 +295,7 @@ export class S1000DTableOverlayView {
 
     const geometry = measureS1000DRenderedTableGeometry(context.dom, context.wrapper, context.activeTgroupIndex);
     this.syncInteractionGeometry(context, geometry);
-    const overlayHost = this.overlayHost.attach(context.wrapper);
+    const overlayHost = this.overlayHost.attach(getTableOverlayMount(this.view));
     const hostRect = overlayHost.getBoundingClientRect();
     const positionState = getTableOverlayPositionState(
       geometry,
@@ -325,6 +326,7 @@ export class S1000DTableOverlayView {
       's1000d-table-overlay--dragging',
       Boolean(this.activeCellDrag || this.pendingCellDrag || this.axisDrag?.hasDragged),
     );
+    this.root.classList.toggle('s1000d-table-overlay--hovering', interaction.hovered?.tablePos === context.tablePos);
     this.root.classList.toggle('s1000d-table-overlay--resizing', Boolean(interaction.resizing));
 
     this.renderSelection(interaction, geometry, positionState, selectionInfo, rowSelection, columnSelection);
@@ -336,7 +338,7 @@ export class S1000DTableOverlayView {
     this.renderResizeHandles(interaction, context, geometry, positionState);
     this.renderExtendButtons(interaction, positionState);
     this.renderContextTrigger(interaction, hostRect);
-    this.menuAdapter.render(interaction, overlayHost.getBoundingClientRect());
+    this.menuAdapter.render(interaction, overlayHost.getBoundingClientRect(), { geometry });
 
     this.root.hidden = false;
   }
@@ -536,7 +538,10 @@ export class S1000DTableOverlayView {
       const isMenuOpen = isAxisHandleSelected(interaction, 'row', context.tablePos, row.index, context.activeTgroupIndex)
         && interaction.contextMenuOpen
         && interaction.menuScope === 'row';
-      handle.hidden = !rect || !this.isAxisHandleVisible(interaction, 'row', context.tablePos, row.index, context.activeTgroupIndex);
+      const isVisible = interaction.contextMenuOpen
+        ? isSelected
+        : this.isAxisHandleVisible(interaction, 'row', context.tablePos, row.index, context.activeTgroupIndex);
+      handle.hidden = !rect || !isVisible;
       handle.tabIndex = handle.hidden ? -1 : 0;
       handle.dataset.tablePos = String(context.tablePos);
       handle.dataset.tgroupIndex = String(context.activeTgroupIndex);
@@ -590,7 +595,10 @@ export class S1000DTableOverlayView {
       const isMenuOpen = isAxisHandleSelected(interaction, 'column', context.tablePos, column.index, context.activeTgroupIndex)
         && interaction.contextMenuOpen
         && interaction.menuScope === 'column';
-      handle.hidden = !rect || !this.isAxisHandleVisible(interaction, 'column', context.tablePos, column.index, context.activeTgroupIndex);
+      const isVisible = interaction.contextMenuOpen
+        ? isSelected
+        : this.isAxisHandleVisible(interaction, 'column', context.tablePos, column.index, context.activeTgroupIndex);
+      handle.hidden = !rect || !isVisible;
       handle.tabIndex = handle.hidden ? -1 : 0;
       handle.dataset.tablePos = String(context.tablePos);
       handle.dataset.tgroupIndex = String(context.activeTgroupIndex);
@@ -1310,6 +1318,7 @@ export class S1000DTableOverlayView {
       return;
     }
 
+    this.menuAdapter.prepareOpen();
     const rect = focusTarget.getBoundingClientRect();
     openS1000DTableContextMenu(this.view, {
       scope,
@@ -1398,6 +1407,7 @@ export class S1000DTableOverlayView {
       return;
     }
 
+    this.menuAdapter.prepareOpen();
     const rect = this.cellHandle.getBoundingClientRect();
     openS1000DTableContextMenu(this.view, {
       scope: 'cell',
@@ -1917,6 +1927,7 @@ export class S1000DTableOverlayView {
   private detach(): void {
     this.root.hidden = true;
     this.root.classList.remove('s1000d-table-overlay--dragging');
+    this.root.classList.remove('s1000d-table-overlay--hovering');
     this.root.classList.remove('s1000d-table-overlay--resizing');
     this.lastRenderState = null;
     this.extendTarget = null;

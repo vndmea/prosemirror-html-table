@@ -71,6 +71,19 @@ export class S1000DResizeController {
     createResizeHandle: () => HTMLButtonElement,
   ): void {
     syncCount(resizersParent, geometry.columns.length, () => createResizeHandle());
+    const interactionVisible = Boolean(interaction.resizing && interaction.resizing.tablePos === context.tablePos)
+      || (
+        interaction.hovered?.tablePos === context.tablePos
+        && (
+          interaction.hoveredControl === 'cell'
+          || interaction.hoveredControl === 'column-handle'
+        )
+      )
+      || (
+        interaction.contextMenuOpen
+        && interaction.selectedAxis.tablePos === context.tablePos
+        && interaction.selectedAxis.kind === 'column'
+      );
 
     for (let index = 0; index < geometry.columns.length; index += 1) {
       const handle = resizersParent.children[index] as HTMLButtonElement | undefined;
@@ -83,7 +96,7 @@ export class S1000DResizeController {
       const visibleRight = positionState.tableLeft + (geometry.visibleTableRect.right - geometry.tableRect.left);
       const boundary = positionState.tableLeft + column.left + column.width;
 
-      handle.hidden = axisDragHasDragged || boundary < visibleLeft || boundary > visibleRight;
+      handle.hidden = !interactionVisible || axisDragHasDragged || boundary < visibleLeft || boundary > visibleRight;
       handle.dataset.tablePos = String(context.tablePos);
       handle.dataset.tgroupIndex = String(context.activeTgroupIndex);
       handle.dataset.columnIndex = String(column.index);
@@ -92,7 +105,7 @@ export class S1000DResizeController {
         Boolean(interaction.resizing && interaction.resizing.tablePos === context.tablePos && interaction.resizing.columnIndex === column.index),
       );
       Object.assign(handle.style, {
-        left: `${boundary}px`,
+        left: `${boundary + 10}px`,
         top: `${positionState.visibleTableTop}px`,
         width: `${RESIZE_HANDLE_WIDTH}px`,
         height: `${positionState.visibleTableHeight}px`,

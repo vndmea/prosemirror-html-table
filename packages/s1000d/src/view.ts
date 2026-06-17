@@ -17,6 +17,7 @@ export class S1000DTableNodeView {
   contentDOM: HTMLElement;
   private readonly wrapper: HTMLElement;
   private readonly table: HTMLTableElement;
+  private syncFrame: number | null = null;
   private node: ProseMirrorNode;
   private readonly options: S1000DTableTiptapOptions;
   private readonly htmlAttributes: Record<string, unknown>;
@@ -46,6 +47,7 @@ export class S1000DTableNodeView {
     this.syncWrapperState();
     this.syncColumnState();
     this.syncEntrySpanState();
+    this.scheduleRenderedStateSync();
   }
 
   update(node: ProseMirrorNode): boolean {
@@ -58,7 +60,15 @@ export class S1000DTableNodeView {
     this.syncWrapperState();
     this.syncColumnState();
     this.syncEntrySpanState();
+    this.scheduleRenderedStateSync();
     return true;
+  }
+
+  destroy(): void {
+    if (this.syncFrame !== null) {
+      cancelAnimationFrame(this.syncFrame);
+      this.syncFrame = null;
+    }
   }
 
   selectNode(): void {
@@ -129,18 +139,25 @@ export class S1000DTableNodeView {
       return;
     }
 
-    const widths = resolveColspecs(firstTgroup).map((colspec) => colspec.colwidth?.trim() ?? '');
+    const widths = getS1000DColumnPixelWidths(firstTgroup, this.options.cellMinWidth);
+    const totalWidth = widths.reduce((sum, width) => sum + width, 0);
+    const minimumWidth = Math.max(this.options.cellMinWidth, totalWidth);
+
+    this.table.style.tableLayout = this.options.resizable ? 'fixed' : '';
+    this.table.style.minWidth = `${minimumWidth}px`;
+    this.table.style.width = this.options.resizable ? `${minimumWidth}px` : '';
+
     const colElements = Array.from(this.table.querySelectorAll('col'));
     colElements.forEach((col, index) => {
-      const width = widths[index] ?? '';
+      const width = widths[index];
       if (!width) {
         col.removeAttribute('width');
         (col as HTMLElement).style.removeProperty('width');
         return;
       }
 
-      col.setAttribute('width', width);
-      (col as HTMLElement).style.width = width;
+      col.setAttribute('width', String(width));
+      (col as HTMLElement).style.width = `${width}px`;
     });
   }
 
@@ -201,4 +218,58 @@ export class S1000DTableNodeView {
       }
     }
   }
+
+  private scheduleRenderedStateSync(): void {
+    if (this.syncFrame !== null) {
+      cancelAnimationFrame(this.syncFrame);
+    }
+
+    this.syncFrame = requestAnimationFrame(() => {
+      this.syncFrame = null;
+      this.syncColumnState();
+      this.syncEntrySpanState();
+    });
+  }
+}
+
+function getS1000DColumnPixelWidths(tgroup: ProseMirrorNode, cellMinWidth: number): number[] {
+  const resolvedColspecs = resolveColspecs(tgroup);
+  const grid = createS1000DTableAdapter().createGrid(tgroup, 0);
+  const columnCount = Math.max(
+    1,
+    grid.width,
+    resolvedColspecs.reduce((max, colspec) => Math.max(max, colspec.index + 1), 0),
+  );
+  const widths = Array.from({ length: columnCount }, () => cellMinWidth);
+
+  for (const colspec of resolvedColspecs) {
+    const width = parseS1000DPixelWidth(colspec.colwidth);
+    if (width) {
+      widths[colspec.index] = width;
+    }
+  }
+
+  return widths;
+}
+
+function parseS1000DPixelWidth(value: string | null): number | null {
+  if (typeof value !== 'string') {
+    return null;
+  }
+
+  const normalized = value.trim().toLowerCase();
+  if (!normalized) {
+    return null;
+  }
+
+  const exactPixels = normalized.match(/^(\d+(?:\.\d+)?)px$/);
+  if (exactPixels) {
+    const parsed = Number.parseFloat(exactPixels[1] ?? '');
+    return Number.isFinite(parsed) && parsed > 0 ? Math.round(parsed) : null;
+  }
+
+  const bareNumber = Number.parseFloat(normalized);
+  return Number.isFinite(bareNumber) && bareNumber > 0 && /^\d+(?:\.\d+)?$/.test(normalized)
+    ? Math.round(bareNumber)
+    : null;
 }

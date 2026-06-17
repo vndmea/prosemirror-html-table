@@ -22,7 +22,7 @@ export const ROW_HANDLE_OFFSET = 10;
 export const COLUMN_HANDLE_OFFSET = 10;
 export const MIN_HANDLE_INSET = 8;
 export const HANDLE_SIZE = 14;
-export const RESIZE_HANDLE_WIDTH = 12;
+export const RESIZE_HANDLE_WIDTH = 6;
 export const MIN_COLUMN_WIDTH = 48;
 export const DRAG_SELECTION_THRESHOLD = 4;
 export const AXIS_DRAG_THRESHOLD = 6;
@@ -452,10 +452,10 @@ export function getMenuPosition(
     anchor.top - hostRect.top,
     256,
     320,
-    inset - hostRect.left,
-    inset - hostRect.top,
-    window.innerWidth - hostRect.left - inset,
-    window.innerHeight - hostRect.top - inset,
+    inset,
+    inset,
+    Math.max(inset, hostRect.width - inset),
+    Math.max(inset, hostRect.height - inset),
   );
 
   return {
@@ -551,7 +551,7 @@ export function measureS1000DRenderedTableGeometry(
   wrapper?: HTMLElement,
   activeTgroupIndex?: number | null,
 ): TableGeometry {
-  const tableRect = measureS1000DTableRect(table);
+  const tableRect = measureS1000DTableRect(table, activeTgroupIndex);
   const wrapperRect = wrapper ? toTableRect(wrapper.getBoundingClientRect()) : tableRect;
   const visibleTableRect = getVisibleTableRect(tableRect, wrapperRect);
   const columnBoundaries = measureS1000DColumnBoundaries(table, tableRect);
@@ -602,8 +602,30 @@ function getRenderedTgroupElement(
   return directTgroups[activeTgroupIndex] ?? null;
 }
 
-export function measureS1000DTableRect(table: HTMLTableElement): TableRect {
-  return toTableRect(table.getBoundingClientRect());
+export function measureS1000DTableRect(
+  table: HTMLTableElement,
+  activeTgroupIndex?: number | null,
+): TableRect {
+  const tableRect = toTableRect(table.getBoundingClientRect());
+  const rows = getRenderedRowElements(table, activeTgroupIndex);
+  if (rows.length === 0) {
+    return tableRect;
+  }
+
+  const firstRowRect = rows[0]?.getBoundingClientRect();
+  const lastRowRect = rows[rows.length - 1]?.getBoundingClientRect();
+  if (!firstRowRect || !lastRowRect) {
+    return tableRect;
+  }
+
+  return {
+    left: tableRect.left,
+    right: tableRect.right,
+    width: tableRect.width,
+    top: firstRowRect.top,
+    bottom: lastRowRect.bottom,
+    height: Math.max(0, lastRowRect.bottom - firstRowRect.top),
+  };
 }
 
 export function measureS1000DColumnBoundaries(table: HTMLTableElement, tableRect: TableRect): number[] {

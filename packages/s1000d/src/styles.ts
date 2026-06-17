@@ -342,8 +342,13 @@ const s1000dTableStyles = `
   border-radius: 0;
   background: transparent;
   cursor: col-resize;
-  pointer-events: auto;
+  pointer-events: none;
   transform: translateX(-50%);
+}
+
+.s1000d-table-overlay.s1000d-table-overlay--hovering .s1000d-table-overlay__resize-handle,
+.s1000d-table-overlay.s1000d-table-overlay--resizing .s1000d-table-overlay__resize-handle {
+  pointer-events: auto;
 }
 
 .s1000d-table-overlay .s1000d-table-overlay__resize-handle::before {

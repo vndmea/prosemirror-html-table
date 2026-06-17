@@ -99,6 +99,8 @@ export type {
 
 export interface S1000DTableTiptapOptions {
   HTMLAttributes: Record<string, unknown>;
+  resizable: boolean;
+  cellMinWidth: number;
   allowTableNodeSelection: boolean;
   enableTabNavigation: boolean;
   addRowOnTabAtEnd: boolean;
@@ -116,6 +118,8 @@ export interface CreateS1000DTableExtensionsOptions extends Omit<S1000DTableSche
 
 export const defaultS1000DTableTiptapOptions: S1000DTableTiptapOptions = {
   HTMLAttributes: {},
+  resizable: true,
+  cellMinWidth: 120,
   allowTableNodeSelection: true,
   enableTabNavigation: true,
   addRowOnTabAtEnd: true,
