@@ -27,7 +27,7 @@ import {
   type S1000DContextMenuActionResolver,
 } from './menu.js';
 import { findS1000DEntryPosition } from './position.js';
-import { S1000DCellSelection, isS1000DCellSelection } from './selection.js';
+import { S1000DCellSelection } from './selection.js';
 import { S1000DMenuAdapter } from './s1000d-menu-adapter.js';
 import {
   applyRect,
@@ -392,13 +392,13 @@ export class S1000DTableOverlayView {
       this.columnBand.hidden = false;
     }
 
-    const hasCellSelection = isS1000DCellSelection(this.view.state.selection);
-    if (!hasCellSelection) {
+    const tableSelection = isTableSelectionForContext(this.view, selectionInfo.tablePos);
+    if (tableSelection) {
       return;
     }
 
     if (!rowSelection && !columnSelection) {
-      this.root.dataset.selectionScope = isTableSelectionForContext(this.view, selectionInfo.tablePos) ? 'table' : 'cell';
+      this.root.dataset.selectionScope = 'cell';
     }
 
     applyRect(this.cellFill, rect);
@@ -406,7 +406,7 @@ export class S1000DTableOverlayView {
 
     this.cellFill.hidden = false;
     this.cellOutline.hidden = false;
-    this.cellHandle.hidden = suppressSelectionControls || !hasCellSelection;
+    this.cellHandle.hidden = suppressSelectionControls;
     this.cellHandle.classList.toggle('is-selected', true);
     this.cellHandle.setAttribute('aria-label', 'Cell actions');
     this.cellHandle.title = 'Cell actions';

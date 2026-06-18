@@ -426,6 +426,24 @@ test.describe('S1000D React demo', () => {
     await expect(page.getByTestId('selection-menu-item-copy-selection')).toBeVisible();
   });
 
+  test('cell selection handle appears for a focused cell and opens the action menu', async ({ page }) => {
+    await page.goto('/');
+    await expectDemoApi(page);
+    await loadDemoSample(page, 'extended');
+
+    const table = page.getByTestId('editor').getByTestId('s1000d-table');
+    const bodyRows = table.locator('tbody[data-s1000d="tbody"] tr');
+    await bodyRows.nth(1).locator('td').first().click();
+
+    const cellHandle = page.getByTestId('s1000d-cell-handle');
+    await expect(cellHandle).toBeVisible();
+    await cellHandle.click();
+
+    await expect(page.getByTestId('selection-menu')).toBeVisible();
+    await expect(page.getByTestId('selection-menu')).toHaveAttribute('data-scope', 'cell');
+    await expect(page.getByTestId('selection-menu-item-copy-selection')).toBeVisible();
+  });
+
   test('table context menu only exposes remaining table actions', async ({ page }) => {
     await page.goto('/');
     await expectDemoApi(page);
