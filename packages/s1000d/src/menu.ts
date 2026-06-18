@@ -25,7 +25,6 @@ import {
 } from './commands.js';
 import { clearS1000DSelectedCells, getS1000DSelectionInfo } from './clipboard.js';
 import {
-  getS1000DTableInteractionState,
   type S1000DTableInteractionState,
   type S1000DTableMenuAnchor,
   type S1000DTableMenuScope,

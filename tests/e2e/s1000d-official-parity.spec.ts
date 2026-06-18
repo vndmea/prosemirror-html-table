@@ -129,12 +129,6 @@ async function openColumnMenu(page: Page, index: number) {
   await expect(contextMenu(page)).toBeVisible();
 }
 
-async function clickMenuAction(page: Page, label: string) {
-  const action = contextMenuAction(page, label);
-  await expect(action).toBeVisible();
-  await action.click();
-}
-
 async function openSubmenu(page: Page, label: string) {
   await contextSubmenuTrigger(page, label).click();
   await expect(contextSubmenu(page)).toBeVisible();
