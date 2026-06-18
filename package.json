@@ -43,7 +43,8 @@
     "pack:s1000d": "npm pack -w prosemirror-html-table-s1000d --dry-run",
     "pack:check": "npm run build:packages && npm run pack:core && npm run pack:tiptap && npm run pack:s1000d",
     "release:version": "changeset version",
-    "release:publish": "npm run build:packages && changeset publish"
+    "release:publish": "npm run build:packages && changeset publish",
+    "prepare": "husky"
   },
   "devDependencies": {
     "@changesets/cli": "^2.31.0",
@@ -53,6 +54,7 @@
     "@vitest/coverage-v8": "^3.0.0",
     "cross-env": "^7.0.0",
     "eslint": "^9.0.0",
+    "husky": "^9.1.7",
     "rimraf": "^6.0.0",
     "start-server-and-test": "^2.0.10",
     "tsup": "^8.0.0",
