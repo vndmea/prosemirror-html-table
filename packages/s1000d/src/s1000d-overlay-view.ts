@@ -53,7 +53,6 @@ import {
   hitTestRenderedTablePoint,
   isAxisHandleHovered,
   isAxisHandleSelected,
-  isKeyboardClick,
   isSameGeometry,
   isSingleColumnSelection,
   isSingleRowSelection,
@@ -71,6 +70,7 @@ import { S1000DResizeController } from './s1000d-resize-controller.js';
 import { ensureS1000DTableStyles } from './styles.js';
 import {
   getTableOverlayMount,
+  isKeyboardClick,
   getTableOverlayPositionState,
   getVisibleTableSelectionRect,
   TableOverlayHost,

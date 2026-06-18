@@ -116,10 +116,6 @@ export function getExtendRowIndex(
   return lastBodyRow?.rowIndex ?? Math.max(0, grid.height - 1);
 }
 
-export function isKeyboardClick(event: MouseEvent): boolean {
-  return event.detail === 0;
-}
-
 export function createLayer(ownerDocument: Document, className: string): HTMLDivElement {
   const element = ownerDocument.createElement('div');
   element.className = className;
