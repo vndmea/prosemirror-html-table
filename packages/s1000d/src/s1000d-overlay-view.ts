@@ -565,7 +565,7 @@ export class S1000DTableOverlayView {
         left: `${positionState.rowHandleLeft}px`,
         top: `${rect.top + rect.height / 2}px`,
         width: `${HANDLE_SIZE}px`,
-        height: `${Math.max(HANDLE_SIZE, Math.min(22, rect.height))}px`,
+        height: `${Math.max(HANDLE_SIZE, rect.height)}px`,
       });
     }
   }
@@ -621,7 +621,7 @@ export class S1000DTableOverlayView {
       Object.assign(handle.style, {
         left: `${rect.left + rect.width / 2}px`,
         top: `${positionState.columnHandleTop}px`,
-        width: `${Math.max(HANDLE_SIZE, Math.min(22, rect.width))}px`,
+        width: `${Math.max(HANDLE_SIZE, rect.width)}px`,
         height: `${HANDLE_SIZE}px`,
       });
     }

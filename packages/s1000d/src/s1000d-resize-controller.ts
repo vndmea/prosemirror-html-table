@@ -113,7 +113,7 @@ export class S1000DResizeController {
         Boolean(interaction.resizing && interaction.resizing.tablePos === context.tablePos && interaction.resizing.columnIndex === column.index),
       );
       Object.assign(handle.style, {
-        left: `${boundary + 10}px`,
+        left: `${boundary}px`,
         top: `${positionState.visibleTableTop}px`,
         width: `${RESIZE_HANDLE_WIDTH}px`,
         height: `${positionState.visibleTableHeight}px`,
