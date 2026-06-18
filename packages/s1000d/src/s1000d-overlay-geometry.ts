@@ -714,7 +714,7 @@ export function measureS1000DColumnBoundaries(table: HTMLTableElement, tableRect
 }
 
 function measureS1000DColspecBoundaries(table: HTMLTableElement, tableRect: TableRect): number[] | null {
-  const colElements = Array.from(table.querySelectorAll('col[data-s1000d="colspec"]'));
+  const colElements = Array.from(table.querySelectorAll<HTMLTableColElement>('col[data-s1000d="colspec"]'));
   if (colElements.length === 0) {
     return null;
   }
