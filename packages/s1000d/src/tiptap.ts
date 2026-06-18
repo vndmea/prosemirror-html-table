@@ -21,6 +21,7 @@ import {
   moveS1000DRowUp,
   splitS1000DCell,
 } from './commands.js';
+import { createS1000DTableGrid } from './grid.js';
 import {
   applyS1000DClipboardToSelection,
   clearS1000DSelectedCells,
@@ -42,6 +43,7 @@ import { normalizeS1000DTableProfile, type S1000DTableProfile } from './profile.
 import { S1000DCellSelection, isS1000DCellSelection } from './selection.js';
 import {
   createS1000DTableInteractionPlugin,
+  s1000dTableInteractionPluginKey,
 } from './interaction.js';
 import type { S1000DContextMenuActionResolver } from './menu.js';
 import {
@@ -187,6 +189,116 @@ export function createS1000DTableExtensions(options: CreateS1000DTableExtensions
 
 export const S1000DTableExtensions = createS1000DTableExtensions();
 
+export function findFirstS1000DTableInDoc(doc: ProseMirrorNode): {
+  table: ProseMirrorNode;
+  tablePos: number;
+} | null {
+  let result: { table: ProseMirrorNode; tablePos: number } | null = null;
+
+  doc.descendants((node, pos) => {
+    if (node.type.name === s1000dTableNodeNames.table) {
+      result = { table: node, tablePos: pos };
+      return false;
+    }
+    return true;
+  });
+
+  return result;
+}
+
+export function findS1000DGridEntryPosition(
+  doc: ProseMirrorNode,
+  rowIndex: number,
+  columnIndex: number,
+  tgroupIndex = 0,
+): number | null {
+  const tableInfo = findFirstS1000DTableInDoc(doc);
+  if (!tableInfo) return null;
+
+  const tgroup = createS1000DTableGrid(tableInfo.table).tgroups[tgroupIndex];
+  if (!tgroup) return null;
+
+  const entry = tgroup.slots[rowIndex]?.[columnIndex]?.entry;
+  if (!entry) return null;
+
+  return getNodePositions(doc).get(entry.node) ?? null;
+}
+
+export function createS1000DCellSelectTr(
+  state: EditorState,
+  rowIndex: number,
+  columnIndex: number,
+  tgroupIndex = 0,
+): Transaction | null {
+  const entryPos = findS1000DGridEntryPosition(state.doc, rowIndex, columnIndex, tgroupIndex);
+  if (typeof entryPos !== 'number') return null;
+  return state.tr.setSelection(S1000DCellSelection.create(state.doc, entryPos)).scrollIntoView();
+}
+
+export function createS1000DCellRangeTr(
+  state: EditorState,
+  anchorRowIndex: number,
+  anchorColumnIndex: number,
+  headRowIndex: number,
+  headColumnIndex: number,
+  tgroupIndex = 0,
+): Transaction | null {
+  const anchorPos = findS1000DGridEntryPosition(state.doc, anchorRowIndex, anchorColumnIndex, tgroupIndex);
+  const headPos = findS1000DGridEntryPosition(state.doc, headRowIndex, headColumnIndex, tgroupIndex);
+  if (typeof anchorPos !== 'number' || typeof headPos !== 'number') return null;
+  return state.tr.setSelection(S1000DCellSelection.create(state.doc, anchorPos, headPos)).scrollIntoView();
+}
+
+export function createS1000DRowSelectTr(
+  state: EditorState,
+  rowIndex: number,
+  tgroupIndex = 0,
+): Transaction | null {
+  const entryPos = findS1000DGridEntryPosition(state.doc, rowIndex, 0, tgroupIndex);
+  const tableInfo = findFirstS1000DTableInDoc(state.doc);
+  if (typeof entryPos !== 'number' || !tableInfo) return null;
+  return state.tr
+    .setSelection(S1000DCellSelection.rowSelection(state.doc.resolve(entryPos + 1)))
+    .setMeta(s1000dTableInteractionPluginKey, {
+      selectedAxis: {
+        kind: 'row',
+        index: rowIndex,
+        tablePos: tableInfo.tablePos,
+        tgroupIndex,
+      },
+      selectedAxisExplicit: true,
+    })
+    .scrollIntoView();
+}
+
+export function createS1000DColumnSelectTr(
+  state: EditorState,
+  columnIndex: number,
+  tgroupIndex = 0,
+): Transaction | null {
+  const entryPos = findS1000DGridEntryPosition(state.doc, 0, columnIndex, tgroupIndex);
+  const tableInfo = findFirstS1000DTableInDoc(state.doc);
+  if (typeof entryPos !== 'number' || !tableInfo) return null;
+  return state.tr
+    .setSelection(S1000DCellSelection.colSelection(state.doc.resolve(entryPos + 1)))
+    .setMeta(s1000dTableInteractionPluginKey, {
+      selectedAxis: {
+        kind: 'column',
+        index: columnIndex,
+        tablePos: tableInfo.tablePos,
+        tgroupIndex,
+      },
+      selectedAxisExplicit: true,
+    })
+    .scrollIntoView();
+}
+
+export function createS1000DTableSelectTr(state: EditorState): Transaction | null {
+  const tableInfo = findFirstS1000DTableInDoc(state.doc);
+  if (!tableInfo) return null;
+  return state.tr.setSelection(NodeSelection.create(state.doc, tableInfo.tablePos)).scrollIntoView();
+}
+
 function assertNoCustomNames(options: CreateS1000DTableExtensionsOptions): void {
   const runtimeNames = (options as CreateS1000DTableExtensionsOptions & {
     names?: Partial<S1000DTableNodeNames>;
@@ -280,6 +392,15 @@ function createTableExtension(
       return ['table', mergeAttributes(this.options.HTMLAttributes, HTMLAttributes, { 'data-s1000d': 'table' }), 0];
     },
   });
+}
+
+function getNodePositions(doc: ProseMirrorNode): Map<ProseMirrorNode, number> {
+  const nodePositions = new Map<ProseMirrorNode, number>();
+  doc.descendants((node, pos) => {
+    nodePositions.set(node, pos);
+    return true;
+  });
+  return nodePositions;
 }
 
 function createTitleExtension(names: S1000DTableNodeNames) {

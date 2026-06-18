@@ -1,8 +1,15 @@
-import { NodeSelection, TextSelection, type EditorState, type Transaction } from 'prosemirror-state';
+import { TextSelection, type EditorState, type Transaction } from 'prosemirror-state';
 import { Schema, type Node as ProseMirrorNode } from 'prosemirror-model';
 
 import { S1000DCellSelection, createS1000DTableGrid, parseS1000DTableXml, s1000dTableNodeNames, type S1000DTableProfile } from 'prosemirror-html-table-s1000d';
-import { s1000dTableInteractionPluginKey } from 'prosemirror-html-table-s1000d/tiptap';
+import {
+  createS1000DCellRangeTr,
+  createS1000DCellSelectTr,
+  createS1000DColumnSelectTr,
+  createS1000DRowSelectTr,
+  createS1000DTableSelectTr,
+  findS1000DGridEntryPosition,
+} from 'prosemirror-html-table-s1000d/tiptap';
 
 export function createDocFromS1000DXml(
   schema: Schema,
@@ -58,41 +65,17 @@ export function selectFirstBodyCell(state: EditorState): Transaction | null {
 }
 
 export function selectFirstBodyRow(state: EditorState): Transaction | null {
-  const [firstEntryPos] = getFirstTbodyEntryPositions(state.doc);
-  if (typeof firstEntryPos !== 'number') return null;
   const tableInfo = findFirstS1000DTable(state.doc);
   if (!tableInfo) return null;
-  return state.tr
-    .setSelection(S1000DCellSelection.rowSelection(state.doc.resolve(firstEntryPos + 1)))
-    .setMeta(s1000dTableInteractionPluginKey, {
-      selectedAxis: {
-        kind: 'row',
-        index: 0,
-        tablePos: tableInfo.tablePos,
-        tgroupIndex: 0,
-      },
-      selectedAxisExplicit: true,
-    })
-    .scrollIntoView();
+  const firstTgroup = createS1000DTableGrid(tableInfo.table).tgroups[0];
+  const firstBodyRow = firstTgroup?.rows.find((row) => row.section === 'tbody');
+  if (!firstBodyRow) return null;
+  return createS1000DRowSelectTr(state, firstBodyRow.rowIndex, 0);
 }
 
 export function selectFirstBodyColumn(state: EditorState): Transaction | null {
-  const [firstEntryPos] = getFirstTbodyEntryPositions(state.doc);
-  if (typeof firstEntryPos !== 'number') return null;
-  const tableInfo = findFirstS1000DTable(state.doc);
-  if (!tableInfo) return null;
-  return state.tr
-    .setSelection(S1000DCellSelection.colSelection(state.doc.resolve(firstEntryPos + 1)))
-    .setMeta(s1000dTableInteractionPluginKey, {
-      selectedAxis: {
-        kind: 'column',
-        index: 0,
-        tablePos: tableInfo.tablePos,
-        tgroupIndex: 0,
-      },
-      selectedAxisExplicit: true,
-    })
-    .scrollIntoView();
+  if (getFirstTbodyEntryPositions(state.doc).length === 0) return null;
+  return createS1000DColumnSelectTr(state, 0, 0);
 }
 
 export function selectFirstTwoBodyCells(state: EditorState): Transaction | null {
@@ -102,9 +85,7 @@ export function selectFirstTwoBodyCells(state: EditorState): Transaction | null 
 }
 
 export function selectWholeTable(state: EditorState): Transaction | null {
-  const tableInfo = findFirstS1000DTable(state.doc);
-  if (!tableInfo) return null;
-  return state.tr.setSelection(NodeSelection.create(state.doc, tableInfo.tablePos)).scrollIntoView();
+  return createS1000DTableSelectTr(state);
 }
 
 export function focusFirstBodyCell(state: EditorState): Transaction | null {
@@ -119,16 +100,7 @@ export function findGridEntryPosition(
   columnIndex: number,
   tgroupIndex = 0,
 ): number | null {
-  const tableInfo = findFirstS1000DTable(doc);
-  if (!tableInfo) return null;
-
-  const tgroup = createS1000DTableGrid(tableInfo.table).tgroups[tgroupIndex];
-  if (!tgroup) return null;
-
-  const entry = tgroup.slots[rowIndex]?.[columnIndex]?.entry;
-  if (!entry) return null;
-
-  return getNodePositions(doc).get(entry.node) ?? null;
+  return findS1000DGridEntryPosition(doc, rowIndex, columnIndex, tgroupIndex);
 }
 
 export function selectGridCell(
@@ -137,9 +109,7 @@ export function selectGridCell(
   columnIndex: number,
   tgroupIndex = 0,
 ): Transaction | null {
-  const entryPos = findGridEntryPosition(state.doc, rowIndex, columnIndex, tgroupIndex);
-  if (typeof entryPos !== 'number') return null;
-  return state.tr.setSelection(S1000DCellSelection.create(state.doc, entryPos)).scrollIntoView();
+  return createS1000DCellSelectTr(state, rowIndex, columnIndex, tgroupIndex);
 }
 
 export function selectGridRange(
@@ -150,10 +120,14 @@ export function selectGridRange(
   headColumnIndex: number,
   tgroupIndex = 0,
 ): Transaction | null {
-  const anchorPos = findGridEntryPosition(state.doc, anchorRowIndex, anchorColumnIndex, tgroupIndex);
-  const headPos = findGridEntryPosition(state.doc, headRowIndex, headColumnIndex, tgroupIndex);
-  if (typeof anchorPos !== 'number' || typeof headPos !== 'number') return null;
-  return state.tr.setSelection(S1000DCellSelection.create(state.doc, anchorPos, headPos)).scrollIntoView();
+  return createS1000DCellRangeTr(
+    state,
+    anchorRowIndex,
+    anchorColumnIndex,
+    headRowIndex,
+    headColumnIndex,
+    tgroupIndex,
+  );
 }
 
 export function selectGridRow(
@@ -161,21 +135,7 @@ export function selectGridRow(
   rowIndex: number,
   tgroupIndex = 0,
 ): Transaction | null {
-  const entryPos = findGridEntryPosition(state.doc, rowIndex, 0, tgroupIndex);
-  const tableInfo = findFirstS1000DTable(state.doc);
-  if (typeof entryPos !== 'number' || !tableInfo) return null;
-  return state.tr
-    .setSelection(S1000DCellSelection.rowSelection(state.doc.resolve(entryPos + 1)))
-    .setMeta(s1000dTableInteractionPluginKey, {
-      selectedAxis: {
-        kind: 'row',
-        index: rowIndex,
-        tablePos: tableInfo.tablePos,
-        tgroupIndex,
-      },
-      selectedAxisExplicit: true,
-    })
-    .scrollIntoView();
+  return createS1000DRowSelectTr(state, rowIndex, tgroupIndex);
 }
 
 export function selectGridColumn(
@@ -183,21 +143,7 @@ export function selectGridColumn(
   columnIndex: number,
   tgroupIndex = 0,
 ): Transaction | null {
-  const entryPos = findGridEntryPosition(state.doc, 0, columnIndex, tgroupIndex);
-  const tableInfo = findFirstS1000DTable(state.doc);
-  if (typeof entryPos !== 'number' || !tableInfo) return null;
-  return state.tr
-    .setSelection(S1000DCellSelection.colSelection(state.doc.resolve(entryPos + 1)))
-    .setMeta(s1000dTableInteractionPluginKey, {
-      selectedAxis: {
-        kind: 'column',
-        index: columnIndex,
-        tablePos: tableInfo.tablePos,
-        tgroupIndex,
-      },
-      selectedAxisExplicit: true,
-    })
-    .scrollIntoView();
+  return createS1000DColumnSelectTr(state, columnIndex, tgroupIndex);
 }
 
 function getNodePositions(doc: ProseMirrorNode): Map<ProseMirrorNode, number> {

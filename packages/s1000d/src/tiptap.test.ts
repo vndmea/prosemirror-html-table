@@ -9,12 +9,17 @@ import {
 } from './index.js';
 import { clearS1000DSelectedCells } from './clipboard.js';
 import {
+  createS1000DCellRangeTr,
+  createS1000DColumnSelectTr,
+  createS1000DRowSelectTr,
   createS1000DTableEditingPlugin,
   createS1000DTableExtensions,
   defaultS1000DTableTiptapOptions,
+  findS1000DGridEntryPosition,
 } from './tiptap.js';
 import { findS1000DTableByResolvedPos, resolveRequiredS1000DTableContext } from './context.js';
 import { getRenderedS1000DTableContext, s1000dTableDomAdapter } from './dom-adapter.js';
+import { s1000dTableInteractionPluginKey } from './interaction.js';
 import { applyS1000DColumnWidthsToTgroup, createS1000DTableOverlayPlugin } from './overlay.js';
 
 const schema = new Schema({
@@ -58,6 +63,59 @@ describe('S1000D tiptap integration', () => {
     expect(typeof table?.config.addNodeView).toBe('function');
     expect(s1000dTableDomAdapter.nodeName).toBe('s1000dTable');
     expect(typeof createS1000DTableOverlayPlugin).toBe('function');
+  });
+
+  it('resolves grid coordinates to entry positions through the tiptap helper', () => {
+    const state = createStateWithSelection(['A', 'B', 'C', 'D'], [0, 0]);
+    const entryPositions = findNodePositions(state.doc, 's1000dEntry');
+
+    expect(findS1000DGridEntryPosition(state.doc, 0, 0)).toBe(entryPositions[0]);
+    expect(findS1000DGridEntryPosition(state.doc, 1, 1)).toBe(entryPositions[3]);
+    expect(findS1000DGridEntryPosition(state.doc, 5, 5)).toBeNull();
+  });
+
+  it('creates explicit row and column selection transactions for grid helpers', () => {
+    const state = createStateWithSelection(['A', 'B', 'C', 'D'], [0, 0]);
+
+    const rowSelection = createS1000DRowSelectTr(state, 1);
+    const columnSelection = createS1000DColumnSelectTr(state, 1);
+
+    expect(rowSelection?.selection).toBeInstanceOf(S1000DCellSelection);
+    expect(rowSelection?.getMeta(s1000dTableInteractionPluginKey)).toEqual({
+      selectedAxis: {
+        kind: 'row',
+        index: 1,
+        tablePos: 0,
+        tgroupIndex: 0,
+      },
+      selectedAxisExplicit: true,
+    });
+    expect(columnSelection?.selection).toBeInstanceOf(S1000DCellSelection);
+    expect(columnSelection?.getMeta(s1000dTableInteractionPluginKey)).toEqual({
+      selectedAxis: {
+        kind: 'column',
+        index: 1,
+        tablePos: 0,
+        tgroupIndex: 0,
+      },
+      selectedAxisExplicit: true,
+    });
+  });
+
+  it('creates rectangular grid range selection transactions without axis metadata', () => {
+    const state = createStateWithSelection(['A', 'B', 'C', 'D'], [0, 0]);
+    const entryPositions = findNodePositions(state.doc, 's1000dEntry');
+
+    const transaction = createS1000DCellRangeTr(state, 0, 0, 1, 1);
+
+    expect(transaction?.selection).toBeInstanceOf(S1000DCellSelection);
+    expect(transaction?.getMeta(s1000dTableInteractionPluginKey)).toBeUndefined();
+    if (transaction?.selection instanceof S1000DCellSelection) {
+      expect([
+        transaction.selection.anchorEntryPos,
+        transaction.selection.headEntryPos,
+      ]).toEqual([entryPositions[0], entryPositions[3]]);
+    }
   });
 
   it('rejects custom names for the tiptap integration boundary', () => {
