@@ -95,6 +95,16 @@ export { normalizeHtmlTable } from './normalize.js';
 export { createHtmlTableNodeSpecs, normalizeHtmlTableSchemaOptions } from './schema.js';
 export { CellSelection, isCellSelection } from './selection.js';
 export { tableEditing, tableEditingKey } from './table-editing.js';
+export {
+  applyColumnWidths,
+  createAxisFocusTransaction,
+  createColumnResizeTransaction,
+  createColumnSelectionTransaction,
+  createRowSelectionTransaction,
+  findAdjacentCell,
+  getTableColumnWidths,
+  getTableSelectionInfo,
+} from './table-utils.js';
 
 export type { CreateHtmlTableOptions } from './builders.js';
 export type {
@@ -124,6 +134,10 @@ export type { NormalizeHtmlTableOptions } from './normalize.js';
 export type { CellSelectionJSON } from './selection.js';
 export type { HtmlTableNodeNameKey } from './names.js';
 export type { TableEditingOptions } from './table-editing.js';
+export type {
+  TableContext,
+  TableSelectionInfo,
+} from './table-utils.js';
 
 export type {
   HtmlTableCellRef,
