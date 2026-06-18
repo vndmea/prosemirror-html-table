@@ -63,7 +63,6 @@ import {
   OVERLAY_SELECTOR,
   ROW_HANDLE_OFFSET,
   shouldToggleContextMenuFromAxisHandle,
-  shouldToggleContextMenuFromTableHandle,
   syncCount,
   type S1000DAxisDragState,
   type S1000DOverlayRenderState,
@@ -487,24 +486,19 @@ export class S1000DTableOverlayView {
     const isHovered =
       interaction.hovered?.tablePos === context.tablePos
       && interaction.hoveredControl === 'table-handle';
-    const isMenuOpen = isSelected && interaction.contextMenuOpen && interaction.menuScope === 'table';
     const hidden = Boolean(interaction.resizing || this.axisDrag?.hasDragged);
 
     this.tableHandle.hidden = hidden;
     this.tableHandle.tabIndex = hidden ? -1 : 0;
     this.tableHandle.dataset.tablePos = String(context.tablePos);
-    this.tableHandle.setAttribute('aria-haspopup', 'menu');
-    this.tableHandle.setAttribute('aria-expanded', isMenuOpen ? 'true' : 'false');
-    if (isMenuOpen) {
-      this.tableHandle.setAttribute('aria-controls', this.contextMenu.id);
-    } else {
-      this.tableHandle.removeAttribute('aria-controls');
-    }
-    this.tableHandle.setAttribute('aria-label', 'Table actions');
-    this.tableHandle.title = 'Table actions';
+    this.tableHandle.removeAttribute('aria-haspopup');
+    this.tableHandle.removeAttribute('aria-controls');
+    this.tableHandle.setAttribute('aria-label', 'Select table');
+    this.tableHandle.title = 'Select table';
     this.tableHandle.classList.toggle('is-selected', isSelected);
     this.tableHandle.classList.toggle('is-hovered', isHovered);
-    this.tableHandle.classList.toggle('is-menu-open', isMenuOpen);
+    this.tableHandle.classList.remove('is-menu-open');
+    this.tableHandle.setAttribute('aria-expanded', 'false');
     Object.assign(this.tableHandle.style, {
       left: `${positionState.rowHandleLeft}px`,
       top: `${positionState.columnHandleTop}px`,
@@ -1272,15 +1266,9 @@ export class S1000DTableOverlayView {
     tablePos: number,
     handle: HTMLButtonElement | null,
   ): void {
-    const interaction = getS1000DTableInteractionState(this.view.state);
-    if (shouldToggleContextMenuFromTableHandle(interaction, tablePos)) {
-      this.toggleContextMenuFromControl('table', handle);
-      return;
-    }
-
     this.view.dispatch(this.view.state.tr.setSelection(NodeSelection.create(this.view.state.doc, tablePos)).scrollIntoView());
     this.view.focus();
-    this.openContextMenuFromControl('table', handle);
+    void handle;
   }
 
   private toggleContextTriggerMenu(): void {

@@ -1,4 +1,4 @@
-import { NodeSelection, type EditorState } from 'prosemirror-state';
+import type { EditorState } from 'prosemirror-state';
 import type { EditorView } from 'prosemirror-view';
 
 import {
@@ -23,8 +23,7 @@ import {
   setS1000DSelectedEntryRawAttrs,
   splitS1000DCell,
 } from './commands.js';
-import { clearS1000DSelectedCells, getS1000DSelectionInfo, isWholeS1000DTableSelection } from './clipboard.js';
-import { s1000dTableNodeNames } from './names.js';
+import { clearS1000DSelectedCells, getS1000DSelectionInfo } from './clipboard.js';
 import {
   getS1000DTableInteractionState,
   type S1000DTableInteractionState,
@@ -174,17 +173,6 @@ function getS1000DContextMenuScope(
     return null;
   }
 
-  if (
-    state.selection instanceof NodeSelection
-    && state.selection.node.type.name === s1000dTableNodeNames.table
-  ) {
-    return 'table';
-  }
-
-  if (isWholeS1000DTableSelection(state, { tablePos: interaction.activeTable.tablePos })) {
-    return 'table';
-  }
-
   if (interaction.selectedAxis.kind === 'row') {
     return 'row';
   }
@@ -212,13 +200,6 @@ function getS1000DContextMenuAnchor(
   }
 
   const geometry = geometryOverride ?? interaction.geometry;
-
-  if (geometry && scope === 'table') {
-    return {
-      left: geometry.visibleTableRect.left,
-      top: geometry.visibleTableRect.top,
-    };
-  }
 
   const selectedRowIndex = interaction.selectedAxis.index ?? (
     scope === 'row' && selectionInfo && selectionInfo.top === selectionInfo.bottom
@@ -292,27 +273,7 @@ function getBuiltInContextMenuActions(
   selectionInfo: ReturnType<typeof getS1000DSelectionInfo> | undefined,
 ): S1000DContextMenuAction[] {
   if (scope === 'table') {
-    return [
-      createAction('select-table', 'Select table', 'table', true, (view) => {
-        const activeTable = getS1000DTableInteractionState(view.state).activeTable;
-        if (!activeTable) return false;
-        view.dispatch(view.state.tr.setSelection(NodeSelection.create(view.state.doc, activeTable.tablePos)).scrollIntoView());
-        view.focus();
-        return true;
-      }),
-      createAction('delete-table', 'Delete table', 'danger', true, (view) => {
-        const interactionState = getS1000DTableInteractionState(view.state);
-        const activeTable = interactionState.activeTable;
-        if (!activeTable) return false;
-        const paragraph = view.state.schema.nodes.paragraph?.createAndFill();
-        const tr = paragraph && view.state.doc.childCount === 1
-          ? view.state.tr.replaceWith(activeTable.tablePos, activeTable.tablePos + activeTable.table.nodeSize, paragraph)
-          : view.state.tr.delete(activeTable.tablePos, activeTable.tablePos + activeTable.table.nodeSize);
-        view.dispatch(tr.scrollIntoView());
-        view.focus();
-        return true;
-      }, { destructive: true }),
-    ];
+    return [];
   }
 
   if (scope === 'row') {

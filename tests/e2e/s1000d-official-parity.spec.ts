@@ -358,15 +358,14 @@ test.describe('official s1000d parity', () => {
     await expect(contextMenuAction(page, 'Split cell')).toBeVisible();
   });
 
-  test('table menu actions keep the document valid and support delete lifecycle', async ({ page }) => {
+  test('table handle keeps whole-table selection stable and delete lifecycle works from the keyboard', async ({ page }) => {
     await gotoDemo(page);
 
     await table(page).hover();
     await clickCenter(page, tableHandle(page));
-    await expect(contextMenuAction(page, 'Fit table to width')).toHaveCount(0);
-    await expect(contextMenuAction(page, 'Distribute columns')).toHaveCount(0);
+    await expect(contextMenu(page)).toBeHidden();
     expect((await exportDemoXml(page)).includes('<table')).toBe(true);
-    await clickMenuAction(page, 'Delete table');
+    await page.keyboard.press('Delete');
 
     await expect(page.getByTestId('editor')).not.toContainText('Check system status');
   });

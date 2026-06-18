@@ -217,7 +217,7 @@ test.describe('S1000D React demo', () => {
     expect((xml.match(/<row\b/g) ?? []).length).toBeGreaterThanOrEqual(4);
   });
 
-  test('table handle selects the whole table and table actions remain available', async ({ page }) => {
+  test('table handle selects the whole table without opening a table menu', async ({ page }) => {
     await page.goto('/');
     await expectDemoApi(page);
     await loadDemoSample(page, 'proced');
@@ -229,12 +229,7 @@ test.describe('S1000D React demo', () => {
     const snapshot = await getDemoSnapshot(page);
     expect(snapshot.selectionScope).toBe('table');
     expect(snapshot.selectionSummary).toContain('Whole table: true');
-
-    await expect(page.getByTestId('selection-menu-item-export-xml')).toBeVisible();
-    await page.getByTestId('selection-menu-item-render-html').click();
-
-    const html = await renderDemoHtml(page);
-    expect(html).toContain('<table');
+    await expect(page.getByTestId('selection-menu')).toBeHidden();
   });
 
   test('selection context menu supports keyboard navigation and dismissal', async ({ page }) => {
@@ -449,13 +444,16 @@ test.describe('S1000D React demo', () => {
     await table.hover();
     await page.getByTestId('s1000d-table-handle').click();
 
-    await expect(page.getByTestId('selection-menu-item-select-table')).toBeVisible();
-    await expect(page.getByTestId('selection-menu-item-delete-table')).toBeVisible();
+    await expect(page.getByTestId('selection-menu')).toBeHidden();
+    const snapshot = await getDemoSnapshot(page);
+    expect(snapshot.selectionScope).toBe('table');
     await expect(page.getByTestId('selection-menu-item-fit-table-to-width')).toHaveCount(0);
     await expect(page.getByTestId('selection-menu-item-distribute-columns')).toHaveCount(0);
     await expect(page.getByTestId('selection-menu-item-validate-table')).toHaveCount(0);
     await expect(page.getByTestId('selection-menu-item-export-xml')).toHaveCount(0);
     await expect(page.getByTestId('selection-menu-item-render-html')).toHaveCount(0);
+    await expect(page.getByTestId('selection-menu-item-select-table')).toHaveCount(0);
+    await expect(page.getByTestId('selection-menu-item-delete-table')).toHaveCount(0);
   });
 
   test('resize writes colwidth to the active tgroup only and participates in undo/redo', async ({ page }) => {

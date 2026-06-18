@@ -537,17 +537,6 @@ export function App() {
       return 'column';
     }
 
-    const tableHandle = target.closest('[data-testid="s1000d-table-handle"]');
-    if (tableHandle instanceof HTMLElement) {
-      const tr = selectWholeTable(editor.state);
-      if (!tr) {
-        return null;
-      }
-      editor.view.dispatch(tr);
-      editor.commands.focus();
-      return 'table';
-    }
-
     return null;
   }
 

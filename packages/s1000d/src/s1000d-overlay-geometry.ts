@@ -73,16 +73,6 @@ export function shouldToggleContextMenuFromAxisHandle(
     && (tgroupIndex == null || interaction.selectedAxis.tgroupIndex === tgroupIndex);
 }
 
-export function shouldToggleContextMenuFromTableHandle(
-  interaction: {
-    tableSelected: boolean;
-    activeTable: { tablePos: number } | null;
-  },
-  tablePos: number,
-): boolean {
-  return interaction.tableSelected && interaction.activeTable?.tablePos === tablePos;
-}
-
 export function isAxisHandleHovered(
   interaction: {
     hovered: { tablePos: number; rowIndex: number | null; columnIndex: number | null } | null;
