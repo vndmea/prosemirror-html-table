@@ -375,7 +375,7 @@ export class S1000DMenuAdapter {
           : this.createContextMenuActionButton(entry.action)
       ),
       entries,
-      groupClassName: 's1000d-table-overlay__context-menu-group s1000d-table-overlay__context-menu-group--stack',
+      groupClassName: 'html-table-overlay__context-menu-group html-table-overlay__context-menu-group--stack',
     });
   }
 
@@ -431,7 +431,7 @@ export class S1000DMenuAdapter {
 
   private createContextMenuSubmenuTrigger(entry: S1000DContextMenuSubmenuEntry): HTMLButtonElement {
     return createTableContextMenuSubmenuButton(this.root.ownerDocument, {
-      className: 's1000d-table-overlay__context-menu-action has-submenu',
+      className: 'html-table-overlay__context-menu-action has-submenu',
       expanded: this.genericController.openSubmenuId === entry.key,
       key: entry.key,
       label: entry.label,
@@ -468,7 +468,7 @@ export class S1000DMenuAdapter {
     return createTableContextMenuActionButton(this.root.ownerDocument, {
       actionId: action.id,
       active: Boolean(action.active),
-      className: 's1000d-table-overlay__context-menu-action',
+      className: 'html-table-overlay__context-menu-action',
       destructive: Boolean(action.destructive),
       disabled: !action.enabled,
       label: action.label,

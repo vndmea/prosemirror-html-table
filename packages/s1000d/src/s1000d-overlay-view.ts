@@ -67,7 +67,6 @@ import {
   type S1000DOverlayRenderState,
 } from './s1000d-overlay-geometry.js';
 import { S1000DResizeController } from './s1000d-resize-controller.js';
-import { ensureS1000DTableStyles } from './styles.js';
 import {
   canToggleTableContextTriggerMenu,
   getScopedTableMenuToggleAction,
@@ -156,46 +155,49 @@ export class S1000DTableOverlayView {
   constructor(view: EditorView, options: S1000DTableOverlayPluginOptions) {
     this.view = view;
     this.options = options;
-    ensureS1000DTableStyles(view.dom.ownerDocument);
     this.root = view.dom.ownerDocument.createElement('div');
-    this.root.className = 's1000d-table-overlay';
+    this.root.className = 'html-table-overlay';
     this.root.dataset.s1000dTableOverlay = 'true';
     this.root.dataset.testid = 's1000d-overlay';
     this.root.hidden = true;
 
     this.overlayHost = new TableOverlayHost(this.root, {
-      hostClassName: 's1000d-table-overlay-host',
+      hostClassName: 'html-table-overlay-host',
       hostDataAttribute: 'data-s1000d-table-overlay-host',
       hostDataValue: 'true',
     });
 
-    this.rowHandlesParent = createLayer(this.root.ownerDocument, 's1000d-table-overlay__rows');
-    this.columnHandlesParent = createLayer(this.root.ownerDocument, 's1000d-table-overlay__columns');
-    this.resizersParent = createLayer(this.root.ownerDocument, 's1000d-table-overlay__resizers');
+    this.rowHandlesParent = createLayer(this.root.ownerDocument, 'html-table-overlay__rows');
+    this.columnHandlesParent = createLayer(this.root.ownerDocument, 'html-table-overlay__columns');
+    this.resizersParent = createLayer(this.root.ownerDocument, 'html-table-overlay__resizers');
     this.tableHandle = this.createTableHandle();
     this.contextTriggerButton = this.createContextTriggerButton();
     this.addRowButton = this.createExtendButton('row');
     this.addColumnButton = this.createExtendButton('column');
-    this.dropIndicator = createBox(this.root.ownerDocument, 's1000d-table-overlay__drop-indicator');
+    this.dropIndicator = createBox(this.root.ownerDocument, 'html-table-overlay__drop-indicator');
     this.dropIndicator.dataset.testid = 's1000d-drop-indicator';
     this.dropIndicator.setAttribute('aria-hidden', 'true');
-    this.rowBand = createBand(this.root.ownerDocument, 's1000d-table-overlay__selection-band s1000d-table-overlay__selection-band--row');
+    this.rowBand = createBand(this.root.ownerDocument, 'html-table-overlay__selection-band html-table-overlay__selection-band--row');
     this.rowBand.dataset.testid = 's1000d-selection-row-band';
-    this.columnBand = createBand(this.root.ownerDocument, 's1000d-table-overlay__selection-band s1000d-table-overlay__selection-band--column');
+    this.columnBand = createBand(this.root.ownerDocument, 'html-table-overlay__selection-band html-table-overlay__selection-band--column');
     this.columnBand.dataset.testid = 's1000d-selection-column-band';
-    this.cellFill = createBox(this.root.ownerDocument, 's1000d-table-overlay__cell-selection-fill');
-    this.cellOutline = createBox(this.root.ownerDocument, 's1000d-table-overlay__cell-selection-outline');
+    this.cellFill = createBox(this.root.ownerDocument, 'html-table-overlay__cell-selection-fill');
+    this.cellOutline = createBox(this.root.ownerDocument, 'html-table-overlay__cell-selection-outline');
     this.cellHandle = this.createCellHandle();
     this.cellFill.dataset.testid = 's1000d-selection-cell-fill';
     this.cellOutline.dataset.testid = 's1000d-selection-cell-outline';
-    this.hoverRowBand = createBox(this.root.ownerDocument, 's1000d-table-overlay__hover-band');
+    this.hoverRowBand = createBand(this.root.ownerDocument, 'html-table-overlay__selection-band html-table-overlay__selection-band--row');
     this.hoverRowBand.dataset.testid = 's1000d-hover-row-band';
-    this.hoverColumnBand = createBox(this.root.ownerDocument, 's1000d-table-overlay__hover-band');
+    this.hoverRowBand.style.opacity = '0.7';
+    this.hoverColumnBand = createBand(this.root.ownerDocument, 'html-table-overlay__selection-band html-table-overlay__selection-band--column');
     this.hoverColumnBand.dataset.testid = 's1000d-hover-column-band';
-    this.hoverCellFill = createBox(this.root.ownerDocument, 's1000d-table-overlay__hover-cell-fill');
+    this.hoverColumnBand.style.opacity = '0.7';
+    this.hoverCellFill = createBox(this.root.ownerDocument, 'html-table-overlay__cell-selection-fill');
     this.hoverCellFill.dataset.testid = 's1000d-hover-cell-fill';
-    this.hoverCellOutline = createBox(this.root.ownerDocument, 's1000d-table-overlay__hover-cell-outline');
+    this.hoverCellFill.style.opacity = '0.55';
+    this.hoverCellOutline = createBox(this.root.ownerDocument, 'html-table-overlay__cell-selection-outline');
     this.hoverCellOutline.dataset.testid = 's1000d-hover-cell-outline';
+    this.hoverCellOutline.style.opacity = '0.7';
     this.contextMenu = this.createContextMenu();
     this.contextSubmenu = this.createContextSubmenu();
     this.cellOutline.append(this.cellHandle);
@@ -334,11 +336,10 @@ export class S1000DTableOverlayView {
       && isSingleColumnSelection(this.view.state.selection, selectionInfo);
 
     this.root.classList.toggle(
-      's1000d-table-overlay--dragging',
+      'html-table-overlay--dragging',
       Boolean(this.activeCellDrag || this.pendingCellDrag || this.axisDrag?.hasDragged),
     );
-    this.root.classList.toggle('s1000d-table-overlay--hovering', interaction.hovered?.tablePos === context.tablePos);
-    this.root.classList.toggle('s1000d-table-overlay--resizing', Boolean(interaction.resizing));
+    this.root.classList.toggle('html-table-overlay--resizing', Boolean(interaction.resizing));
 
     this.renderSelection(interaction, geometry, positionState, selectionInfo, rowSelection, columnSelection);
     this.renderHoverFeedback(interaction, context, geometry, positionState, selectionInfo);
@@ -643,7 +644,7 @@ export class S1000DTableOverlayView {
     const dragState = this.axisDrag;
     if (!dragState?.hasDragged || dragState.targetIndex === null) {
       this.dropIndicator.hidden = true;
-      this.dropIndicator.className = 's1000d-table-overlay__drop-indicator';
+      this.dropIndicator.className = 'html-table-overlay__drop-indicator';
       return;
     }
 
@@ -655,7 +656,7 @@ export class S1000DTableOverlayView {
       }
 
       this.dropIndicator.hidden = false;
-      this.dropIndicator.className = `s1000d-table-overlay__drop-indicator s1000d-table-overlay__drop-indicator--row${dragState.isValidTarget ? '' : ' s1000d-table-overlay__drop-indicator--invalid'}`;
+      this.dropIndicator.className = `html-table-overlay__drop-indicator html-table-overlay__drop-indicator--row${dragState.isValidTarget ? '' : ' html-table-overlay__drop-indicator--invalid'}`;
       Object.assign(this.dropIndicator.style, {
         left: `${positionState.visibleTableLeft}px`,
         top: `${positionState.tableTop + row.top + row.height / 2}px`,
@@ -672,7 +673,7 @@ export class S1000DTableOverlayView {
     }
 
     this.dropIndicator.hidden = false;
-    this.dropIndicator.className = `s1000d-table-overlay__drop-indicator s1000d-table-overlay__drop-indicator--column${dragState.isValidTarget ? '' : ' s1000d-table-overlay__drop-indicator--invalid'}`;
+    this.dropIndicator.className = `html-table-overlay__drop-indicator html-table-overlay__drop-indicator--column${dragState.isValidTarget ? '' : ' html-table-overlay__drop-indicator--invalid'}`;
     Object.assign(this.dropIndicator.style, {
       left: `${positionState.tableLeft + column.left + column.width / 2}px`,
       top: `${positionState.visibleTableTop}px`,
@@ -795,7 +796,7 @@ export class S1000DTableOverlayView {
     const handle = this.root.ownerDocument.createElement('button');
     handle.type = 'button';
     handle.tabIndex = -1;
-    handle.className = 's1000d-table-overlay__handle s1000d-table-overlay__handle--table';
+    handle.className = 'html-table-overlay__handle html-table-overlay__handle--table';
     handle.dataset.testid = 's1000d-table-handle';
     handle.setAttribute('aria-label', 'Select table');
     handle.addEventListener('mousedown', (event) => this.handleTableMouseDown(event));
@@ -809,7 +810,7 @@ export class S1000DTableOverlayView {
     const handle = this.root.ownerDocument.createElement('button');
     handle.type = 'button';
     handle.tabIndex = -1;
-    handle.className = `s1000d-table-overlay__handle s1000d-table-overlay__handle--${axis}`;
+    handle.className = `html-table-overlay__handle html-table-overlay__handle--${axis}`;
     handle.dataset.testid = axis === 'row' ? 's1000d-row-handle' : 's1000d-column-handle';
     handle.addEventListener('mousedown', (event) => this.handleAxisMouseDown(event, axis));
     handle.addEventListener('click', (event) => this.handleAxisClick(event, axis));
@@ -823,7 +824,7 @@ export class S1000DTableOverlayView {
     button.type = 'button';
     button.tabIndex = -1;
     button.hidden = true;
-    button.className = 's1000d-table-overlay__context-trigger';
+    button.className = 'html-table-overlay__context-trigger';
     button.dataset.testid = 's1000d-context-trigger';
     button.textContent = '...';
     button.setAttribute('aria-label', 'Context actions');
@@ -838,7 +839,7 @@ export class S1000DTableOverlayView {
     button.type = 'button';
     button.tabIndex = -1;
     button.hidden = true;
-    button.className = `s1000d-table-overlay__extend-button s1000d-table-overlay__extend-button--${axis}`;
+    button.className = `html-table-overlay__extend-button html-table-overlay__extend-button--${axis}`;
     button.dataset.axis = axis;
     button.dataset.testid = axis === 'row' ? 's1000d-extend-row' : 's1000d-extend-column';
     button.textContent = '+';
@@ -853,7 +854,7 @@ export class S1000DTableOverlayView {
     const handle = this.root.ownerDocument.createElement('button');
     handle.type = 'button';
     handle.tabIndex = -1;
-    handle.className = 's1000d-table-overlay__resize-handle';
+    handle.className = 'html-table-overlay__resize-handle';
     handle.dataset.testid = 's1000d-resize-handle';
     handle.addEventListener('mousedown', (event) => this.resizeController.handleResizeStart(event));
     return handle;
@@ -862,7 +863,7 @@ export class S1000DTableOverlayView {
   private createCellHandle(): HTMLButtonElement {
     const handle = this.root.ownerDocument.createElement('button');
     handle.type = 'button';
-    handle.className = 's1000d-table-overlay__cell-selection-handle';
+    handle.className = 'html-table-overlay__cell-selection-handle';
     handle.dataset.testid = 's1000d-cell-handle';
     handle.tabIndex = -1;
     handle.hidden = true;
@@ -873,7 +874,7 @@ export class S1000DTableOverlayView {
 
   private createContextMenu(): HTMLDivElement {
     return createTableContextMenuElement(this.root.ownerDocument, {
-      className: 's1000d-table-overlay__context-menu',
+      className: 'html-table-overlay__context-menu',
       id: 's1000d-context-menu',
       testId: 'selection-menu',
       zIndex: 6,
@@ -882,7 +883,7 @@ export class S1000DTableOverlayView {
 
   private createContextSubmenu(): HTMLDivElement {
     return createTableContextMenuElement(this.root.ownerDocument, {
-      className: 's1000d-table-overlay__context-menu s1000d-table-overlay__context-menu--submenu',
+      className: 'html-table-overlay__context-menu html-table-overlay__context-menu--submenu',
       id: 's1000d-context-submenu',
       testId: 'selection-submenu',
       zIndex: 7,
@@ -1230,7 +1231,7 @@ export class S1000DTableOverlayView {
     this.stopAxisDragListeners();
     this.axisDrag = null;
     this.dropIndicator.hidden = true;
-    this.dropIndicator.className = 's1000d-table-overlay__drop-indicator';
+    this.dropIndicator.className = 'html-table-overlay__drop-indicator';
     this.root.ownerDocument.body.style.removeProperty('user-select');
   }
 
@@ -1940,9 +1941,8 @@ export class S1000DTableOverlayView {
 
   private detach(): void {
     this.root.hidden = true;
-    this.root.classList.remove('s1000d-table-overlay--dragging');
-    this.root.classList.remove('s1000d-table-overlay--hovering');
-    this.root.classList.remove('s1000d-table-overlay--resizing');
+    this.root.classList.remove('html-table-overlay--dragging');
+    this.root.classList.remove('html-table-overlay--resizing');
     this.lastRenderState = null;
     this.extendTarget = null;
     this.tableHandle.hidden = true;

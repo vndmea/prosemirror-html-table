@@ -14,7 +14,7 @@ export interface S1000DTableDomAdapter {
 export const s1000dTableDomAdapter: S1000DTableDomAdapter = {
   nodeName: s1000dTableNodeNames.table,
   tableSelector: '[data-s1000d-table], table[data-s1000d="table"], table',
-  wrapperSelector: '[data-s1000d-table-wrapper], .s1000d-table-node__wrapper',
+  wrapperSelector: '[data-s1000d-table-wrapper], .html-table-node__wrapper',
 };
 
 export interface S1000DTableDOMContext {

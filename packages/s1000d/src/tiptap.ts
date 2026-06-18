@@ -129,7 +129,7 @@ export const defaultS1000DTableTiptapOptions: S1000DTableTiptapOptions = {
   enableCellRangeClipboard: true,
   deleteTableOnAllCellsSelected: true,
   clearCellsOnDelete: true,
-  selectedCellClassName: 's1000d-table-cell--selected',
+  selectedCellClassName: 'html-table-cell--selected',
 };
 
 declare module '@tiptap/core' {
