@@ -13,6 +13,7 @@ import {
   getHtmlTableSelectionScope,
   getHtmlTableVisibleSelectionRect,
 } from './html-table-overlay-geometry.js';
+import type { HtmlTableTiptapOptions } from './options.js';
 import { measureHtmlTableGeometry } from './table-dom.js';
 import { getTableSelectionInfo } from './table-utils.js';
 
@@ -42,6 +43,7 @@ export interface HtmlTableCellSelectionControllerOptions {
   getView: () => EditorView;
   root: HTMLDivElement;
   suppressPointerClick: () => void;
+  tableOptions?: Pick<HtmlTableTiptapOptions, 'contextActionResolver'>;
   toggleContextMenuFromControl: (
     interaction: HtmlTableInteractionState,
     focusTarget: HTMLButtonElement | null,
@@ -55,6 +57,7 @@ export class HtmlTableCellSelectionController {
   private readonly contextMenuId: string;
   private readonly getView: () => EditorView;
   private readonly suppressPointerClick: () => void;
+  private readonly tableOptions: Pick<HtmlTableTiptapOptions, 'contextActionResolver'>;
   private readonly toggleContextMenuFromControl: HtmlTableCellSelectionControllerOptions['toggleContextMenuFromControl'];
   private readonly rowSelectionOverlay: HTMLDivElement;
   private readonly columnSelectionOverlay: HTMLDivElement;
@@ -66,6 +69,7 @@ export class HtmlTableCellSelectionController {
     this.contextMenuId = options.contextMenuId;
     this.getView = options.getView;
     this.suppressPointerClick = options.suppressPointerClick;
+    this.tableOptions = options.tableOptions ?? { contextActionResolver: null };
     this.toggleContextMenuFromControl = options.toggleContextMenuFromControl;
 
     this.rowSelectionOverlay = this.root.ownerDocument.createElement('div');
@@ -297,7 +301,7 @@ export class HtmlTableCellSelectionController {
       return;
     }
 
-    const menu = getHtmlTableContextMenuState(this.view.state, interaction);
+    const menu = getHtmlTableContextMenuState(this.view.state, interaction, this.tableOptions);
     const renderState = getHtmlTableCellContextTriggerRenderState(menu);
     if (!renderState.visible) {
       this.view.focus();

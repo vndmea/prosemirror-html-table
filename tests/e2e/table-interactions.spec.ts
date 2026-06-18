@@ -1,9 +1,20 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 
+import {
+  copyHtmlTableDemoSelection,
+  expectHtmlTableDemoApi,
+  getHtmlTableDemoSnapshot,
+  pasteHtmlTableDemoHtml,
+  pasteHtmlTableDemoSingleCell,
+  runHtmlTableDemoCommand,
+  selectHtmlTableDemoCell,
+} from './html-table-demo-api';
+
 async function gotoDemo(page: Page) {
   await page.goto('/');
   await expect(page.getByTestId('pmht-editor')).toBeVisible();
   await expect(page.getByTestId('pmht-table')).toBeVisible();
+  await expectHtmlTableDemoApi(page);
 }
 
 function table(page: Page) {
@@ -197,6 +208,41 @@ test.describe('table interactions', () => {
 
     await expect(contextMenu(page)).toBeHidden();
     await expect(table(page).locator('tbody tr').first().locator('td,th')).toHaveCount(beforeMergeCellCount);
+  });
+
+  test('demo clipboard api copies a cell range and pastes copied html into another row', async ({ page }) => {
+    await gotoDemo(page);
+
+    await dragBetweenCells(page, firstBodyCell(page), secondBodyCell(page));
+    await expect(page.getByTestId('pmht-selected-cell')).toHaveCount(2);
+
+    const clipboard = await copyHtmlTableDemoSelection(page);
+    expect(clipboard.html).toContain('<table');
+    expect(clipboard.text).toContain('Open panel');
+
+    await expect(await selectHtmlTableDemoCell(page, 1, 0)).toBe(true);
+    await expect(await pasteHtmlTableDemoHtml(page)).toBe(true);
+
+    await expect(table(page).locator('tbody tr').nth(1).locator('td,th').nth(0)).toContainText('Open panel');
+    await expect(table(page).locator('tbody tr').nth(1).locator('td,th').nth(1)).toContainText('Done');
+  });
+
+  test('demo history api and toolbar undo redo stay in sync', async ({ page }) => {
+    await gotoDemo(page);
+
+    await expect(await selectHtmlTableDemoCell(page, 0, 0)).toBe(true);
+    await expect(await pasteHtmlTableDemoSingleCell(page, 'History change')).toBe(true);
+    await expect(firstBodyCell(page)).toContainText('History change');
+    await expect(page.getByRole('button', { name: 'Undo' })).toBeEnabled();
+    await expect((await getHtmlTableDemoSnapshot(page)).canUndo).toBe(true);
+
+    await expect(await runHtmlTableDemoCommand(page, 'undo')).toBe(true);
+    await expect(firstBodyCell(page)).toContainText('Open panel');
+    await expect(page.getByRole('button', { name: 'Redo' })).toBeEnabled();
+    await expect((await getHtmlTableDemoSnapshot(page)).canRedo).toBe(true);
+
+    await expect(await runHtmlTableDemoCommand(page, 'redo')).toBe(true);
+    await expect(firstBodyCell(page)).toContainText('History change');
   });
 
   test('cell submenu opens as a right-side flyout without inline back navigation', async ({ page }) => {

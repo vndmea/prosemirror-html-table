@@ -48,13 +48,14 @@ import {
   getHtmlTableSelectionScope,
   type HtmlTableSelectionScope,
 } from './html-table-handles.js';
+import type { HtmlTableContextActionResolver, HtmlTableContextActionResolverParams } from './options.js';
 import {
   createColumnSelectionTransaction,
   createRowSelectionTransaction,
   getTableSelectionInfo,
 } from './table-utils.js';
 
-export type HtmlTableContextActionId =
+type BuiltInHtmlTableContextActionId =
   | 'deleteTable'
   | 'toggleCaption'
   | 'toggleColgroup'
@@ -98,6 +99,10 @@ export type HtmlTableContextActionId =
   | 'splitCell'
   | 'toggleHeaderCell';
 
+export type HtmlTableContextActionId =
+  | BuiltInHtmlTableContextActionId
+  | (string & {});
+
 export interface HtmlTableContextAction {
   id: HtmlTableContextActionId;
   label: string;
@@ -105,6 +110,13 @@ export interface HtmlTableContextAction {
   enabled: boolean;
   active?: boolean;
   destructive?: boolean;
+  group?: HtmlTableContextActionGroupId;
+  run?: (
+    state: EditorState,
+    dispatch?: Parameters<Command>[1],
+    interaction?: HtmlTableInteractionState,
+  ) => boolean;
+  shortcut?: string | null;
 }
 
 export type HtmlTableContextActionGroupId =
@@ -115,7 +127,8 @@ export type HtmlTableContextActionGroupId =
   | 'reorder'
   | 'section'
   | 'content'
-  | 'danger';
+  | 'danger'
+  | 'external';
 
 export interface HtmlTableContextActionGroup {
   id: HtmlTableContextActionGroupId;
@@ -128,7 +141,9 @@ export type HtmlTableContextActionMenuItemRole = 'menuitem';
 export type HtmlTableContextActionOptions =
   FitHtmlTableToWidthOptions &
   DistributeHtmlTableColumnsOptions &
-  HtmlTableCommandOptions;
+  HtmlTableCommandOptions & {
+    contextActionResolver?: HtmlTableContextActionResolver | null;
+  };
 
 export interface HtmlTableContextActionMenuItemState {
   role: HtmlTableContextActionMenuItemRole;
@@ -159,7 +174,7 @@ export function getHtmlTableContextActions(
     const hasHead = hasChild(table, 'htmlTableHead');
     const hasFoot = hasChild(table, 'htmlTableFoot');
 
-    return [
+    return appendResolvedContextActions([
       createAction('deleteTable', scope, resolveTableScopeCommand('deleteTable', false, options), state, { destructive: true }),
       createAction(
         'toggleCaption',
@@ -191,7 +206,7 @@ export function getHtmlTableContextActions(
         state,
         { active: hasFoot },
       ),
-    ];
+    ], resolveCustomContextActions(state, interaction, scope, options));
   }
 
   if (!selectionInfo) {
@@ -203,7 +218,7 @@ export function getHtmlTableContextActions(
     const textAlign = getCommonSelectedCellAttribute(state, selectionInfo, 'textAlign');
     const backgroundColor = getCommonSelectedCellAttribute(state, selectionInfo, 'backgroundColor');
     const verticalAlign = getCommonSelectedCellAttribute(state, selectionInfo, 'verticalAlign');
-    return [
+    return appendResolvedContextActions([
       createAction('toggleHeaderRow', scope, toggleHeaderRow(options), state, rowHeaderActive === undefined ? {} : { active: rowHeaderActive }),
       createAction('addRowBefore', scope, addRowBefore(options), state),
       createAction('addRowAfter', scope, addRowAfter(options), state),
@@ -245,7 +260,7 @@ export function getHtmlTableContextActions(
       createAction('moveRowToBody', scope, moveRowToBody(options), state),
       createAction('moveRowToFoot', scope, moveRowToFoot(options), state),
       createAction('deleteRow', scope, deleteRow(options), state, { destructive: true }),
-    ];
+    ], resolveCustomContextActions(state, interaction, scope, options));
   }
 
   if (scope === 'column') {
@@ -253,7 +268,7 @@ export function getHtmlTableContextActions(
     const textAlign = getCommonSelectedCellAttribute(state, selectionInfo, 'textAlign');
     const backgroundColor = getCommonSelectedCellAttribute(state, selectionInfo, 'backgroundColor');
     const verticalAlign = getCommonSelectedCellAttribute(state, selectionInfo, 'verticalAlign');
-    return [
+    return appendResolvedContextActions([
       createAction('moveColumnLeft', scope, moveColumnLeft(options), state),
       createAction('moveColumnRight', scope, moveColumnRight(options), state),
       createAction('addColumnBefore', scope, addColumnBefore(options), state),
@@ -300,7 +315,7 @@ export function getHtmlTableContextActions(
         columnHeaderActive === undefined ? {} : { active: columnHeaderActive },
       ),
       createAction('deleteColumn', scope, deleteColumn(options), state, { destructive: true }),
-    ];
+    ], resolveCustomContextActions(state, interaction, scope, options));
   }
 
   const textAlign = getCommonSelectedCellAttribute(state, selectionInfo, 'textAlign');
@@ -310,7 +325,7 @@ export function getHtmlTableContextActions(
   const headerCellActive = singleSelectedCell ? areSelectedCellsHeader(selectionInfo) : undefined;
   const toggleHeaderCellCommand = singleSelectedCell ? toggleHeaderCell(options) : () => false;
 
-  return [
+  return appendResolvedContextActions([
     createAction('setCellTextAlignLeft', scope, setCellTextAlign('left', options), state, {
       active: textAlign === 'left',
     }),
@@ -351,13 +366,17 @@ export function getHtmlTableContextActions(
       state,
       headerCellActive === undefined ? {} : { active: headerCellActive },
     ),
-  ];
+  ], resolveCustomContextActions(state, interaction, scope, options));
 }
 
 export function getHtmlTableContextActionCommand(
   action: HtmlTableContextAction,
   options: HtmlTableContextActionOptions = {},
 ): Command {
+  if (!isBuiltInHtmlTableContextActionId(action.id)) {
+    return () => false;
+  }
+
   switch (action.id) {
     case 'deleteTable':
       return resolveTableScopeCommand(action.id, false, options);
@@ -453,6 +472,11 @@ export function runHtmlTableContextAction(
   options: HtmlTableContextActionOptions = {},
   interaction?: HtmlTableInteractionState,
 ): boolean {
+  if (action.run) {
+    const commandState = createContextActionCommandState(state, action, interaction) ?? state;
+    return action.run(commandState, dispatch, interaction);
+  }
+
   const command = getHtmlTableContextActionCommand(action, options);
   const commandState = createContextActionCommandState(state, action, interaction) ?? state;
   if (!dispatch) {
@@ -472,7 +496,7 @@ export function getHtmlTableContextActionGroups(
   const grouped = new Map<HtmlTableContextActionGroupId, HtmlTableContextAction[]>();
 
   for (const action of actions) {
-    const groupId = ACTION_GROUPS[action.id];
+    const groupId = action.group ?? (isBuiltInHtmlTableContextActionId(action.id) ? ACTION_GROUPS[action.id] : 'external');
     const groupActions = grouped.get(groupId) ?? [];
     groupActions.push(action);
     grouped.set(groupId, groupActions);
@@ -521,7 +545,7 @@ export function getHtmlTableContextActionShortcutState(
   action: HtmlTableContextAction,
 ): HtmlTableContextActionShortcutState {
   return {
-    ariaKeyshortcuts: ACTION_ARIA_KEYSHORTCUTS[action.id] ?? null,
+    ariaKeyshortcuts: action.shortcut ?? (isBuiltInHtmlTableContextActionId(action.id) ? ACTION_ARIA_KEYSHORTCUTS[action.id] ?? null : null),
   };
 }
 
@@ -589,7 +613,7 @@ function createContextActionCommandState(
 }
 
 function createAction(
-  id: HtmlTableContextActionId,
+  id: BuiltInHtmlTableContextActionId,
   scope: HtmlTableSelectionScope,
   command: Command,
   state: EditorState,
@@ -605,7 +629,7 @@ function createAction(
 }
 
 function getHtmlTableContextActionLabel(
-  id: HtmlTableContextActionId,
+  id: BuiltInHtmlTableContextActionId,
   active: boolean | undefined,
 ): string {
   if (id === 'toggleCaption') {
@@ -701,7 +725,7 @@ function areSelectedCellsHeader(
   return selectionInfo.cells.every((cell) => cell.node.type.name === 'htmlTableHeaderCell');
 }
 
-const ACTION_LABELS: Record<HtmlTableContextActionId, string> = {
+const ACTION_LABELS: Record<BuiltInHtmlTableContextActionId, string> = {
   deleteTable: 'Delete table',
   toggleCaption: 'Toggle caption',
   toggleColgroup: 'Toggle colgroup',
@@ -746,7 +770,7 @@ const ACTION_LABELS: Record<HtmlTableContextActionId, string> = {
   toggleHeaderCell: 'Toggle header cell',
 };
 
-const ACTION_GROUPS: Record<HtmlTableContextActionId, HtmlTableContextActionGroupId> = {
+const ACTION_GROUPS: Record<BuiltInHtmlTableContextActionId, HtmlTableContextActionGroupId> = {
   deleteTable: 'danger',
   toggleCaption: 'table',
   toggleColgroup: 'table',
@@ -799,6 +823,7 @@ const ACTION_GROUP_ORDER: HtmlTableContextActionGroupId[] = [
   'reorder',
   'section',
   'content',
+  'external',
   'danger',
 ];
 
@@ -810,10 +835,11 @@ const ACTION_GROUP_LABELS: Record<HtmlTableContextActionGroupId, string> = {
   reorder: 'Reorder',
   section: 'Section',
   content: 'Content',
+  external: 'More',
   danger: 'Danger',
 };
 
-const ACTION_ARIA_KEYSHORTCUTS: Partial<Record<HtmlTableContextActionId, string>> = {
+const ACTION_ARIA_KEYSHORTCUTS: Partial<Record<BuiltInHtmlTableContextActionId, string>> = {
   sortBodyRowsAsc: 'Alt+ArrowUp',
   sortBodyRowsDesc: 'Alt+ArrowDown',
   clearSelectedCells: 'Delete',
@@ -830,7 +856,7 @@ const ACTION_ARIA_KEYSHORTCUTS: Partial<Record<HtmlTableContextActionId, string>
   setCellVerticalAlignBottom: 'Alt+Shift+B',
 };
 
-const PRIMARY_ACTION_ORDER: HtmlTableContextActionId[] = [
+const PRIMARY_ACTION_ORDER: BuiltInHtmlTableContextActionId[] = [
   'toggleHeadSection',
   'toggleCaption',
   'addRowAfter',
@@ -845,3 +871,34 @@ const PRIMARY_ACTION_ORDER: HtmlTableContextActionId[] = [
   'duplicateColumn',
   'clearSelectedCells',
 ];
+
+function isBuiltInHtmlTableContextActionId(
+  actionId: HtmlTableContextActionId,
+): actionId is BuiltInHtmlTableContextActionId {
+  return actionId in ACTION_LABELS;
+}
+
+function resolveCustomContextActions(
+  state: EditorState,
+  interaction: HtmlTableInteractionState,
+  scope: HtmlTableSelectionScope,
+  options: HtmlTableContextActionOptions,
+): HtmlTableContextAction[] {
+  const resolver = options.contextActionResolver;
+  if (!resolver) {
+    return [];
+  }
+
+  return resolver({
+    interaction,
+    scope,
+    state,
+  } satisfies HtmlTableContextActionResolverParams).filter((action) => action.scope === scope);
+}
+
+function appendResolvedContextActions(
+  actions: HtmlTableContextAction[],
+  extraActions: HtmlTableContextAction[],
+): HtmlTableContextAction[] {
+  return extraActions.length > 0 ? [...actions, ...extraActions] : actions;
+}

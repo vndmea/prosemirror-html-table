@@ -65,7 +65,11 @@ export type {
   HtmlTableContextMenuState,
   HtmlTableContextTriggerButtonState,
 } from './html-table-context-menu.js';
-export type { HtmlTableTiptapOptions } from './options.js';
+export type {
+  HtmlTableContextActionResolver,
+  HtmlTableContextActionResolverParams,
+  HtmlTableTiptapOptions,
+} from './options.js';
 export type { CreateHtmlTableExtensionsOptions } from './nodes.js';
 export type {
   HtmlTableHoverKind,

@@ -50,6 +50,7 @@ import {
   createRowSelectionTransaction,
   getTableSelectionInfo,
 } from './table-utils.js';
+import type { HtmlTableTiptapOptions } from './options.js';
 
 const SUBMENU_GAP = 6;
 
@@ -166,6 +167,7 @@ interface HtmlTableMenuControllerOptions {
   contextTriggerButton: HTMLButtonElement;
   cellSelectionHandle: HTMLButtonElement;
   suppressPointerClick: () => void;
+  tableOptions?: Pick<HtmlTableTiptapOptions, 'contextActionResolver'>;
 }
 
 export function getHtmlTableContextTriggerRenderState(
@@ -340,6 +342,7 @@ export class HtmlTableMenuController {
   private readonly contextTriggerButton: HTMLButtonElement;
   private readonly cellSelectionHandle: HTMLButtonElement;
   private readonly suppressPointerClick: () => void;
+  private readonly tableOptions: Pick<HtmlTableTiptapOptions, 'contextActionResolver'>;
   private readonly genericController: GenericTableMenuController;
   private contextMenuFocusTarget: HTMLButtonElement | null = null;
   private contextMenuContext: HtmlTableMenuContext | null = null;
@@ -357,6 +360,7 @@ export class HtmlTableMenuController {
     this.contextTriggerButton = options.contextTriggerButton;
     this.cellSelectionHandle = options.cellSelectionHandle;
     this.suppressPointerClick = options.suppressPointerClick;
+    this.tableOptions = options.tableOptions ?? { contextActionResolver: null };
     this.genericController = new GenericTableMenuController({
       contextMenu: this.contextMenu,
       contextSubmenu: this.contextSubmenu,
@@ -560,6 +564,16 @@ export class HtmlTableMenuController {
     this.appendSubmenuEntry(entries, 'alignment', 'Alignment', ALIGNMENT_ACTION_IDS, actionsById, menu.primaryAction?.id ?? null);
     this.appendSubmenuEntry(entries, 'structure', 'Structure', CELL_STRUCTURE_ACTION_IDS, actionsById, menu.primaryAction?.id ?? null);
     this.appendActionEntry(entries, actionsById, 'clearSelectedCells', menu.primaryAction?.id ?? null);
+    this.appendRemainingActionEntries(
+      entries,
+      menu,
+      [
+        ...COLOR_ACTION_IDS,
+        ...ALIGNMENT_ACTION_IDS,
+        ...CELL_STRUCTURE_ACTION_IDS,
+        'clearSelectedCells',
+      ],
+    );
 
     return entries;
   }
@@ -581,6 +595,25 @@ export class HtmlTableMenuController {
     this.appendActionEntry(entries, actionsById, 'clearRowContent', menu.primaryAction?.id ?? null);
     this.appendActionEntry(entries, actionsById, 'duplicateRow', menu.primaryAction?.id ?? null);
     this.appendActionEntry(entries, actionsById, 'deleteRow', menu.primaryAction?.id ?? null);
+    this.appendRemainingActionEntries(
+      entries,
+      menu,
+      [
+        'toggleHeaderRow',
+        'addRowBefore',
+        'addRowAfter',
+        ...COLOR_ACTION_IDS,
+        ...ALIGNMENT_ACTION_IDS,
+        'moveRowUp',
+        'moveRowDown',
+        'moveRowToHead',
+        'moveRowToBody',
+        'moveRowToFoot',
+        'clearRowContent',
+        'duplicateRow',
+        'deleteRow',
+      ],
+    );
 
     return entries;
   }
@@ -601,6 +634,24 @@ export class HtmlTableMenuController {
     this.appendActionEntry(entries, actionsById, 'duplicateColumn', menu.primaryAction?.id ?? null);
     this.appendActionEntry(entries, actionsById, 'toggleHeaderColumn', menu.primaryAction?.id ?? null);
     this.appendActionEntry(entries, actionsById, 'deleteColumn', menu.primaryAction?.id ?? null);
+    this.appendRemainingActionEntries(
+      entries,
+      menu,
+      [
+        'moveColumnLeft',
+        'moveColumnRight',
+        'addColumnBefore',
+        'addColumnAfter',
+        'sortBodyRowsAsc',
+        'sortBodyRowsDesc',
+        ...COLOR_ACTION_IDS,
+        ...ALIGNMENT_ACTION_IDS,
+        'clearColumnContent',
+        'duplicateColumn',
+        'toggleHeaderColumn',
+        'deleteColumn',
+      ],
+    );
 
     return entries;
   }
@@ -648,6 +699,21 @@ export class HtmlTableMenuController {
       label,
       items,
     });
+  }
+
+  private appendRemainingActionEntries(
+    entries: HtmlTableContextMenuEntry[],
+    menu: HtmlTableContextMenuState,
+    consumedActionIds: readonly HtmlTableContextActionId[],
+  ): void {
+    const consumed = new Set(consumedActionIds);
+    for (const action of menu.actions) {
+      if (consumed.has(action.id)) {
+        continue;
+      }
+
+      entries.push(this.createActionEntry(action, menu.primaryAction?.id === action.id));
+    }
   }
 
   private buildContextMenuPanel(
@@ -796,7 +862,7 @@ export class HtmlTableMenuController {
 
   private rerenderOpenContextMenu(): void {
     const interaction = getHtmlTableInteractionState(this.view.state);
-    const menu = getHtmlTableContextMenuState(this.view.state, interaction);
+    const menu = getHtmlTableContextMenuState(this.view.state, interaction, this.tableOptions);
     if (this.lastHostRect) {
       this.sync(menu, this.lastHostRect, this.lastViewportInset);
       return;

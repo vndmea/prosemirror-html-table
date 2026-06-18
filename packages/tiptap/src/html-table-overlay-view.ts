@@ -108,6 +108,9 @@ export class HtmlTableOverlayView {
       minHandleInset: MIN_HANDLE_INSET,
       root: this.root,
       suppressPointerClick: () => this.suppressPointerClick(),
+      tableOptions: {
+        contextActionResolver: options.contextActionResolver,
+      },
       toggleContextMenuFromControl: (interaction, focusTarget) => this.toggleContextMenuFromControl(interaction, focusTarget),
     });
     this.cellSelectionController = new HtmlTableCellSelectionController({
@@ -115,6 +118,9 @@ export class HtmlTableOverlayView {
       getView: () => this.view,
       root: this.root,
       suppressPointerClick: () => this.suppressPointerClick(),
+      tableOptions: {
+        contextActionResolver: options.contextActionResolver,
+      },
       toggleContextMenuFromControl: (interaction, focusTarget) => this.toggleContextMenuFromControl(interaction, focusTarget),
     });
     this.contextMenu = this.createContextMenu();
@@ -126,6 +132,9 @@ export class HtmlTableOverlayView {
       contextTriggerButton: this.handleController.contextTriggerButton,
       cellSelectionHandle: this.cellSelectionController.cellSelectionHandle,
       suppressPointerClick: () => this.suppressPointerClick(),
+      tableOptions: {
+        contextActionResolver: options.contextActionResolver,
+      },
     });
     this.resizeController = new HtmlTableResizeController({
       getView: () => this.view,
@@ -202,8 +211,8 @@ export class HtmlTableOverlayView {
       this.view.state.selection instanceof CellSelection || this.view.state.selection.empty
         ? getTableSelectionInfo(this.view.state.doc, this.view.state.selection)
         : undefined;
-    const contextTrigger = getHtmlTableContextTriggerButtonState(this.view.state, interaction);
-    const contextMenu = getHtmlTableContextMenuState(this.view.state, interaction);
+    const contextTrigger = getHtmlTableContextTriggerButtonState(this.view.state, interaction, this.options);
+    const contextMenu = getHtmlTableContextMenuState(this.view.state, interaction, this.options);
 
     this.handleController.render(
       interaction,

@@ -1,5 +1,4 @@
 import type { EditorState } from '@tiptap/pm/state';
-import type { HtmlTableCommandOptions } from 'prosemirror-html-table';
 
 import {
   getHtmlTableContextActionGroups,
@@ -7,6 +6,7 @@ import {
   getPrimaryHtmlTableContextAction,
   runHtmlTableContextAction,
   type HtmlTableContextAction,
+  type HtmlTableContextActionOptions,
   type HtmlTableContextActionId,
   type HtmlTableContextActionGroup,
 } from './html-table-actions.js';
@@ -43,7 +43,7 @@ export interface HtmlTableContextTriggerButtonState {
 export function getHtmlTableContextMenuState(
   state: EditorState,
   interaction: HtmlTableInteractionState,
-  options: HtmlTableCommandOptions = {},
+  options: HtmlTableContextActionOptions = {},
 ): HtmlTableContextMenuState {
   const tablePos = interaction.activeTable?.tablePos ?? null;
   const geometry = interaction.geometry;
@@ -78,7 +78,7 @@ export function getHtmlTableContextMenuState(
 export function getHtmlTableContextTriggerButtonState(
   state: EditorState,
   interaction: HtmlTableInteractionState,
-  options: HtmlTableCommandOptions = {},
+  options: HtmlTableContextActionOptions = {},
 ): HtmlTableContextTriggerButtonState {
   const menu = getHtmlTableContextMenuState(state, interaction, options);
   const hasInteractionAnchor =
@@ -121,7 +121,7 @@ export function runHtmlTableContextMenuAction(
   interaction: HtmlTableInteractionState,
   actionId: HtmlTableContextActionId,
   dispatch?: Parameters<typeof runHtmlTableContextAction>[2],
-  options: HtmlTableCommandOptions = {},
+  options: HtmlTableContextActionOptions = {},
 ): boolean {
   const menu = getHtmlTableContextMenuState(state, interaction, options);
   if (!menu.visible) {

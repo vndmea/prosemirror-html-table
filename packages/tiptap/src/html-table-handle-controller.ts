@@ -35,6 +35,7 @@ import {
   createColumnSelectionTransaction,
   createRowSelectionTransaction,
 } from './table-utils.js';
+import type { HtmlTableTiptapOptions } from './options.js';
 
 export function isTableHandleVisible(
   _allowTableNodeSelection: boolean,
@@ -143,6 +144,7 @@ export interface HtmlTableHandleControllerOptions {
   minHandleInset: number;
   root: HTMLDivElement;
   suppressPointerClick: () => void;
+  tableOptions?: Pick<HtmlTableTiptapOptions, 'contextActionResolver'>;
   toggleContextMenuFromControl: (
     interaction: HtmlTableInteractionState,
     focusTarget: HTMLButtonElement | null,
@@ -180,6 +182,7 @@ export class HtmlTableHandleController {
   private readonly enableRowColumnDrag: boolean;
   private readonly getView: () => EditorView;
   private readonly suppressPointerClick: () => void;
+  private readonly tableOptions: Pick<HtmlTableTiptapOptions, 'contextActionResolver'>;
   private readonly toggleContextMenuFromControl: HtmlTableHandleControllerOptions['toggleContextMenuFromControl'];
   private readonly handleCrossAxisSize: number;
   private readonly handleMainAxisInset: number;
@@ -204,6 +207,7 @@ export class HtmlTableHandleController {
     this.enableRowColumnDrag = options.enableRowColumnDrag;
     this.getView = options.getView;
     this.suppressPointerClick = options.suppressPointerClick;
+    this.tableOptions = options.tableOptions ?? { contextActionResolver: null };
     this.toggleContextMenuFromControl = options.toggleContextMenuFromControl;
     this.handleCrossAxisSize = options.handleCrossAxisSize;
     this.handleMainAxisInset = options.handleMainAxisInset;
@@ -874,7 +878,7 @@ export class HtmlTableHandleController {
 
   private toggleContextTriggerMenu(): void {
     const interaction = getHtmlTableInteractionState(this.view.state);
-    const trigger = getHtmlTableContextTriggerButtonState(this.view.state, interaction);
+    const trigger = getHtmlTableContextTriggerButtonState(this.view.state, interaction, this.tableOptions);
     if (!canToggleTableContextTriggerMenu(trigger.visible, {
       blockedByResize: interaction.resizing?.tablePos === interaction.activeTable?.tablePos,
     })) {

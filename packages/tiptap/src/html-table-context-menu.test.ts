@@ -135,6 +135,44 @@ describe('html table context menu state', () => {
     expect(menu.primaryAction?.id).toBe('clearSelectedCells');
   });
 
+  it('appends custom cell actions from the table option resolver', () => {
+    const table = createHtmlTableNode(schema, { rows: 2, cols: 2 });
+    const doc = schema.nodes.doc!.create(null, [table]);
+    const cellPositions = findNodePositions(doc, 'htmlTableCell');
+    const state = EditorState.create({
+      schema,
+      doc,
+      selection: CellSelection.create(doc, cellPositions[0]!),
+    });
+
+    const menu = getHtmlTableContextMenuState(
+      state,
+      createInteractionState({
+        activeTable: { tablePos: 0, table },
+        geometry: createGeometry(),
+      }),
+      {
+        contextActionResolver: ({ scope }) => (
+          scope === 'cell'
+            ? [{
+              id: 'copySelection',
+              label: 'Copy selection',
+              scope,
+              enabled: true,
+              group: 'external',
+              shortcut: 'Mod+C',
+              run: () => true,
+            }]
+            : []
+        ),
+      },
+    );
+
+    expect(menu.actions.map((action) => action.id)).toContain('copySelection');
+    expect(menu.groups.map((group) => group.id)).toEqual(['format', 'structure', 'content', 'external']);
+    expect(findHtmlTableContextMenuAction(menu, 'copySelection')?.label).toBe('Copy selection');
+  });
+
   it('aggregates column-scope menu state from column selections', () => {
     const table = createHtmlTableNode(schema, { rows: 2, cols: 2 });
     const doc = schema.nodes.doc!.create(null, [table]);
