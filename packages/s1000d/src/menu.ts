@@ -21,17 +21,12 @@ import {
   moveS1000DRowUp,
   setS1000DSelectedEntryAttrs,
   setS1000DSelectedEntryRawAttrs,
-  setS1000DTableColumnWidths,
   splitS1000DCell,
 } from './commands.js';
 import { clearS1000DSelectedCells, getS1000DSelectionInfo, isWholeS1000DTableSelection } from './clipboard.js';
-import { distributeS1000DColumnWidths } from './column-widths.js';
-import { getRenderedS1000DTableContext } from './dom-adapter.js';
 import { s1000dTableNodeNames } from './names.js';
 import {
-  closeS1000DTableContextMenu,
   getS1000DTableInteractionState,
-  s1000dTableInteractionPluginKey,
   type S1000DTableInteractionState,
   type S1000DTableMenuAnchor,
   type S1000DTableMenuScope,
@@ -305,20 +300,6 @@ function getBuiltInContextMenuActions(
         view.focus();
         return true;
       }),
-      createAction(
-        'fit-table-to-width',
-        'Fit table to width',
-        'table',
-        Boolean(interaction.activeTable && interaction.geometry?.columns.length),
-        (view) => runMeasuredTableWidthAction(view, 'fit'),
-      ),
-      createAction(
-        'distribute-columns',
-        'Distribute columns',
-        'table',
-        Boolean(interaction.activeTable && interaction.geometry?.columns.length),
-        (view) => runMeasuredTableWidthAction(view, 'distribute'),
-      ),
       createAction('delete-table', 'Delete table', 'danger', true, (view) => {
         const interactionState = getS1000DTableInteractionState(view.state);
         const activeTable = interactionState.activeTable;
@@ -468,68 +449,6 @@ function readEntryRawAttribute(rawAttrs: unknown, name: string): string | null {
 
   const value = (rawAttrs as Record<string, unknown>)[name];
   return typeof value === 'string' && value.length > 0 ? value : null;
-}
-
-function runMeasuredTableWidthAction(
-  view: EditorView,
-  mode: 'fit' | 'distribute',
-): boolean {
-  const interaction = getS1000DTableInteractionState(view.state);
-  const tablePos = interaction.activeTable?.tablePos;
-  const columnCount = interaction.geometry?.columns.length ?? 0;
-  if (tablePos == null || columnCount <= 0) {
-    return false;
-  }
-
-  const measuredWidth = measureTableContentWidth(view, tablePos);
-  if (measuredWidth == null) {
-    return false;
-  }
-
-  const currentWidths = interaction.geometry?.columns.map((column) => column.width);
-  const widths = mode === 'fit'
-    ? distributeS1000DColumnWidths(measuredWidth, columnCount, 48, currentWidths)
-    : distributeS1000DColumnWidths(measuredWidth, columnCount, 48);
-  if (widths.length === 0) {
-    return false;
-  }
-
-  const applied = setS1000DTableColumnWidths(widths, { tablePos })(
-    view.state,
-    (transaction) => view.dispatch(
-      transaction.setMeta(s1000dTableInteractionPluginKey, {
-        contextMenuOpen: false,
-        menuScope: null,
-        menuAnchor: null,
-      }),
-    ),
-  );
-  if (!applied) {
-    closeS1000DTableContextMenu(view);
-  }
-  view.focus();
-  return true;
-}
-
-function measureTableContentWidth(view: EditorView, tablePos: number): number | null {
-  const context = getRenderedS1000DTableContext(view, tablePos);
-  if (!context) {
-    return null;
-  }
-
-  const measuredElement = context.wrapper.parentElement ?? context.wrapper;
-  const styles = measuredElement.ownerDocument.defaultView?.getComputedStyle(measuredElement);
-  const paddingLeft = styles ? Number.parseFloat(styles.paddingLeft) || 0 : 0;
-  const paddingRight = styles ? Number.parseFloat(styles.paddingRight) || 0 : 0;
-  const borderLeft = styles ? Number.parseFloat(styles.borderLeftWidth) || 0 : 0;
-  const borderRight = styles ? Number.parseFloat(styles.borderRightWidth) || 0 : 0;
-  const contentWidth = measuredElement.clientWidth - paddingLeft - paddingRight - borderLeft - borderRight;
-  if (contentWidth > 0) {
-    return contentWidth;
-  }
-
-  const fallbackWidth = context.dom.getBoundingClientRect().width;
-  return fallbackWidth > 0 ? fallbackWidth : null;
 }
 
 function canClearSelection(state: EditorState) {

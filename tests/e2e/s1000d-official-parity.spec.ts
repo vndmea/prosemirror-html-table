@@ -363,12 +363,9 @@ test.describe('official s1000d parity', () => {
 
     await table(page).hover();
     await clickCenter(page, tableHandle(page));
-    await clickMenuAction(page, 'Fit table to width');
-    await expect(contextMenu(page)).toBeHidden();
+    await expect(contextMenuAction(page, 'Fit table to width')).toHaveCount(0);
+    await expect(contextMenuAction(page, 'Distribute columns')).toHaveCount(0);
     expect((await exportDemoXml(page)).includes('<table')).toBe(true);
-
-    await table(page).hover();
-    await clickCenter(page, tableHandle(page));
     await clickMenuAction(page, 'Delete table');
 
     await expect(page.getByTestId('editor')).not.toContainText('Check system status');

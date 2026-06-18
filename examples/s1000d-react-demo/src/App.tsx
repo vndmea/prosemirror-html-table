@@ -576,37 +576,6 @@ export function App() {
   const hasActionMenu = Boolean(triggerState?.visible);
 
   contextMenuActionsRef.current = ({ scope }) => [
-    ...(scope === 'table'
-      ? [
-        {
-          id: 'validate-table',
-          label: 'Validate table',
-          group: 'external' as const,
-          enabled: true,
-          run: () => {
-            void validateCurrentTable();
-          },
-        },
-        {
-          id: 'export-xml',
-          label: 'Export XML',
-          group: 'external' as const,
-          enabled: true,
-          run: () => {
-            void exportXml();
-          },
-        },
-        {
-          id: 'render-html',
-          label: 'Render HTML',
-          group: 'external' as const,
-          enabled: true,
-          run: () => {
-            void renderHtml(false);
-          },
-        },
-      ]
-      : []),
     ...(scope === 'cell'
       ? [
         {

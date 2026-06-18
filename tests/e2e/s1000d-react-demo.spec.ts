@@ -430,7 +430,7 @@ test.describe('S1000D React demo', () => {
     await expect(page.getByTestId('selection-menu-item-copy-selection')).toBeVisible();
   });
 
-  test('table context menu exposes fit and distribute actions', async ({ page }) => {
+  test('table context menu only exposes remaining table actions', async ({ page }) => {
     await page.goto('/');
     await expectDemoApi(page);
     await loadDemoXml(page, `
@@ -449,8 +449,13 @@ test.describe('S1000D React demo', () => {
     await table.hover();
     await page.getByTestId('s1000d-table-handle').click();
 
-    await expect(page.getByTestId('selection-menu-item-fit-table-to-width')).toBeVisible();
-    await expect(page.getByTestId('selection-menu-item-distribute-columns')).toBeVisible();
+    await expect(page.getByTestId('selection-menu-item-select-table')).toBeVisible();
+    await expect(page.getByTestId('selection-menu-item-delete-table')).toBeVisible();
+    await expect(page.getByTestId('selection-menu-item-fit-table-to-width')).toHaveCount(0);
+    await expect(page.getByTestId('selection-menu-item-distribute-columns')).toHaveCount(0);
+    await expect(page.getByTestId('selection-menu-item-validate-table')).toHaveCount(0);
+    await expect(page.getByTestId('selection-menu-item-export-xml')).toHaveCount(0);
+    await expect(page.getByTestId('selection-menu-item-render-html')).toHaveCount(0);
   });
 
   test('resize writes colwidth to the active tgroup only and participates in undo/redo', async ({ page }) => {
