@@ -15,19 +15,31 @@ import {
 import { CONTEXT_MENU_SCOPE_LABELS, OVERLAY_SELECTOR, SUBMENU_GAP } from './s1000d-overlay-geometry.js';
 import {
   canRestoreMenuFocus,
+  closeTableContextSubmenu,
+  consumeTableContextSubmenuAutoFocus,
+  createTableContextMenuActionButton,
+  createTableContextMenuPanel,
+  createTableContextMenuSubmenuButton,
+  createTableContextSubmenuState,
   focusFirstEnabledMenuButton,
   focusMenuButtonWithoutScroll,
   getNextMenuActionIndex,
-  getTableContextMenuPosition,
-  getTableContextMenuTransformOrigin,
-  getTableContextSubmenuPosition,
-  getTableContextSubmenuTransformOrigin,
+  getTableMenuLiveAnchor,
+  isKeyboardClick,
   isMenuDismissKey,
   isMenuExitKey,
   isMenuNavigationKey,
   isMenuTypeaheadKey,
   MenuTypeaheadController,
+  openTableContextSubmenu,
+  positionTableContextMenuElement,
+  positionTableContextSubmenuElement,
+  resetTableContextSubmenuState,
+  resolveOpenTableContextSubmenu,
   shouldCloseMenuForTarget,
+  syncTableContextSubmenuTriggerExpandedState,
+  type TableContextMenuActionEntryLike,
+  type TableContextMenuSubmenuEntryLike,
 } from 'tiptap-html-table/table-interaction';
 
 const COLOR_ACTION_IDS = [
@@ -50,16 +62,31 @@ const CELL_STRUCTURE_ACTION_IDS = [
   'merge-or-split-cell',
 ] as const;
 
-interface S1000DContextMenuActionEntry {
-  kind: 'action';
+const LIVE_ANCHOR_SELECTORS: Record<S1000DTableMenuScope, readonly string[]> = {
+  cell: [],
+  column: [
+    '[data-testid="s1000d-column-handle"].is-menu-open',
+    '[data-testid="s1000d-column-handle"].is-selected:not([hidden])',
+    '[data-testid="s1000d-column-handle"][aria-expanded="true"]',
+  ],
+  row: [
+    '[data-testid="s1000d-row-handle"].is-menu-open',
+    '[data-testid="s1000d-row-handle"].is-selected:not([hidden])',
+    '[data-testid="s1000d-row-handle"][aria-expanded="true"]',
+  ],
+  table: [
+    '[data-testid="s1000d-table-handle"].is-menu-open',
+    '[data-testid="s1000d-table-handle"].is-selected',
+    '[data-testid="s1000d-table-handle"][aria-expanded="true"]',
+  ],
+};
+
+interface S1000DContextMenuActionEntry extends TableContextMenuActionEntryLike<string> {
   action: S1000DContextMenuAction;
 }
 
-interface S1000DContextMenuSubmenuEntry {
-  kind: 'submenu';
-  key: string;
-  label: string;
-  actions: S1000DContextMenuAction[];
+interface S1000DContextMenuSubmenuEntry extends TableContextMenuSubmenuEntryLike<string> {
+  items: S1000DContextMenuActionEntry[];
 }
 
 type S1000DContextMenuEntry = S1000DContextMenuActionEntry | S1000DContextMenuSubmenuEntry;
@@ -82,11 +109,10 @@ export class S1000DMenuAdapter {
   private readonly onRender: () => void;
   private readonly contextMenuActionResolver?: S1000DContextMenuActionResolver | undefined;
   private readonly typeahead = new MenuTypeaheadController();
+  private readonly submenuState = createTableContextSubmenuState();
   private contextMenuActionElements: HTMLButtonElement[] = [];
   private contextSubmenuActionElements: HTMLButtonElement[] = [];
   private previousMenuOpen = false;
-  private openContextSubmenuId: string | null = null;
-  private focusFirstSubmenuActionOnOpen = false;
   private pendingRepositionFrame: number | null = null;
   private forceClosed = false;
   private currentMenuSignature = '';
@@ -149,8 +175,7 @@ export class S1000DMenuAdapter {
       this.previousMenuOpen = false;
       this.currentMenuSignature = '';
       this.currentSubmenuSignature = '';
-      this.openContextSubmenuId = null;
-      this.focusFirstSubmenuActionOnOpen = false;
+      resetTableContextSubmenuState(this.submenuState);
       if (this.pendingRepositionFrame !== null) {
         cancelAnimationFrame(this.pendingRepositionFrame);
         this.pendingRepositionFrame = null;
@@ -165,9 +190,19 @@ export class S1000DMenuAdapter {
       this.contextMenuActionElements = Array.from(this.contextMenu.querySelectorAll('button'));
       this.currentMenuSignature = menuSignature;
     } else {
-      this.syncContextMenuTriggerState(entries);
+      syncTableContextSubmenuTriggerExpandedState(this.contextMenu, this.submenuState.openSubmenuId);
     }
-    this.positionContextMenu(hostRect, menu.scope ?? 'cell', menu.anchor);
+    positionTableContextMenuElement(this.contextMenu, {
+      anchor: getTableMenuLiveAnchor(this.root, menu.scope ?? 'cell', menu.anchor, LIVE_ANCHOR_SELECTORS),
+      bounds: {
+        left: 12,
+        top: 12,
+        right: Math.max(12, hostRect.width - 12),
+        bottom: Math.max(12, hostRect.height - 12),
+      },
+      hostRect,
+      scope: menu.scope ?? 'cell',
+    });
     this.renderContextSubmenu(entries, hostRect);
 
     if (!this.previousMenuOpen) {
@@ -215,7 +250,7 @@ export class S1000DMenuAdapter {
       return;
     }
 
-    const activeButtons = this.openContextSubmenuId
+    const activeButtons = this.submenuState.openSubmenuId
       ? this.contextSubmenuActionElements
       : this.contextMenuActionElements;
     const enabledButtons = activeButtons.filter((button) => !button.disabled);
@@ -226,7 +261,7 @@ export class S1000DMenuAdapter {
     const activeIndex = enabledButtons.findIndex((button) => button === this.root.ownerDocument.activeElement);
     if (isMenuDismissKey(event.key)) {
       event.preventDefault();
-      if (this.openContextSubmenuId) {
+      if (this.submenuState.openSubmenuId) {
         this.closeContextSubmenu(true);
         return;
       }
@@ -256,7 +291,7 @@ export class S1000DMenuAdapter {
       return;
     }
 
-    if (event.key === 'ArrowLeft' && this.openContextSubmenuId) {
+    if (event.key === 'ArrowLeft' && this.submenuState.openSubmenuId) {
       event.preventDefault();
       this.closeContextSubmenu(true);
       return;
@@ -294,8 +329,7 @@ export class S1000DMenuAdapter {
     this.contextMenuActionElements = [];
     this.contextSubmenuActionElements = [];
     this.currentSubmenuSignature = '';
-    this.openContextSubmenuId = null;
-    this.focusFirstSubmenuActionOnOpen = false;
+    resetTableContextSubmenuState(this.submenuState);
     const interaction = getS1000DTableInteractionState(this.view.state);
     if (!interaction.contextMenuOpen) {
       return;
@@ -331,18 +365,19 @@ export class S1000DMenuAdapter {
       }
 
       consumed.add(actionId);
-      entries.push({ kind: 'action', action });
+      entries.push(this.createActionEntry(action));
     };
     const appendSubmenu = (key: string, label: string, actionIds: readonly string[]) => {
-      const submenuActions = actionIds
+      const submenuItems = actionIds
         .map((actionId) => actionsById.get(actionId))
-        .filter((action): action is S1000DContextMenuAction => Boolean(action));
-      if (submenuActions.length === 0) {
+        .filter((action): action is S1000DContextMenuAction => Boolean(action))
+        .map((action) => this.createActionEntry(action));
+      if (submenuItems.length === 0) {
         return;
       }
 
-      submenuActions.forEach((action) => consumed.add(action.id));
-      entries.push({ kind: 'submenu', key, label, actions: submenuActions });
+      submenuItems.forEach((action) => consumed.add(action.actionId));
+      entries.push({ kind: 'submenu', key, label, items: submenuItems });
     };
 
     if (scope === 'cell') {
@@ -382,47 +417,40 @@ export class S1000DMenuAdapter {
 
     for (const action of actions) {
       if (!consumed.has(action.id)) {
-        entries.push({ kind: 'action', action });
+        entries.push(this.createActionEntry(action));
       }
     }
 
     return entries;
   }
 
-  private createContextMenuPanel(entries: readonly S1000DContextMenuEntry[]): HTMLDivElement {
-    const groupElement = this.root.ownerDocument.createElement('div');
-    groupElement.className = 's1000d-table-overlay__context-menu-group s1000d-table-overlay__context-menu-group--stack';
-    groupElement.setAttribute('role', 'group');
-
-    for (const entry of entries) {
-      groupElement.append(
-        entry.kind === 'submenu'
-          ? this.createContextMenuSubmenuTrigger(entry)
-          : this.createContextMenuActionButton(entry.action),
-      );
-    }
-
-    return groupElement;
+  private createActionEntry(action: S1000DContextMenuAction): S1000DContextMenuActionEntry {
+    return {
+      action,
+      actionId: action.id,
+      active: Boolean(action.active),
+      destructive: Boolean(action.destructive),
+      enabled: action.enabled,
+      key: action.id,
+      kind: 'action',
+      label: action.label,
+    };
   }
 
-  private syncContextMenuTriggerState(entries: readonly S1000DContextMenuEntry[]): void {
-    for (const entry of entries) {
-      if (entry.kind !== 'submenu') {
-        continue;
-      }
-
-      const trigger = this.contextMenu.querySelector(`[data-submenu-id="${entry.key}"]`);
-      if (trigger instanceof HTMLButtonElement) {
-        trigger.setAttribute('aria-expanded', this.openContextSubmenuId === entry.key ? 'true' : 'false');
-      }
-    }
+  private createContextMenuPanel(entries: readonly S1000DContextMenuEntry[]): HTMLDivElement {
+    return createTableContextMenuPanel(this.root.ownerDocument, {
+      createElement: (entry) => (
+        entry.kind === 'submenu'
+          ? this.createContextMenuSubmenuTrigger(entry)
+          : this.createContextMenuActionButton(entry.action)
+      ),
+      entries,
+      groupClassName: 's1000d-table-overlay__context-menu-group s1000d-table-overlay__context-menu-group--stack',
+    });
   }
 
   private renderContextSubmenu(entries: readonly S1000DContextMenuEntry[], hostRect: DOMRect): void {
-    const submenuEntry = entries.find(
-      (entry): entry is S1000DContextMenuSubmenuEntry =>
-        entry.kind === 'submenu' && entry.key === this.openContextSubmenuId,
-    );
+    const submenuEntry = resolveOpenTableContextSubmenu(entries, this.submenuState.openSubmenuId);
     if (!submenuEntry) {
       this.contextSubmenu.replaceChildren();
       this.contextSubmenu.hidden = true;
@@ -445,90 +473,68 @@ export class S1000DMenuAdapter {
     this.contextSubmenu.hidden = false;
     this.contextSubmenu.setAttribute('aria-hidden', 'false');
     this.contextSubmenu.setAttribute('aria-label', `${submenuEntry.label} actions`);
-    const submenuSignature = `${submenuEntry.key}:${submenuEntry.actions.map((action) => `${action.id}:${action.enabled}:${action.active ? '1' : '0'}`).join(',')}`;
+    const submenuSignature = `${submenuEntry.key}:${submenuEntry.items.map((action) => `${action.actionId}:${action.enabled}:${action.active ? '1' : '0'}`).join(',')}`;
     if (this.currentSubmenuSignature !== submenuSignature) {
-      this.contextSubmenu.replaceChildren(this.createContextMenuPanel(
-        submenuEntry.actions.map((action) => ({ kind: 'action', action })),
-      ));
+      this.contextSubmenu.replaceChildren(this.createContextMenuPanel(submenuEntry.items));
       this.contextSubmenuActionElements = Array.from(this.contextSubmenu.querySelectorAll('button'));
       this.currentSubmenuSignature = submenuSignature;
     }
 
     const rootRect = this.contextMenu.getBoundingClientRect();
     const triggerRect = trigger.getBoundingClientRect();
-    const submenuWidth = this.contextSubmenu.offsetWidth;
-    const submenuHeight = this.contextSubmenu.offsetHeight;
-    const position = getTableContextSubmenuPosition(
-      rootRect.left - hostRect.left,
-      rootRect.right - hostRect.left,
-      triggerRect.top - hostRect.top,
-      submenuWidth,
-      submenuHeight,
-      0,
-      0,
-      hostRect.width,
-      hostRect.height,
-      SUBMENU_GAP,
-    );
-
-    Object.assign(this.contextSubmenu.style, {
-      left: `${position.left}px`,
-      top: `${position.top}px`,
-      position: 'absolute',
-      transformOrigin: getTableContextSubmenuTransformOrigin(position.placement),
+    positionTableContextSubmenuElement(this.contextSubmenu, {
+      bounds: {
+        left: 0,
+        top: 0,
+        right: hostRect.width,
+        bottom: hostRect.height,
+      },
+      gap: SUBMENU_GAP,
+      hostRect,
+      submenuHeight: this.contextSubmenu.offsetHeight,
+      submenuWidth: this.contextSubmenu.offsetWidth,
+      triggerRect: {
+        left: rootRect.left,
+        right: rootRect.right,
+        top: triggerRect.top,
+      } as Pick<DOMRect, 'left' | 'right' | 'top'>,
     });
-    this.contextSubmenu.dataset.placement = position.placement;
 
-    if (this.focusFirstSubmenuActionOnOpen) {
+    if (consumeTableContextSubmenuAutoFocus(this.submenuState)) {
       this.focusFirstContextMenuAction(this.contextSubmenuActionElements);
-      this.focusFirstSubmenuActionOnOpen = false;
     }
   }
 
   private createContextMenuSubmenuTrigger(entry: S1000DContextMenuSubmenuEntry): HTMLButtonElement {
-    const button = this.root.ownerDocument.createElement('button');
-    button.type = 'button';
-    button.dataset.testid = `selection-menu-submenu-${entry.key}`;
-    button.dataset.submenuId = entry.key;
-    button.textContent = entry.label;
-    button.className = 's1000d-table-overlay__context-menu-action has-submenu';
-    button.setAttribute('role', 'menuitem');
-    button.setAttribute('aria-haspopup', 'menu');
-    button.setAttribute('aria-expanded', this.openContextSubmenuId === entry.key ? 'true' : 'false');
-    button.addEventListener('mousedown', (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      if (this.openContextSubmenuId === entry.key) {
-        this.closeContextSubmenu(true);
-      } else {
-        this.openContextSubmenu(entry.key, true);
-      }
+    return createTableContextMenuSubmenuButton(this.root.ownerDocument, {
+      className: 's1000d-table-overlay__context-menu-action has-submenu',
+      expanded: this.submenuState.openSubmenuId === entry.key,
+      key: entry.key,
+      label: entry.label,
+      onClick: (event) => {
+        if (isKeyboardClick(event)) {
+          event.preventDefault();
+          if (this.submenuState.openSubmenuId === entry.key) {
+            this.closeContextSubmenu(true);
+          } else {
+            this.openContextSubmenu(entry.key, true);
+          }
+        }
+      },
+      onMouseDown: (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        if (this.submenuState.openSubmenuId === entry.key) {
+          this.closeContextSubmenu(true);
+        } else {
+          this.openContextSubmenu(entry.key, true);
+        }
+      },
+      testId: `selection-menu-submenu-${entry.key}`,
     });
-    button.addEventListener('click', (event) => {
-      if ((event as MouseEvent).detail !== 0) {
-        return;
-      }
-      event.preventDefault();
-      if (this.openContextSubmenuId === entry.key) {
-        this.closeContextSubmenu(true);
-      } else {
-        this.openContextSubmenu(entry.key, true);
-      }
-    });
-    return button;
   }
 
   private createContextMenuActionButton(action: S1000DContextMenuAction): HTMLButtonElement {
-    const button = this.root.ownerDocument.createElement('button');
-    button.type = 'button';
-    button.dataset.testid = `selection-menu-item-${action.id}`;
-    button.textContent = action.label;
-    button.disabled = !action.enabled;
-    button.className = 's1000d-table-overlay__context-menu-action';
-    button.classList.toggle('is-destructive', Boolean(action.destructive));
-    button.classList.toggle('is-active', Boolean(action.active));
-    button.setAttribute('role', 'menuitem');
-    button.tabIndex = action.enabled ? 0 : -1;
     const executeAction = (event: Event) => {
       if (!action.enabled) {
         return;
@@ -543,113 +549,40 @@ export class S1000DMenuAdapter {
         }
       });
     };
-    button.addEventListener('mousedown', (event) => {
-      event.preventDefault();
-      event.stopPropagation();
+    return createTableContextMenuActionButton(this.root.ownerDocument, {
+      actionId: action.id,
+      active: Boolean(action.active),
+      className: 's1000d-table-overlay__context-menu-action',
+      destructive: Boolean(action.destructive),
+      disabled: !action.enabled,
+      label: action.label,
+      onClick: (event) => executeAction(event),
+      onMouseDown: (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+      },
+      tabIndex: action.enabled ? 0 : -1,
+      testId: `selection-menu-item-${action.id}`,
     });
-    button.addEventListener('click', (event) => {
-      executeAction(event);
-    });
-    return button;
   }
 
   private focusFirstContextMenuAction(buttons: readonly HTMLButtonElement[]): void {
     focusFirstEnabledMenuButton(buttons);
   }
 
-  private positionContextMenu(
-    hostRect: DOMRect,
-    scope: S1000DTableMenuScope,
-    fallback: { left: number; top: number },
-  ): void {
-    const anchor = this.getLiveAnchor(scope, fallback);
-    const menuWidth = this.contextMenu.offsetWidth || 192;
-    const menuHeight = this.contextMenu.offsetHeight || 320;
-    const position = getTableContextMenuPosition(
-      scope,
-      anchor.left - hostRect.left,
-      anchor.top - hostRect.top,
-      menuWidth,
-      menuHeight,
-      12,
-      12,
-      Math.max(12, hostRect.width - 12),
-      Math.max(12, hostRect.height - 12),
-    );
-
-    Object.assign(this.contextMenu.style, {
-      left: `${position.left}px`,
-      top: `${position.top}px`,
-      position: 'absolute',
-      transformOrigin: getTableContextMenuTransformOrigin(position.placement),
-    });
-    this.contextMenu.dataset.placement = position.placement;
-  }
-
-  private getLiveAnchor(
-    scope: S1000DTableMenuScope,
-    fallback: { left: number; top: number },
-  ): { left: number; top: number } {
-    if (scope === 'cell') {
-      return fallback;
-    }
-
-    const selectors = scope === 'row'
-      ? [
-        '[data-testid="s1000d-row-handle"].is-menu-open',
-        '[data-testid="s1000d-row-handle"].is-selected:not([hidden])',
-        '[data-testid="s1000d-row-handle"][aria-expanded="true"]',
-      ]
-      : scope === 'column'
-        ? [
-          '[data-testid="s1000d-column-handle"].is-menu-open',
-          '[data-testid="s1000d-column-handle"].is-selected:not([hidden])',
-          '[data-testid="s1000d-column-handle"][aria-expanded="true"]',
-        ]
-        : scope === 'table'
-          ? [
-            '[data-testid="s1000d-table-handle"].is-menu-open',
-            '[data-testid="s1000d-table-handle"].is-selected',
-            '[data-testid="s1000d-table-handle"][aria-expanded="true"]',
-          ]
-          : [
-            '[data-testid="s1000d-cell-handle"].is-menu-open',
-            '[data-testid="s1000d-cell-handle"].is-selected:not([hidden])',
-            '[data-testid="s1000d-cell-handle"][aria-expanded="true"]',
-          ];
-    const activeHandle = selectors
-      .map((selector) => this.root.querySelector(selector))
-      .find((element): element is HTMLElement => element instanceof HTMLElement);
-    if (!(activeHandle instanceof HTMLElement)) {
-      return fallback;
-    }
-
-    const rect = activeHandle.getBoundingClientRect();
-    return {
-      left: rect.left + rect.width / 2,
-      top: rect.top + rect.height / 2,
-    };
-  }
-
   private openContextSubmenu(submenuId: string, focusFirstAction: boolean): void {
-    if (this.openContextSubmenuId === submenuId) {
+    if (!openTableContextSubmenu(this.submenuState, submenuId, focusFirstAction)) {
       return;
     }
-
-    this.openContextSubmenuId = submenuId;
-    this.focusFirstSubmenuActionOnOpen = focusFirstAction;
     this.typeahead.reset();
     this.onRender();
   }
 
   private closeContextSubmenu(restoreFocus: boolean): void {
-    const submenuId = this.openContextSubmenuId;
+    const submenuId = closeTableContextSubmenu(this.submenuState, restoreFocus);
     if (!submenuId) {
       return;
     }
-
-    this.openContextSubmenuId = null;
-    this.focusFirstSubmenuActionOnOpen = false;
     this.typeahead.reset();
     this.onRender();
 
@@ -669,8 +602,8 @@ export class S1000DMenuAdapter {
       scope,
       ...entries.map((entry) => (
         entry.kind === 'submenu'
-          ? `submenu:${entry.key}:${entry.actions.map((action) => action.id).join(',')}`
-          : `action:${entry.action.id}:${entry.action.enabled}:${entry.action.active ? '1' : '0'}`
+          ? `submenu:${entry.key}:${entry.items.map((action) => action.actionId).join(',')}`
+          : `action:${entry.actionId}:${entry.enabled}:${entry.active ? '1' : '0'}`
       )),
     ].join('|');
   }

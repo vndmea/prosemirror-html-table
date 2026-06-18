@@ -65,14 +65,27 @@ export {
 export {
   canToggleTableContextTriggerMenu,
   createTableContextMenuElement,
+  createTableContextMenuActionButton,
+  createTableContextMenuPanel,
+  createTableContextMenuSubmenuButton,
+  createTableContextSubmenuState,
+  closeTableContextSubmenu,
+  consumeTableContextSubmenuAutoFocus,
+  consumeTableContextSubmenuTriggerToFocus,
   focusFirstEnabledMenuButton,
   focusMenuButtonWithoutScroll,
   getEnabledMenuButtons,
   getNextMenuActionIndex,
   getScopedTableMenuToggleAction,
+  getTableMenuLiveAnchor,
   getTableMenuAnchorForElement,
   getTableMenuToggleAction,
   isMenuTypeaheadKey,
+  openTableContextSubmenu,
+  positionTableContextMenuElement,
+  positionTableContextSubmenuElement,
+  resetTableContextSubmenuState,
+  resolveOpenTableContextSubmenu,
   shouldCloseMenuForTarget,
   isMenuDismissKey,
   isMenuExitKey,
@@ -81,6 +94,15 @@ export {
   isKeyboardClick,
   canRestoreMenuFocus,
   MenuTypeaheadController,
+  syncTableContextSubmenuTriggerExpandedState,
+} from './menu-controller.js';
+export type {
+  TableContextMenuActionEntryLike,
+  TableContextMenuPanelEntryLike,
+  TableContextMenuSubmenuEntryLike,
+  TableContextSubmenuState,
+  TableMenuScope,
+  TableMenuViewportBounds,
 } from './menu-controller.js';
 
 export {
