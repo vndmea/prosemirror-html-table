@@ -273,7 +273,7 @@ test.describe('S1000D React demo', () => {
     expect(afterRows).toBe(beforeRows - 1);
   });
 
-  test('row handle right-click deletes body rows and disables delete for an undeletable header row', async ({ page }) => {
+  test('row handle right-click deletes body rows and removes thead when deleting its only row', async ({ page }) => {
     await page.goto('/');
     await expectDemoApi(page);
     await loadDemoSample(page, 'proced');
@@ -281,17 +281,23 @@ test.describe('S1000D React demo', () => {
     const table = page.getByTestId('editor').getByTestId('s1000d-table');
 
     await table.locator('thead tr').first().locator('td,th').first().hover();
+    const beforeHeaderRows = await exportDemoXml(page);
+    expect(beforeHeaderRows).toContain('<thead>');
     await page.locator('[data-testid="s1000d-row-handle"][data-row-index="0"]').click({ button: 'right' });
     await expect(page.getByTestId('selection-menu')).toHaveAttribute('data-scope', 'row');
-    await expect(page.getByTestId('selection-menu-item-delete-row')).toBeDisabled();
+    await expect(page.getByTestId('selection-menu-item-delete-row')).toBeEnabled();
+    await page.getByTestId('selection-menu-item-delete-row').click();
 
-    await page.keyboard.press('Escape');
+    const afterHeaderDeleteXml = await exportDemoXml(page);
+    expect(afterHeaderDeleteXml).not.toContain('<thead>');
+    expect(afterHeaderDeleteXml).toContain('<tbody>');
+
     await expect(page.getByTestId('selection-menu')).toBeHidden();
 
     await table.locator('tbody[data-s1000d="tbody"] tr').first().locator('td,th').first().hover();
     const beforeRows = (await exportDemoXml(page).then((xml) => xml.match(/<row\b/g)?.length ?? 0));
 
-    await page.locator('[data-testid="s1000d-row-handle"][data-row-index="1"]').click({ button: 'right' });
+    await page.locator('[data-testid="s1000d-row-handle"]:visible').first().click({ button: 'right' });
     await expect(page.getByTestId('selection-menu')).toHaveAttribute('data-scope', 'row');
     await expect(page.getByTestId('selection-menu-item-delete-row')).toBeEnabled();
     await page.getByTestId('selection-menu-item-delete-row').click();

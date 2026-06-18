@@ -212,6 +212,48 @@ describe('S1000D table commands and adapters', () => {
     expect(findS1000DTableContext(nextState)?.table.child(0)?.child(0)?.childCount).toBe(2);
   });
 
+  it('deletes the last thead row by removing the empty thead section', () => {
+    const table = parseS1000DTableXml(
+      '<table id="tab-1"><tgroup cols="2"><thead><row id="head-row"><entry>H1</entry><entry>H2</entry></row></thead><tbody><row id="body-row-1"><entry>A</entry><entry>B</entry></row><row id="body-row-2"><entry>C</entry><entry>D</entry></row></tbody></tgroup></table>',
+      extendedSchema,
+      { profile: 'extended' },
+    );
+    const doc = extendedSchema.nodes.doc!.create(null, [table]);
+    const state = EditorState.create({
+      doc,
+      selection: TextSelection.create(doc, findTextPosition(doc, 'H1')),
+    });
+
+    let nextState = state;
+    const result = deleteS1000DRow()(state, (transaction) => {
+      nextState = nextState.apply(transaction);
+    });
+
+    expect(result).toBe(true);
+    const nextTable = findS1000DTableContext(nextState)?.table;
+    const nextTgroup = nextTable?.child(0);
+    expect(nextTgroup?.childCount).toBe(1);
+    expect(nextTgroup?.child(0)?.type.name).toBe('s1000dTbody');
+    expect(nextTgroup?.child(0)?.childCount).toBe(2);
+    expect(findS1000DRowContext(nextState)?.rowRef.section).toBe('tbody');
+    expect(findS1000DRowContext(nextState)?.row.textContent).toBe('AB');
+  });
+
+  it('does not delete the last tbody row', () => {
+    const table = parseS1000DTableXml(
+      '<table id="tab-1"><tgroup cols="2"><tbody><row id="body-row-1"><entry>A</entry><entry>B</entry></row></tbody></tgroup></table>',
+      extendedSchema,
+      { profile: 'extended' },
+    );
+    const doc = extendedSchema.nodes.doc!.create(null, [table]);
+    const state = EditorState.create({
+      doc,
+      selection: TextSelection.create(doc, findTextPosition(doc, 'A')),
+    });
+
+    expect(deleteS1000DRow()(state)).toBe(false);
+  });
+
   it('adds a row before the current row and selects it', () => {
     const table = parseS1000DTableXml(
       '<table id="tab-1"><tgroup cols="2"><tbody><row id="row-1"><entry>A</entry><entry>B</entry></row><row id="row-2"><entry>C</entry><entry>D</entry></row></tbody></tgroup></table>',

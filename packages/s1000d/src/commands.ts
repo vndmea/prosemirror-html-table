@@ -183,11 +183,31 @@ export function deleteS1000DRow(options: S1000DTableCommandOptions = {}): Comman
     if (!context?.activeTgroup) return false;
 
     const sectionChildren = getS1000DNodeChildren(context.section);
-    if (sectionChildren.length <= 1) return false;
+    const deletingLastRowInSection = sectionChildren.length <= 1;
+    if (deletingLastRowInSection && context.rowRef.section === 'tbody') return false;
 
-    sectionChildren.splice(context.rowRef.rowIndexInSection, 1);
-    const nextSection = context.section.copy(Fragment.fromArray(sectionChildren));
-    const nextTgroup = replaceS1000DChildAt(context.activeTgroup, context.sectionChildIndex, nextSection);
+    let nextTgroup: ProseMirrorNode;
+    let targetSection: S1000DRowRef['section'];
+    let targetRowIndexInSection: number;
+
+    if (deletingLastRowInSection) {
+      const tgroupChildren = getS1000DNodeChildren(context.activeTgroup);
+      tgroupChildren.splice(context.sectionChildIndex, 1);
+      nextTgroup = context.activeTgroup.copy(Fragment.fromArray(tgroupChildren));
+      targetSection = 'tbody';
+      const nextTbodyIndex = findSectionChildIndex(nextTgroup, 'tbody');
+      const nextTbody = nextTbodyIndex >= 0 ? nextTgroup.child(nextTbodyIndex) : null;
+      targetRowIndexInSection = context.rowRef.section === 'tfoot'
+        ? Math.max(0, (nextTbody?.childCount ?? 1) - 1)
+        : 0;
+    } else {
+      sectionChildren.splice(context.rowRef.rowIndexInSection, 1);
+      const nextSection = context.section.copy(Fragment.fromArray(sectionChildren));
+      nextTgroup = replaceS1000DChildAt(context.activeTgroup, context.sectionChildIndex, nextSection);
+      targetSection = context.rowRef.section;
+      targetRowIndexInSection = Math.min(context.rowRef.rowIndexInSection, sectionChildren.length - 1);
+    }
+
     const normalizedTgroup = normalizeS1000DTgroup(nextTgroup);
     const nextTable = replaceActiveS1000DTgroup(context.table, normalizedTgroup, context.activeTgroupIndex);
 
@@ -196,8 +216,8 @@ export function deleteS1000DRow(options: S1000DTableCommandOptions = {}): Comman
       dispatch,
       context,
       nextTable,
-      context.rowRef.section,
-      Math.min(context.rowRef.rowIndexInSection, sectionChildren.length - 1),
+      targetSection,
+      targetRowIndexInSection,
     );
   };
 }
