@@ -62,6 +62,43 @@ export async function expectDemoApi(page: Page): Promise<void> {
     .toBe(true);
 }
 
+const DEMO_BODY_CELL_SELECTOR = [
+  '[data-testid="editor"]',
+  '[data-testid="s1000d-table"]',
+  'tbody[data-s1000d="tbody"] tr td,',
+  '[data-testid="editor"]',
+  '[data-testid="s1000d-table"]',
+  'tbody[data-s1000d="tbody"] tr th',
+].join(' ');
+
+function inferProfile(kind: 'proced' | 'extended' | 'unsafe'): 'proced' | 'extended' {
+  return kind === 'proced' ? 'proced' : 'extended';
+}
+
+async function waitForDemoTable(page: Page, profile: 'proced' | 'extended'): Promise<void> {
+  await expect(page.getByTestId('editor')).toBeVisible();
+  await expect(page.getByTestId('s1000d-table')).toBeVisible();
+  await expect.poll(async () => (await getDemoSnapshot(page)).profile).toBe(profile);
+  await expect.poll(async () => page.locator(DEMO_BODY_CELL_SELECTOR).count()).toBeGreaterThan(0);
+  await page.evaluate(
+    () => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))),
+  );
+}
+
+async function waitForSelectionScope(
+  page: Page,
+  predicate: (scope: DemoSelectionScope) => boolean,
+): Promise<void> {
+  await expect.poll(async () => predicate((await getDemoSnapshot(page)).selectionScope)).toBe(true);
+}
+
+async function waitForSelectionSummary(
+  page: Page,
+  predicate: (snapshot: DemoSnapshot) => boolean,
+): Promise<void> {
+  await expect.poll(async () => predicate(await getDemoSnapshot(page))).toBe(true);
+}
+
 export async function getDemoSnapshot(page: Page): Promise<DemoSnapshot> {
   return page.evaluate(() => window.__S1000D_DEMO__!.getSnapshot());
 }
@@ -74,7 +111,13 @@ export async function loadDemoSample(
   page: Page,
   kind: 'proced' | 'extended' | 'unsafe',
 ): Promise<boolean> {
-  return page.evaluate((sampleKind) => window.__S1000D_DEMO__!.loadSample(sampleKind), kind);
+  const loaded = await page.evaluate((sampleKind) => window.__S1000D_DEMO__!.loadSample(sampleKind), kind);
+  if (!loaded) {
+    return false;
+  }
+
+  await waitForDemoTable(page, inferProfile(kind));
+  return true;
 }
 
 export async function loadDemoXml(
@@ -82,10 +125,16 @@ export async function loadDemoXml(
   xml: string,
   profile: 'proced' | 'extended' = 'extended',
 ): Promise<boolean> {
-  return page.evaluate(
+  const loaded = await page.evaluate(
     ({ nextXml, nextProfile }) => window.__S1000D_DEMO__!.loadXml(nextXml, nextProfile),
     { nextXml: xml, nextProfile: profile },
   );
+  if (!loaded) {
+    return false;
+  }
+
+  await waitForDemoTable(page, profile);
+  return true;
 }
 
 export async function validateDemo(page: Page): Promise<ValidationOutput> {
@@ -130,11 +179,24 @@ export async function selectDemoCell(
   columnIndex: number,
   tgroupIndex = 0,
 ): Promise<boolean> {
-  return page.evaluate(
+  const selected = await page.evaluate(
     ({ nextRowIndex, nextColumnIndex, nextTgroupIndex }) =>
       window.__S1000D_DEMO__!.selectCell(nextRowIndex, nextColumnIndex, nextTgroupIndex),
     { nextRowIndex: rowIndex, nextColumnIndex: columnIndex, nextTgroupIndex: tgroupIndex },
   );
+  if (!selected) {
+    return false;
+  }
+
+  await waitForSelectionSummary(
+    page,
+    (snapshot) =>
+      snapshot.selectionSummary.includes('Cell selection: true')
+      && snapshot.selectionSummary.includes(`Rows ${rowIndex}-${rowIndex}`)
+      && snapshot.selectionSummary.includes(`Columns ${columnIndex}-${columnIndex}`)
+      && snapshot.selectionSummary.includes('Entries 1'),
+  );
+  return true;
 }
 
 export async function selectDemoRange(
@@ -145,7 +207,7 @@ export async function selectDemoRange(
   headColumnIndex: number,
   tgroupIndex = 0,
 ): Promise<boolean> {
-  return page.evaluate(
+  const selected = await page.evaluate(
     ({
       nextAnchorRowIndex,
       nextAnchorColumnIndex,
@@ -167,6 +229,19 @@ export async function selectDemoRange(
       nextTgroupIndex: tgroupIndex,
     },
   );
+  if (!selected) {
+    return false;
+  }
+
+  await waitForSelectionSummary(
+    page,
+    (snapshot) =>
+      (snapshot.selectionScope === 'multi-cell'
+        || snapshot.selectionScope === 'cell'
+        || snapshot.selectionSummary.includes('Cell selection: true'))
+      && snapshot.selectionSummary.includes('Entries'),
+  );
+  return true;
 }
 
 export async function selectDemoRow(
@@ -174,11 +249,17 @@ export async function selectDemoRow(
   rowIndex: number,
   tgroupIndex = 0,
 ): Promise<boolean> {
-  return page.evaluate(
+  const selected = await page.evaluate(
     ({ nextRowIndex, nextTgroupIndex }) =>
       window.__S1000D_DEMO__!.selectRow(nextRowIndex, nextTgroupIndex),
     { nextRowIndex: rowIndex, nextTgroupIndex: tgroupIndex },
   );
+  if (!selected) {
+    return false;
+  }
+
+  await waitForSelectionScope(page, (scope) => scope === 'row');
+  return true;
 }
 
 export async function selectDemoColumn(
@@ -186,11 +267,17 @@ export async function selectDemoColumn(
   columnIndex: number,
   tgroupIndex = 0,
 ): Promise<boolean> {
-  return page.evaluate(
+  const selected = await page.evaluate(
     ({ nextColumnIndex, nextTgroupIndex }) =>
       window.__S1000D_DEMO__!.selectColumn(nextColumnIndex, nextTgroupIndex),
     { nextColumnIndex: columnIndex, nextTgroupIndex: tgroupIndex },
   );
+  if (!selected) {
+    return false;
+  }
+
+  await waitForSelectionScope(page, (scope) => scope === 'column');
+  return true;
 }
 
 export async function getDemoEntryText(

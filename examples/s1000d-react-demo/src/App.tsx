@@ -264,8 +264,16 @@ export function App() {
     extensions: extensions as never,
     autofocus: false,
     content: '<p>Load a sample to start.</p>',
-    onTransaction: ({ editor: activeEditor }: { editor: TiptapEditor }) => {
-      setToolbarRevision((value) => value + 1);
+    onTransaction: ({
+      editor: activeEditor,
+      transaction,
+    }: {
+      editor: TiptapEditor;
+      transaction: Transaction;
+    }) => {
+      if (transaction.docChanged || transaction.selectionSet) {
+        setToolbarRevision((value) => value + 1);
+      }
       void activeEditor;
     },
   });
@@ -327,15 +335,34 @@ export function App() {
     scope: S1000DTableMenuScope,
     left: number,
     top: number,
+    options: { preserveScroll?: boolean } = {},
   ) {
     if (!editor) {
       return;
     }
 
+    const ownerWindow = editor.view.dom.ownerDocument.defaultView;
+    const previousScrollX = ownerWindow?.scrollX ?? 0;
+    const previousScrollY = ownerWindow?.scrollY ?? 0;
     openS1000DTableContextMenu(editor.view, {
       scope,
       anchor: { left, top },
     });
+    if (!options.preserveScroll || !ownerWindow) {
+      return;
+    }
+
+    const restoreScroll = () => ownerWindow.scrollTo(previousScrollX, previousScrollY);
+    restoreScroll();
+    let remainingFrames = 30;
+    const restoreOnFrame = () => {
+      restoreScroll();
+      remainingFrames -= 1;
+      if (remainingFrames > 0) {
+        ownerWindow.requestAnimationFrame(restoreOnFrame);
+      }
+    };
+    ownerWindow.requestAnimationFrame(restoreOnFrame);
   }
 
   function getSelectionMenuAnchor(scope: S1000DTableMenuScope) {
@@ -366,11 +393,29 @@ export function App() {
     }
 
     const cellOutline = doc.querySelector('[data-testid="s1000d-selection-cell-outline"]') as HTMLElement | null;
-    if (!cellOutline) {
+    if (cellOutline) {
+      const rect = cellOutline.getBoundingClientRect();
+      return { left: rect.right, top: rect.top + rect.height / 2 };
+    }
+
+    if (!editor) {
       return null;
     }
 
-    const rect = cellOutline.getBoundingClientRect();
+    const { node, offset } = editor.view.domAtPos(editor.state.selection.from);
+    const selectionNode = node instanceof Element
+      ? node.childNodes[offset] ?? node
+      : node;
+    const selectionCell = (
+      selectionNode instanceof Element
+        ? selectionNode.closest('td, th')
+        : selectionNode.parentElement?.closest('td, th')
+    ) as HTMLElement | null;
+    if (!selectionCell) {
+      return null;
+    }
+
+    const rect = selectionCell.getBoundingClientRect();
     return { left: rect.right, top: rect.top + rect.height / 2 };
   }
 
@@ -439,13 +484,23 @@ export function App() {
 
     const anchor = getSelectionMenuAnchor(selectionScope === 'multi-cell' ? 'cell' : selectionScope);
     if (anchor) {
-      openSelectionMenuForScope(selectionScope === 'multi-cell' ? 'cell' : selectionScope, anchor.left, anchor.top);
+      openSelectionMenuForScope(
+        selectionScope === 'multi-cell' ? 'cell' : selectionScope,
+        anchor.left,
+        anchor.top,
+        { preserveScroll: true },
+      );
       return;
     }
 
     const rect = selectionMenuTriggerRef.current?.getBoundingClientRect();
     if (rect) {
-      openSelectionMenuForScope(selectionScope === 'multi-cell' ? 'cell' : selectionScope, rect.left, rect.bottom + 8);
+      openSelectionMenuForScope(
+        selectionScope === 'multi-cell' ? 'cell' : selectionScope,
+        rect.left,
+        rect.bottom + 8,
+        { preserveScroll: true },
+      );
     }
   }
 
@@ -705,6 +760,9 @@ export function App() {
             aria-expanded={selectionMenuOpen}
             aria-label={triggerState?.label ?? 'Actions'}
             title={triggerState?.title ?? undefined}
+            onMouseDown={(event) => {
+              event.preventDefault();
+            }}
             onClick={() => {
               if (selectionMenuOpen) {
                 closeSelectionMenu(true);
@@ -713,18 +771,7 @@ export function App() {
               if (!editor || !interaction) {
                 return;
               }
-              const menuState = getS1000DContextMenuState(editor.state, interaction, {
-                actionResolver: contextMenuActionsRef.current,
-                view: editor.view,
-              });
-              if (!menuState.scope || !menuState.anchor) {
-                openSelectionMenuFromTrigger();
-                return;
-              }
-              openS1000DTableContextMenu(editor.view, {
-                scope: menuState.scope,
-                anchor: menuState.anchor,
-              });
+              openSelectionMenuFromTrigger();
             }}
           >
             Actions

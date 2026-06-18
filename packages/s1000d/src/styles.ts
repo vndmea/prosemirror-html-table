@@ -379,7 +379,7 @@ const s1000dTableStyles = `
 
 .s1000d-table-overlay .s1000d-table-overlay__extend-button {
   position: absolute;
-  z-index: 2;
+  z-index: 3;
   display: flex;
   align-items: center;
   justify-content: center;

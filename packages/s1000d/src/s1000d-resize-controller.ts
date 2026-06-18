@@ -1,5 +1,6 @@
 import type { EditorView } from 'prosemirror-view';
 
+import { getS1000DSelectionInfo, isWholeS1000DTableSelection } from './clipboard.js';
 import { applyS1000DColumnWidthsToTgroup } from './column-widths.js';
 import { getRenderedS1000DTableContext, type S1000DTableDOMContext } from './dom-adapter.js';
 import { setS1000DTableInteractionMeta, type S1000DTableInteractionMeta, type S1000DTableInteractionState } from './interaction.js';
@@ -71,6 +72,11 @@ export class S1000DResizeController {
     createResizeHandle: () => HTMLButtonElement,
   ): void {
     syncCount(resizersParent, geometry.columns.length, () => createResizeHandle());
+    const selectionInfo = getS1000DSelectionInfo(this.view.state, { tablePos: context.tablePos });
+    const selectionVisible = (
+      this.view.hasFocus()
+      && Boolean(selectionInfo)
+    ) || isWholeS1000DTableSelection(this.view.state, { tablePos: context.tablePos });
     const interactionVisible = Boolean(interaction.resizing && interaction.resizing.tablePos === context.tablePos)
       || (
         interaction.hovered?.tablePos === context.tablePos
@@ -83,7 +89,8 @@ export class S1000DResizeController {
         interaction.contextMenuOpen
         && interaction.selectedAxis.tablePos === context.tablePos
         && interaction.selectedAxis.kind === 'column'
-      );
+      )
+      || selectionVisible;
 
     for (let index = 0; index < geometry.columns.length; index += 1) {
       const handle = resizersParent.children[index] as HTMLButtonElement | undefined;
@@ -100,6 +107,7 @@ export class S1000DResizeController {
       handle.dataset.tablePos = String(context.tablePos);
       handle.dataset.tgroupIndex = String(context.activeTgroupIndex);
       handle.dataset.columnIndex = String(column.index);
+      handle.style.pointerEvents = interactionVisible && !axisDragHasDragged ? 'auto' : 'none';
       handle.classList.toggle(
         'is-active',
         Boolean(interaction.resizing && interaction.resizing.tablePos === context.tablePos && interaction.resizing.columnIndex === column.index),

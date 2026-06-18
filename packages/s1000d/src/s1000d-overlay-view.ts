@@ -1596,6 +1596,18 @@ export class S1000DTableOverlayView {
   }
 
   private finishCellDrag(event?: MouseEvent): void {
+    if (this.activeCellDrag && event) {
+      const dragContext = getS1000DCellDragContext(
+        this.view,
+        getPointerElement(this.root.ownerDocument, event),
+        event.clientX,
+        event.clientY,
+      );
+      if (dragContext && dragContext.tablePos === this.activeCellDrag.tablePos) {
+        this.activeCellDrag.headEntryPos = dragContext.entryPos;
+      }
+    }
+
     if (
       this.pendingCellDrag
       && !this.activeCellDrag
@@ -1633,6 +1645,7 @@ export class S1000DTableOverlayView {
     this.activeCellDrag = null;
     this.stopCellDragListeners();
     this.restoreNativeSelectionSuppression();
+    this.render();
   }
 
   private startCellDragListeners(): void {

@@ -629,6 +629,11 @@ export function measureS1000DTableRect(
 }
 
 export function measureS1000DColumnBoundaries(table: HTMLTableElement, tableRect: TableRect): number[] {
+  const colspecBoundaries = measureS1000DColspecBoundaries(table, tableRect);
+  if (colspecBoundaries) {
+    return colspecBoundaries;
+  }
+
   const rows = Array.from(table.querySelectorAll('tr'));
   const boundaries: Array<number | undefined> = [0];
   const activeRowSpans: number[] = [];
@@ -716,4 +721,44 @@ export function measureS1000DColumnBoundaries(table: HTMLTableElement, tableRect
   }
 
   return resolvedBoundaries.map((boundary) => boundary ?? 0);
+}
+
+function measureS1000DColspecBoundaries(table: HTMLTableElement, tableRect: TableRect): number[] | null {
+  const colElements = Array.from(table.querySelectorAll('col[data-s1000d="colspec"]'));
+  if (colElements.length === 0) {
+    return null;
+  }
+
+  const boundaries = [0];
+  let offset = 0;
+  for (const col of colElements) {
+    const width = readRenderedColWidth(col);
+    if (width <= 0) {
+      return null;
+    }
+    offset += width;
+    boundaries.push(offset);
+  }
+
+  const finalBoundary = boundaries[boundaries.length - 1];
+  if (typeof finalBoundary === 'number' && Math.abs(finalBoundary - tableRect.width) > 1) {
+    boundaries[boundaries.length - 1] = tableRect.width;
+  }
+
+  return boundaries;
+}
+
+function readRenderedColWidth(col: HTMLTableColElement): number {
+  const attrWidth = Number.parseFloat(col.getAttribute('width') ?? '');
+  if (Number.isFinite(attrWidth) && attrWidth > 0) {
+    return attrWidth;
+  }
+
+  const styleWidth = Number.parseFloat(col.style.width);
+  if (Number.isFinite(styleWidth) && styleWidth > 0) {
+    return styleWidth;
+  }
+
+  const rectWidth = col.getBoundingClientRect().width;
+  return rectWidth > 0 ? rectWidth : 0;
 }

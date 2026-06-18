@@ -3,7 +3,7 @@ import type { Node as ProseMirrorNode } from 'prosemirror-model';
 import type { ViewMutationRecord } from 'prosemirror-view';
 
 import { createS1000DTableAdapter } from './adapter.js';
-import { resolveColspecs } from './cals/index.js';
+import { resolveColspecs, resolveEntryColSpan, resolveEntryRowSpan } from './cals/index.js';
 import { ensureS1000DTableStyles } from './styles.js';
 import type { S1000DTableTiptapOptions } from './tiptap.js';
 import { s1000dTableNodeNames } from './names.js';
@@ -18,6 +18,8 @@ export class S1000DTableNodeView {
   private readonly wrapper: HTMLElement;
   private readonly table: HTMLTableElement;
   private syncFrame: number | null = null;
+  private ignoreMutationFrame: number | null = null;
+  private ignoreTableMutations = false;
   private node: ProseMirrorNode;
   private readonly options: S1000DTableTiptapOptions;
   private readonly htmlAttributes: Record<string, unknown>;
@@ -45,8 +47,7 @@ export class S1000DTableNodeView {
 
     this.applyAttributes();
     this.syncWrapperState();
-    this.syncColumnState();
-    this.syncEntrySpanState();
+    this.syncRenderedState();
     this.scheduleRenderedStateSync();
   }
 
@@ -55,11 +56,14 @@ export class S1000DTableNodeView {
       return false;
     }
 
+    if (node === this.node) {
+      return true;
+    }
+
     this.node = node;
     this.applyAttributes();
     this.syncWrapperState();
-    this.syncColumnState();
-    this.syncEntrySpanState();
+    this.syncRenderedState();
     this.scheduleRenderedStateSync();
     return true;
   }
@@ -69,6 +73,11 @@ export class S1000DTableNodeView {
       cancelAnimationFrame(this.syncFrame);
       this.syncFrame = null;
     }
+    if (this.ignoreMutationFrame !== null) {
+      cancelAnimationFrame(this.ignoreMutationFrame);
+      this.ignoreMutationFrame = null;
+    }
+    this.ignoreTableMutations = false;
   }
 
   selectNode(): void {
@@ -94,6 +103,10 @@ export class S1000DTableNodeView {
       return false;
     }
 
+    if (this.ignoreTableMutations && this.table.contains(mutation.target)) {
+      return true;
+    }
+
     if (mutation.type === 'attributes' && mutation.target instanceof Element) {
       if (mutation.target === this.table && mutation.attributeName === 'style') {
         return true;
@@ -103,6 +116,14 @@ export class S1000DTableNodeView {
         mutation.target.nodeName === 'COL'
         && this.table.contains(mutation.target)
         && (mutation.attributeName === 'style' || mutation.attributeName === 'width')
+      ) {
+        return true;
+      }
+
+      if (
+        (mutation.target.nodeName === 'TD' || mutation.target.nodeName === 'TH')
+        && this.table.contains(mutation.target)
+        && (mutation.attributeName === 'rowspan' || mutation.attributeName === 'colspan')
       ) {
         return true;
       }
@@ -170,27 +191,7 @@ export class S1000DTableNodeView {
   }
 
   private syncEntrySpanState(): void {
-    const adapter = createS1000DTableAdapter();
-    const spanByEntryNode = new Map<ProseMirrorNode, { rowSpan: number; colSpan: number }>();
-
-    adapter.getTgroups(this.node).forEach((tgroup, tgroupIndex) => {
-      const grid = adapter.createGrid(tgroup, tgroupIndex);
-      for (const entry of grid.entries) {
-        spanByEntryNode.set(entry.node, {
-          rowSpan: entry.rowSpan,
-          colSpan: entry.colSpan,
-        });
-      }
-    });
-
-    const entryNodes: ProseMirrorNode[] = [];
-    this.node.descendants((descendant) => {
-      if (descendant.type.name === s1000dTableNodeNames.entry) {
-        entryNodes.push(descendant);
-      }
-      return true;
-    });
-
+    const { entryNodes, spanByEntryNode } = collectRenderedEntrySpans(this.node);
     const entryCells = Array.from(this.table.querySelectorAll<HTMLTableCellElement>('td[data-s1000d="entry"], th[data-s1000d="entry"]'));
     const count = Math.min(entryNodes.length, entryCells.length);
 
@@ -226,8 +227,20 @@ export class S1000DTableNodeView {
 
     this.syncFrame = requestAnimationFrame(() => {
       this.syncFrame = null;
-      this.syncColumnState();
-      this.syncEntrySpanState();
+      this.syncRenderedState();
+    });
+  }
+
+  private syncRenderedState(): void {
+    this.ignoreTableMutations = true;
+    if (this.ignoreMutationFrame !== null) {
+      cancelAnimationFrame(this.ignoreMutationFrame);
+    }
+    this.syncColumnState();
+    this.syncEntrySpanState();
+    this.ignoreMutationFrame = requestAnimationFrame(() => {
+      this.ignoreMutationFrame = null;
+      this.ignoreTableMutations = false;
     });
   }
 }
@@ -250,6 +263,41 @@ function getS1000DColumnPixelWidths(tgroup: ProseMirrorNode, cellMinWidth: numbe
   }
 
   return widths;
+}
+
+function collectRenderedEntrySpans(node: ProseMirrorNode): {
+  entryNodes: ProseMirrorNode[];
+  spanByEntryNode: Map<ProseMirrorNode, { rowSpan: number; colSpan: number }>;
+} {
+  const spanByEntryNode = new Map<ProseMirrorNode, { rowSpan: number; colSpan: number }>();
+  const adapter = createS1000DTableAdapter();
+
+  adapter.getTgroups(node).forEach((tgroup) => {
+    tgroup.descendants((descendant) => {
+      if (descendant.type.name !== s1000dTableNodeNames.entry) {
+        return true;
+      }
+
+      spanByEntryNode.set(descendant, {
+        rowSpan: resolveEntryRowSpan(descendant),
+        colSpan: resolveEntryColSpan(descendant, tgroup),
+      });
+      return true;
+    });
+  });
+
+  const entryNodes: ProseMirrorNode[] = [];
+  node.descendants((descendant) => {
+    if (descendant.type.name === s1000dTableNodeNames.entry) {
+      entryNodes.push(descendant);
+    }
+    return true;
+  });
+
+  return {
+    entryNodes,
+    spanByEntryNode,
+  };
 }
 
 function parseS1000DPixelWidth(value: string | null): number | null {
