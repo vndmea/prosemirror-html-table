@@ -174,6 +174,8 @@ class HtmlTableInteractionView {
   private view: EditorView;
   private readonly ownerDocument: Document;
   private activeCellDrag: HtmlTableCellDragState | null = null;
+  private syncedWrapper: HTMLElement | null = null;
+  private restoreSyncedWrapper: (() => void) | null = null;
   private suppressNextClick = false;
   private previousUserSelect: string | null = null;
   private previousWebkitUserSelect: string | null = null;
@@ -184,6 +186,7 @@ class HtmlTableInteractionView {
   private readonly onMouseLeave = (event: MouseEvent) => this.handleMouseLeave(event);
   private readonly onDocumentMouseUp = (event: MouseEvent) => this.handleDocumentMouseUp(event);
   private readonly onViewportChange = () => this.syncSelectionGeometry();
+  private readonly onSyncedWrapperScroll = () => this.syncSelectionGeometry();
 
   constructor(view: EditorView) {
     this.view = view;
@@ -209,6 +212,7 @@ class HtmlTableInteractionView {
   }
 
   destroy(): void {
+    this.syncWrapperScroll(null);
     this.restoreNativeSelectionSuppression();
     this.view.dom.removeEventListener('mousedown', this.onMouseDown);
     this.view.dom.removeEventListener('click', this.onClickCapture, true);
@@ -308,6 +312,7 @@ class HtmlTableInteractionView {
     const measuredTable = selectionTable ?? current.activeTable;
 
     if (!measuredTable) {
+      this.syncWrapperScroll(null);
       if (current.activeTable || current.geometry) {
         this.dispatchInteractionMeta({
           hovered: current.hovered,
@@ -322,7 +327,12 @@ class HtmlTableInteractionView {
     }
 
     const domContext = getRenderedHtmlTableContext(this.view, measuredTable.tablePos);
-    if (!domContext) return;
+    if (!domContext) {
+      this.syncWrapperScroll(null);
+      return;
+    }
+
+    this.syncWrapperScroll(domContext.wrapper);
 
     const geometry = measureHtmlTableGeometry(domContext.dom, domContext.wrapper);
     if (
@@ -452,6 +462,71 @@ class HtmlTableInteractionView {
     this.previousUserSelect = null;
     this.previousWebkitUserSelect = null;
   }
+
+  private syncWrapperScroll(wrapper: HTMLElement | null): void {
+    if (this.syncedWrapper === wrapper) {
+      return;
+    }
+
+    this.restoreSyncedWrapper?.();
+    this.restoreSyncedWrapper = null;
+    this.syncedWrapper = wrapper;
+
+    if (!wrapper) {
+      return;
+    }
+
+    const restoreScrollLeft = patchProgrammaticScrollProperty(wrapper, 'scrollLeft', this.onViewportChange);
+    const restoreScrollTop = patchProgrammaticScrollProperty(wrapper, 'scrollTop', this.onViewportChange);
+    wrapper.addEventListener('scroll', this.onSyncedWrapperScroll, { passive: true });
+    this.restoreSyncedWrapper = () => {
+      wrapper.removeEventListener('scroll', this.onSyncedWrapperScroll);
+      restoreScrollTop();
+      restoreScrollLeft();
+    };
+  }
+}
+
+function patchProgrammaticScrollProperty(
+  element: HTMLElement,
+  property: 'scrollLeft' | 'scrollTop',
+  onChange: () => void,
+): () => void {
+  const descriptor = getScrollPropertyDescriptor(element, property);
+  if (!descriptor?.get || !descriptor.set) {
+    return () => {};
+  }
+
+  Object.defineProperty(element, property, {
+    configurable: true,
+    enumerable: descriptor.enumerable ?? false,
+    get() {
+      return descriptor.get!.call(this) as number;
+    },
+    set(value: number) {
+      descriptor.set!.call(this, value);
+      onChange();
+    },
+  });
+
+  return () => {
+    delete (element as HTMLElement & Record<string, unknown>)[property];
+  };
+}
+
+function getScrollPropertyDescriptor(
+  element: HTMLElement,
+  property: 'scrollLeft' | 'scrollTop',
+): PropertyDescriptor | null {
+  let prototype: object | null = element;
+  while (prototype) {
+    const descriptor = Object.getOwnPropertyDescriptor(prototype, property);
+    if (descriptor) {
+      return descriptor;
+    }
+    prototype = Object.getPrototypeOf(prototype);
+  }
+  return null;
 }
 
 function getHoverState(
