@@ -38,6 +38,7 @@ import {
   getEnabledMenuButtons,
   MenuTypeaheadController,
   canRestoreMenuFocus,
+  getTableMenuToggleAction,
   getNextMenuActionIndex,
   isKeyboardClick,
   isMenuDismissKey,
@@ -463,7 +464,7 @@ export class HtmlTableMenuController {
     interaction: HtmlTableInteractionState,
     focusTarget: HTMLButtonElement | null,
   ): void {
-    const nextOpen = !interaction.contextMenuOpen;
+    const nextOpen = getTableMenuToggleAction(interaction.contextMenuOpen) === 'open';
     this.contextMenuFocusTarget = focusTarget;
     this.restoreContextMenuFocusOnClose = !nextOpen;
     this.contextMenuContext = nextOpen ? this.captureContextMenuContext(interaction) : null;

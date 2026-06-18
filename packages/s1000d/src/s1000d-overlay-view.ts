@@ -69,6 +69,9 @@ import {
 import { S1000DResizeController } from './s1000d-resize-controller.js';
 import { ensureS1000DTableStyles } from './styles.js';
 import {
+  canToggleTableContextTriggerMenu,
+  getScopedTableMenuToggleAction,
+  getTableMenuAnchorForElement,
   createTableContextMenuElement,
   getTableOverlayMount,
   isKeyboardClick,
@@ -1275,11 +1278,16 @@ export class S1000DTableOverlayView {
       actionResolver: this.options.contextMenuActionResolver,
       view: this.view,
     });
-    if (!menu.scope) {
+    if (!canToggleTableContextTriggerMenu(Boolean(menu.scope), {
+      blockedByResize: interaction.resizing?.tablePos === interaction.activeTable?.tablePos,
+    })) {
+      if (interaction.resizing?.tablePos === interaction.activeTable?.tablePos) {
+        this.view.focus();
+      }
       return;
     }
 
-    this.toggleContextMenuFromControl(menu.scope, this.contextTriggerButton);
+    this.toggleContextMenuFromControl(menu.scope ?? 'cell', this.contextTriggerButton);
   }
 
   private toggleContextMenuFromControl(
@@ -1287,7 +1295,7 @@ export class S1000DTableOverlayView {
     focusTarget: HTMLButtonElement | null,
   ): void {
     const interaction = getS1000DTableInteractionState(this.view.state);
-    if (interaction.contextMenuOpen && interaction.menuScope === scope) {
+    if (getScopedTableMenuToggleAction(interaction.contextMenuOpen, interaction.menuScope ?? null, scope) === 'close') {
       this.closeContextMenu(Boolean(focusTarget));
       return;
     }
@@ -1299,18 +1307,15 @@ export class S1000DTableOverlayView {
     scope: 'table' | 'row' | 'column' | 'cell',
     focusTarget: HTMLButtonElement | null,
   ): void {
-    if (!focusTarget) {
+    const anchor = getTableMenuAnchorForElement(focusTarget);
+    if (!anchor) {
       return;
     }
 
     this.menuAdapter.prepareOpen();
-    const rect = focusTarget.getBoundingClientRect();
     openS1000DTableContextMenu(this.view, {
       scope,
-      anchor: {
-        left: rect.left + rect.width / 2,
-        top: rect.top + rect.height / 2,
-      },
+      anchor,
     });
     this.view.focus();
   }
@@ -1393,13 +1398,13 @@ export class S1000DTableOverlayView {
     }
 
     this.menuAdapter.prepareOpen();
-    const rect = this.cellHandle.getBoundingClientRect();
+    const anchor = getTableMenuAnchorForElement(this.cellHandle);
+    if (!anchor) {
+      return;
+    }
     openS1000DTableContextMenu(this.view, {
       scope: 'cell',
-      anchor: {
-        left: rect.left + rect.width / 2,
-        top: rect.top + (rect.height / 2),
-      },
+      anchor,
     });
     this.view.focus();
   }

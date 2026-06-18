@@ -29,6 +29,7 @@ import {
   shouldToggleTableContextMenuFromAxisHandle,
   shouldToggleTableContextMenuFromTableHandle,
 } from './table-interaction/handle-state.js';
+import { canToggleTableContextTriggerMenu } from './table-interaction/menu-controller.js';
 import { measureHtmlTableGeometry } from './table-dom.js';
 import {
   createColumnSelectionTransaction,
@@ -873,13 +874,10 @@ export class HtmlTableHandleController {
 
   private toggleContextTriggerMenu(): void {
     const interaction = getHtmlTableInteractionState(this.view.state);
-    if (interaction.resizing?.tablePos === interaction.activeTable?.tablePos) {
-      this.view.focus();
-      return;
-    }
-
     const trigger = getHtmlTableContextTriggerButtonState(this.view.state, interaction);
-    if (!trigger.visible) {
+    if (!canToggleTableContextTriggerMenu(trigger.visible, {
+      blockedByResize: interaction.resizing?.tablePos === interaction.activeTable?.tablePos,
+    })) {
       this.view.focus();
       return;
     }

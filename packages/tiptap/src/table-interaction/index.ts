@@ -63,11 +63,15 @@ export {
 } from './resize-lifecycle.js';
 
 export {
+  canToggleTableContextTriggerMenu,
   createTableContextMenuElement,
   focusFirstEnabledMenuButton,
   focusMenuButtonWithoutScroll,
   getEnabledMenuButtons,
   getNextMenuActionIndex,
+  getScopedTableMenuToggleAction,
+  getTableMenuAnchorForElement,
+  getTableMenuToggleAction,
   isMenuTypeaheadKey,
   shouldCloseMenuForTarget,
   isMenuDismissKey,

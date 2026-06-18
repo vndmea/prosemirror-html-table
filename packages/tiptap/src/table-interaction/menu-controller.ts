@@ -83,6 +83,48 @@ export function canRestoreMenuFocus(target: HTMLButtonElement | null): target is
   return Boolean(target && target.isConnected && !target.hidden && target.tabIndex >= 0);
 }
 
+export interface TableMenuAnchor {
+  left: number;
+  top: number;
+}
+
+export type TableMenuToggleAction = 'open' | 'close';
+
+export function getTableMenuAnchorForElement(
+  element: Pick<HTMLElement, 'getBoundingClientRect'> | null,
+): TableMenuAnchor | null {
+  if (!element) {
+    return null;
+  }
+
+  const rect = element.getBoundingClientRect();
+  return {
+    left: rect.left + rect.width / 2,
+    top: rect.top + rect.height / 2,
+  };
+}
+
+export function getTableMenuToggleAction(contextMenuOpen: boolean): TableMenuToggleAction {
+  return contextMenuOpen ? 'close' : 'open';
+}
+
+export function getScopedTableMenuToggleAction<TScope>(
+  contextMenuOpen: boolean,
+  currentScope: TScope | null,
+  requestedScope: TScope,
+): TableMenuToggleAction {
+  return contextMenuOpen && currentScope === requestedScope ? 'close' : 'open';
+}
+
+export function canToggleTableContextTriggerMenu(
+  triggerVisible: boolean,
+  options: {
+    blockedByResize?: boolean | undefined;
+  } = {},
+): boolean {
+  return triggerVisible && !options.blockedByResize;
+}
+
 export interface TableContextMenuElementOptions {
   className: string;
   id: string;
