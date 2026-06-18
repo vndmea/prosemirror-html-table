@@ -94,10 +94,6 @@ function contextSubmenuTrigger(page: Page, label: string) {
     .first();
 }
 
-function tableHandle(page: Page) {
-  return page.getByTestId('s1000d-table-handle');
-}
-
 function addRowButton(page: Page) {
   return page.getByTestId('s1000d-extend-row');
 }
@@ -362,7 +358,8 @@ test.describe('official s1000d parity', () => {
     await gotoDemo(page);
 
     await table(page).hover();
-    await clickCenter(page, tableHandle(page));
+    await expect(page.locator('[data-testid="s1000d-table-handle"]:visible')).toHaveCount(0);
+    expect(await runDemoCommand(page, 'selectWholeTable')).toBe(true);
     await expect(contextMenu(page)).toBeHidden();
     expect((await exportDemoXml(page)).includes('<table')).toBe(true);
     await page.keyboard.press('Delete');

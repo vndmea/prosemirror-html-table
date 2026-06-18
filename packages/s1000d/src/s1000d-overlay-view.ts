@@ -482,29 +482,22 @@ export class S1000DTableOverlayView {
     positionState: TableOverlayPositionState,
     tableSelection: boolean,
   ): void {
-    const isSelected = tableSelection;
-    const isHovered =
-      interaction.hovered?.tablePos === context.tablePos
-      && interaction.hoveredControl === 'table-handle';
-    const hidden = Boolean(interaction.resizing || this.axisDrag?.hasDragged);
+    void interaction;
+    void context;
+    void positionState;
+    void tableSelection;
 
-    this.tableHandle.hidden = hidden;
-    this.tableHandle.tabIndex = hidden ? -1 : 0;
+    this.tableHandle.hidden = true;
+    this.tableHandle.tabIndex = -1;
     this.tableHandle.dataset.tablePos = String(context.tablePos);
     this.tableHandle.removeAttribute('aria-haspopup');
     this.tableHandle.removeAttribute('aria-controls');
     this.tableHandle.setAttribute('aria-label', 'Select table');
     this.tableHandle.title = 'Select table';
-    this.tableHandle.classList.toggle('is-selected', isSelected);
-    this.tableHandle.classList.toggle('is-hovered', isHovered);
+    this.tableHandle.classList.remove('is-selected');
+    this.tableHandle.classList.remove('is-hovered');
     this.tableHandle.classList.remove('is-menu-open');
     this.tableHandle.setAttribute('aria-expanded', 'false');
-    Object.assign(this.tableHandle.style, {
-      left: `${positionState.rowHandleLeft}px`,
-      top: `${positionState.columnHandleTop}px`,
-      width: `${HANDLE_SIZE}px`,
-      height: `${HANDLE_SIZE}px`,
-    });
   }
 
   private renderRowHandles(

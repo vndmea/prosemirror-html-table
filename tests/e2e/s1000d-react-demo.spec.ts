@@ -224,7 +224,8 @@ test.describe('S1000D React demo', () => {
 
     const table = page.getByTestId('editor').getByTestId('s1000d-table');
     await table.hover();
-    await page.getByTestId('s1000d-table-handle').click();
+    await expect(page.locator('[data-testid="s1000d-table-handle"]:visible')).toHaveCount(0);
+    expect(await runDemoCommand(page, 'selectWholeTable')).toBe(true);
 
     const snapshot = await getDemoSnapshot(page);
     expect(snapshot.selectionScope).toBe('table');
@@ -442,7 +443,8 @@ test.describe('S1000D React demo', () => {
 
     const table = page.getByTestId('editor').getByTestId('s1000d-table');
     await table.hover();
-    await page.getByTestId('s1000d-table-handle').click();
+    await expect(page.locator('[data-testid="s1000d-table-handle"]:visible')).toHaveCount(0);
+    expect(await runDemoCommand(page, 'selectWholeTable')).toBe(true);
 
     await expect(page.getByTestId('selection-menu')).toBeHidden();
     const snapshot = await getDemoSnapshot(page);
@@ -610,7 +612,8 @@ test.describe('S1000D React demo', () => {
 
     const table = page.getByTestId('editor').getByTestId('s1000d-table');
     await table.hover();
-    await page.getByTestId('s1000d-table-handle').click();
+    await expect(page.locator('[data-testid="s1000d-table-handle"]:visible')).toHaveCount(0);
+    expect(await runDemoCommand(page, 'selectWholeTable')).toBe(true);
 
     const before = await getDemoSnapshot(page);
     expect(before.selectionScope).toBe('table');
