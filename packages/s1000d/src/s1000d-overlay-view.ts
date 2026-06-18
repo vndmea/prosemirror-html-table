@@ -27,7 +27,7 @@ import {
   type S1000DContextMenuActionResolver,
 } from './menu.js';
 import { findS1000DEntryPosition } from './position.js';
-import { S1000DCellSelection } from './selection.js';
+import { S1000DCellSelection, isS1000DCellSelection } from './selection.js';
 import { S1000DMenuAdapter } from './s1000d-menu-adapter.js';
 import {
   applyRect,
@@ -350,6 +350,7 @@ export class S1000DTableOverlayView {
     columnSelection: boolean,
   ): void {
     const suppressSelectionControls = Boolean(interaction.resizing || this.axisDrag?.hasDragged);
+    const hasCellSelection = isS1000DCellSelection(this.view.state.selection);
     this.rowBand.hidden = true;
     this.columnBand.hidden = true;
     this.cellFill.hidden = true;
@@ -357,6 +358,8 @@ export class S1000DTableOverlayView {
     this.cellHandle.hidden = true;
     this.cellHandle.classList.toggle('is-menu-open', interaction.contextMenuOpen && interaction.menuScope === 'cell');
     this.cellHandle.classList.remove('is-selected');
+    this.cellHandle.classList.remove('is-cursor-cell');
+    this.cellOutline.classList.remove('is-cursor-cell');
     this.hoverRowBand.hidden = true;
     this.hoverColumnBand.hidden = true;
     this.hoverCellFill.hidden = true;
@@ -397,17 +400,22 @@ export class S1000DTableOverlayView {
       return;
     }
 
+    const cursorCellSelection = !hasCellSelection && !rowSelection && !columnSelection;
     if (!rowSelection && !columnSelection) {
       this.root.dataset.selectionScope = 'cell';
     }
 
-    applyRect(this.cellFill, rect);
     applyRect(this.cellOutline, rect);
+    if (hasCellSelection) {
+      applyRect(this.cellFill, rect);
+    }
 
-    this.cellFill.hidden = false;
-    this.cellOutline.hidden = false;
+    this.cellFill.hidden = !hasCellSelection;
+    this.cellOutline.hidden = !(hasCellSelection || cursorCellSelection);
     this.cellHandle.hidden = suppressSelectionControls;
-    this.cellHandle.classList.toggle('is-selected', true);
+    this.cellHandle.classList.toggle('is-selected', hasCellSelection);
+    this.cellHandle.classList.toggle('is-cursor-cell', cursorCellSelection);
+    this.cellOutline.classList.toggle('is-cursor-cell', cursorCellSelection);
     this.cellHandle.setAttribute('aria-label', 'Cell actions');
     this.cellHandle.title = 'Cell actions';
   }

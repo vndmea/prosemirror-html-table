@@ -188,7 +188,7 @@ function getS1000DContextMenuScope(
 }
 
 function getS1000DContextMenuAnchor(
-  _state: EditorState,
+  state: EditorState,
   interaction: S1000DTableInteractionState,
   scope: S1000DTableMenuScope | null,
   selectionInfo: ReturnType<typeof getS1000DSelectionInfo> | undefined,
@@ -199,6 +199,10 @@ function getS1000DContextMenuAnchor(
   }
 
   const geometry = geometryOverride ?? interaction.geometry;
+  const explicitAnchor = interaction.menuAnchor;
+  if (explicitAnchor) {
+    return explicitAnchor;
+  }
 
   const selectedRowIndex = interaction.selectedAxis.index ?? (
     scope === 'row' && selectionInfo && selectionInfo.top === selectionInfo.bottom
@@ -247,8 +251,8 @@ function getS1000DContextMenuAnchor(
     };
   }
 
-  if (interaction.menuAnchor) {
-    return interaction.menuAnchor;
+  if (explicitAnchor) {
+    return explicitAnchor;
   }
 
   if (

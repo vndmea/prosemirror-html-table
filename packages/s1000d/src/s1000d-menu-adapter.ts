@@ -583,6 +583,10 @@ export class S1000DMenuAdapter {
     scope: S1000DTableMenuScope,
     fallback: { left: number; top: number },
   ): { left: number; top: number } {
+    if (scope === 'cell') {
+      return fallback;
+    }
+
     const selectors = scope === 'row'
       ? [
         '[data-testid="s1000d-row-handle"].is-menu-open',
