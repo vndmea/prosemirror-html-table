@@ -220,14 +220,6 @@ const s1000dTableStyles = `
   transform: translate(50%, -50%);
 }
 
-.s1000d-table-overlay .s1000d-table-overlay__cell-selection-handle.is-cursor-cell {
-  transform: translate(160%, -50%);
-}
-
-.s1000d-table-overlay .s1000d-table-overlay__cell-selection-outline.is-cursor-cell {
-  border-color: transparent;
-}
-
 .s1000d-table-overlay .s1000d-table-overlay__handle {
   position: absolute;
   z-index: 1;

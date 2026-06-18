@@ -2,6 +2,7 @@ import { NodeSelection, TextSelection, type EditorState, type Transaction } from
 import { Schema, type Node as ProseMirrorNode } from 'prosemirror-model';
 
 import { S1000DCellSelection, createS1000DTableGrid, parseS1000DTableXml, s1000dTableNodeNames, type S1000DTableProfile } from 'prosemirror-html-table-s1000d';
+import { s1000dTableInteractionPluginKey } from 'prosemirror-html-table-s1000d/tiptap';
 
 export function createDocFromS1000DXml(
   schema: Schema,
@@ -59,13 +60,39 @@ export function selectFirstBodyCell(state: EditorState): Transaction | null {
 export function selectFirstBodyRow(state: EditorState): Transaction | null {
   const [firstEntryPos] = getFirstTbodyEntryPositions(state.doc);
   if (typeof firstEntryPos !== 'number') return null;
-  return state.tr.setSelection(S1000DCellSelection.rowSelection(state.doc.resolve(firstEntryPos + 1))).scrollIntoView();
+  const tableInfo = findFirstS1000DTable(state.doc);
+  if (!tableInfo) return null;
+  return state.tr
+    .setSelection(S1000DCellSelection.rowSelection(state.doc.resolve(firstEntryPos + 1)))
+    .setMeta(s1000dTableInteractionPluginKey, {
+      selectedAxis: {
+        kind: 'row',
+        index: 0,
+        tablePos: tableInfo.tablePos,
+        tgroupIndex: 0,
+      },
+      selectedAxisExplicit: true,
+    })
+    .scrollIntoView();
 }
 
 export function selectFirstBodyColumn(state: EditorState): Transaction | null {
   const [firstEntryPos] = getFirstTbodyEntryPositions(state.doc);
   if (typeof firstEntryPos !== 'number') return null;
-  return state.tr.setSelection(S1000DCellSelection.colSelection(state.doc.resolve(firstEntryPos + 1))).scrollIntoView();
+  const tableInfo = findFirstS1000DTable(state.doc);
+  if (!tableInfo) return null;
+  return state.tr
+    .setSelection(S1000DCellSelection.colSelection(state.doc.resolve(firstEntryPos + 1)))
+    .setMeta(s1000dTableInteractionPluginKey, {
+      selectedAxis: {
+        kind: 'column',
+        index: 0,
+        tablePos: tableInfo.tablePos,
+        tgroupIndex: 0,
+      },
+      selectedAxisExplicit: true,
+    })
+    .scrollIntoView();
 }
 
 export function selectFirstTwoBodyCells(state: EditorState): Transaction | null {
@@ -135,8 +162,20 @@ export function selectGridRow(
   tgroupIndex = 0,
 ): Transaction | null {
   const entryPos = findGridEntryPosition(state.doc, rowIndex, 0, tgroupIndex);
-  if (typeof entryPos !== 'number') return null;
-  return state.tr.setSelection(S1000DCellSelection.rowSelection(state.doc.resolve(entryPos + 1))).scrollIntoView();
+  const tableInfo = findFirstS1000DTable(state.doc);
+  if (typeof entryPos !== 'number' || !tableInfo) return null;
+  return state.tr
+    .setSelection(S1000DCellSelection.rowSelection(state.doc.resolve(entryPos + 1)))
+    .setMeta(s1000dTableInteractionPluginKey, {
+      selectedAxis: {
+        kind: 'row',
+        index: rowIndex,
+        tablePos: tableInfo.tablePos,
+        tgroupIndex,
+      },
+      selectedAxisExplicit: true,
+    })
+    .scrollIntoView();
 }
 
 export function selectGridColumn(
@@ -145,8 +184,20 @@ export function selectGridColumn(
   tgroupIndex = 0,
 ): Transaction | null {
   const entryPos = findGridEntryPosition(state.doc, 0, columnIndex, tgroupIndex);
-  if (typeof entryPos !== 'number') return null;
-  return state.tr.setSelection(S1000DCellSelection.colSelection(state.doc.resolve(entryPos + 1))).scrollIntoView();
+  const tableInfo = findFirstS1000DTable(state.doc);
+  if (typeof entryPos !== 'number' || !tableInfo) return null;
+  return state.tr
+    .setSelection(S1000DCellSelection.colSelection(state.doc.resolve(entryPos + 1)))
+    .setMeta(s1000dTableInteractionPluginKey, {
+      selectedAxis: {
+        kind: 'column',
+        index: columnIndex,
+        tablePos: tableInfo.tablePos,
+        tgroupIndex,
+      },
+      selectedAxisExplicit: true,
+    })
+    .scrollIntoView();
 }
 
 function getNodePositions(doc: ProseMirrorNode): Map<ProseMirrorNode, number> {

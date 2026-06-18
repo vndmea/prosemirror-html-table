@@ -317,8 +317,17 @@ export class S1000DTableOverlayView {
       getS1000DSelectionInfo(this.view.state, { tablePos: context.tablePos })
       ?? getS1000DSelectionInfo(this.view.state);
     const tableSelection = isTableSelectionForContext(this.view, context.tablePos);
-    const rowSelection = isSingleRowSelection(this.view.state.selection, selectionInfo);
-    const columnSelection = isSingleColumnSelection(this.view.state.selection, selectionInfo);
+    const explicitAxisSelection =
+      Boolean(interaction.selectedAxisExplicit)
+      && interaction.selectedAxis.tablePos === context.tablePos;
+    const rowSelection =
+      explicitAxisSelection
+      && interaction.selectedAxis.kind === 'row'
+      && isSingleRowSelection(this.view.state.selection, selectionInfo);
+    const columnSelection =
+      explicitAxisSelection
+      && interaction.selectedAxis.kind === 'column'
+      && isSingleColumnSelection(this.view.state.selection, selectionInfo);
 
     this.root.classList.toggle(
       's1000d-table-overlay--dragging',
@@ -358,8 +367,6 @@ export class S1000DTableOverlayView {
     this.cellHandle.hidden = true;
     this.cellHandle.classList.toggle('is-menu-open', interaction.contextMenuOpen && interaction.menuScope === 'cell');
     this.cellHandle.classList.remove('is-selected');
-    this.cellHandle.classList.remove('is-cursor-cell');
-    this.cellOutline.classList.remove('is-cursor-cell');
     this.hoverRowBand.hidden = true;
     this.hoverColumnBand.hidden = true;
     this.hoverCellFill.hidden = true;
@@ -400,22 +407,25 @@ export class S1000DTableOverlayView {
       return;
     }
 
-    const cursorCellSelection = !hasCellSelection && !rowSelection && !columnSelection;
+    const hideCursorCellHandle = !hasCellSelection
+      && interaction.hovered?.tablePos === selectionInfo.tablePos
+      && (
+        interaction.hoveredControl !== 'cell'
+        || interaction.hovered.rowIndex !== selectionInfo.top
+        || interaction.hovered.columnIndex !== selectionInfo.left
+      );
+
     if (!rowSelection && !columnSelection) {
       this.root.dataset.selectionScope = 'cell';
     }
 
     applyRect(this.cellOutline, rect);
-    if (hasCellSelection) {
-      applyRect(this.cellFill, rect);
-    }
+    applyRect(this.cellFill, rect);
 
-    this.cellFill.hidden = !hasCellSelection;
-    this.cellOutline.hidden = !(hasCellSelection || cursorCellSelection);
-    this.cellHandle.hidden = suppressSelectionControls;
+    this.cellFill.hidden = false;
+    this.cellOutline.hidden = false;
+    this.cellHandle.hidden = suppressSelectionControls || rowSelection || columnSelection || hideCursorCellHandle;
     this.cellHandle.classList.toggle('is-selected', hasCellSelection);
-    this.cellHandle.classList.toggle('is-cursor-cell', cursorCellSelection);
-    this.cellOutline.classList.toggle('is-cursor-cell', cursorCellSelection);
     this.cellHandle.setAttribute('aria-label', 'Cell actions');
     this.cellHandle.title = 'Cell actions';
   }
@@ -1425,9 +1435,20 @@ export class S1000DTableOverlayView {
       return;
     }
 
+    const hoveredResizeHandle = eventElement?.closest('[data-testid="s1000d-resize-handle"]') as HTMLButtonElement | null;
+    if (hoveredResizeHandle) {
+      this.handleAxisHover(hoveredResizeHandle, 'column');
+      return;
+    }
+
     const hoveredTableHandle = eventElement?.closest('[data-testid="s1000d-table-handle"]') as HTMLButtonElement | null;
     if (hoveredTableHandle) {
       this.handleTableHover(hoveredTableHandle);
+      return;
+    }
+
+    const hoveredCellHandle = eventElement?.closest('[data-testid="s1000d-cell-handle"]') as HTMLButtonElement | null;
+    if (hoveredCellHandle) {
       return;
     }
 

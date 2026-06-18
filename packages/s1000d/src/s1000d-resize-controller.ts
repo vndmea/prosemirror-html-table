@@ -14,7 +14,9 @@ import {
 } from './s1000d-overlay-geometry.js';
 import {
   applyTableColumnPreviewWidths,
+  getVisibleTableRect,
   TableResizeLifecycle,
+  toTableRect,
   type TableGeometry,
   type TableOverlayPositionState,
 } from 'tiptap-html-table/table-interaction';
@@ -102,6 +104,10 @@ export class S1000DResizeController {
         && interaction.selectedAxis.kind === 'column'
       );
     const interactionVisible = interactiveHandles || selectionVisible;
+    const fullTableRect = toTableRect(context.dom.getBoundingClientRect());
+    const fullVisibleTableRect = getVisibleTableRect(fullTableRect, geometry.wrapperRect);
+    const resizeTop = positionState.tableTop + (fullVisibleTableRect.top - geometry.tableRect.top);
+    const resizeHeight = fullVisibleTableRect.height;
 
     for (let index = 0; index < geometry.columns.length; index += 1) {
       const handle = resizersParent.children[index] as HTMLButtonElement | undefined;
@@ -125,9 +131,9 @@ export class S1000DResizeController {
       );
       Object.assign(handle.style, {
         left: `${boundary}px`,
-        top: `${positionState.visibleTableTop}px`,
+        top: `${resizeTop}px`,
         width: `${RESIZE_HANDLE_WIDTH}px`,
-        height: `${positionState.visibleTableHeight}px`,
+        height: `${resizeHeight}px`,
       });
     }
   }

@@ -426,6 +426,32 @@ test.describe('S1000D React demo', () => {
     await expect(page.getByTestId('selection-menu-item-copy-selection')).toBeVisible();
   });
 
+  test('cell selection handle stays visible for a full-row two-cell range selected from cells', async ({ page }) => {
+    await page.goto('/');
+    await expectDemoApi(page);
+    await loadDemoXml(page, `
+<table id="two-cell-row-range">
+  <tgroup cols="2">
+    <tbody>
+      <row><entry>1</entry><entry>2</entry></row>
+      <row><entry>3</entry><entry>4</entry></row>
+      <row><entry>5</entry><entry>6</entry></row>
+    </tbody>
+  </tgroup>
+</table>
+    `.trim(), 'extended');
+
+    await selectDemoRange(page, 0, 0, 0, 1);
+
+    const cellHandle = page.getByTestId('s1000d-cell-handle');
+    await expect(cellHandle).toBeVisible();
+    await cellHandle.click();
+
+    await expect(page.getByTestId('selection-menu')).toBeVisible();
+    await expect(page.getByTestId('selection-menu')).toHaveAttribute('data-scope', 'cell');
+    await expect(page.getByTestId('selection-menu-item-copy-selection')).toBeVisible();
+  });
+
   test('cell selection handle appears for a focused cell and opens the action menu', async ({ page }) => {
     await page.goto('/');
     await expectDemoApi(page);

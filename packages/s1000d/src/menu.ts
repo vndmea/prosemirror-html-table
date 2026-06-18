@@ -172,11 +172,11 @@ function getS1000DContextMenuScope(
     return null;
   }
 
-  if (interaction.selectedAxis.kind === 'row') {
+  if (interaction.selectedAxisExplicit && interaction.selectedAxis.kind === 'row') {
     return 'row';
   }
 
-  if (interaction.selectedAxis.kind === 'column') {
+  if (interaction.selectedAxisExplicit && interaction.selectedAxis.kind === 'column') {
     return 'column';
   }
 
