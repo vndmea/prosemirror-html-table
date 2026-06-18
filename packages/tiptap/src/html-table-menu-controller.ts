@@ -25,12 +25,17 @@ import {
 } from './html-table-interaction.js';
 import {
   getHtmlTableContextMenuPosition,
+  getHtmlTableContextSubmenuPosition,
+  getHtmlTableContextSubmenuTransformOrigin,
   getHtmlTableContextMenuTransformOrigin,
   getHtmlTableOverlayViewportBounds,
   getHtmlTableSelectionScope,
   type HtmlTableSelectionScope,
 } from './html-table-overlay-geometry.js';
 import {
+  createTableContextMenuElement,
+  focusMenuButtonWithoutScroll,
+  getEnabledMenuButtons,
   MenuTypeaheadController,
   canRestoreMenuFocus,
   getNextMenuActionIndex,
@@ -389,6 +394,7 @@ export class HtmlTableMenuController {
     const focusedMenuItemKey = this.getFocusedContextMenuItemKey();
 
     this.contextMenu.hidden = !renderState.visible;
+    this.contextMenu.setAttribute('aria-hidden', String(!renderState.visible));
     this.contextMenu.dataset.scope = renderState.scope ?? '';
     this.contextMenu.dataset.primaryAction = renderState.primaryActionId ?? '';
     this.contextMenu.removeAttribute('aria-labelledby');
@@ -522,7 +528,9 @@ export class HtmlTableMenuController {
 
       const currentIndex = enabledButtons.findIndex((button) => button === this.root.ownerDocument.activeElement);
       const nextIndex = getNextMenuActionIndex(currentIndex, enabledButtons.length, event.key);
-      enabledButtons[nextIndex]?.focus();
+      if (enabledButtons[nextIndex]) {
+        focusMenuButtonWithoutScroll(enabledButtons[nextIndex]);
+      }
       return;
     }
 
@@ -540,7 +548,9 @@ export class HtmlTableMenuController {
       return;
     }
 
-    enabledButtons[nextIndex]?.focus();
+    if (enabledButtons[nextIndex]) {
+      focusMenuButtonWithoutScroll(enabledButtons[nextIndex]);
+    }
   }
 
   handleDocumentMouseDown(event: MouseEvent): void {
@@ -578,19 +588,16 @@ export class HtmlTableMenuController {
   }
 
   private createContextSubmenu(): HTMLDivElement {
-    const menu = this.root.ownerDocument.createElement('div');
-    menu.className = 'html-table-overlay__context-menu html-table-overlay__context-menu--submenu';
-    menu.id = `${this.contextMenuId}-submenu`;
-    menu.dataset.testid = 'pmht-context-submenu';
-    menu.hidden = true;
-    menu.setAttribute('role', 'menu');
-    menu.setAttribute('aria-orientation', 'vertical');
-    menu.addEventListener('mousedown', (event) => this.handleMenuMouseDown(event));
-    menu.addEventListener('click', (event) => this.handleMenuClick(event));
-    menu.addEventListener('keydown', (event) => this.handleMenuKeyDown(event));
-    menu.addEventListener('mouseover', (event) => this.handleMenuPointerOver(event));
-    menu.addEventListener('focusin', (event) => this.handleMenuFocusIn(event));
-    return menu;
+    return createTableContextMenuElement(this.root.ownerDocument, {
+      className: 'html-table-overlay__context-menu html-table-overlay__context-menu--submenu',
+      id: `${this.contextMenuId}-submenu`,
+      testId: 'pmht-context-submenu',
+      onMouseDown: (event) => this.handleMenuMouseDown(event),
+      onClick: (event) => this.handleMenuClick(event),
+      onKeyDown: (event) => this.handleMenuKeyDown(event),
+      onMouseOver: (event) => this.handleMenuPointerOver(event),
+      onFocusIn: (event) => this.handleMenuFocusIn(event),
+    });
   }
 
   private buildContextMenuEntries(menu: HtmlTableContextMenuState): HtmlTableContextMenuEntry[] {
@@ -837,43 +844,31 @@ export class HtmlTableMenuController {
       this.buildContextMenuPanel(submenu.items, menu.scope ?? 'cell', menu.primaryAction?.id ?? null),
     );
     this.contextSubmenu.hidden = false;
+    this.contextSubmenu.setAttribute('aria-hidden', 'false');
     this.contextSubmenu.dataset.scope = menu.scope ?? '';
     this.contextSubmenu.style.maxHeight = `${availableHeight}px`;
 
     const triggerRect = trigger.getBoundingClientRect();
     const submenuWidth = this.contextSubmenu.offsetWidth;
     const submenuHeight = this.contextSubmenu.offsetHeight;
-    const triggerLeft = triggerRect.left - hostRect.left;
-    const triggerRight = triggerRect.right - hostRect.left;
-    const triggerTop = triggerRect.top - hostRect.top;
+    const position = getHtmlTableContextSubmenuPosition(
+      triggerRect.left - hostRect.left,
+      triggerRect.right - hostRect.left,
+      triggerRect.top - hostRect.top,
+      submenuWidth,
+      submenuHeight,
+      viewportBounds.left,
+      viewportBounds.top,
+      viewportBounds.right,
+      viewportBounds.bottom,
+      SUBMENU_GAP,
+      -6,
+    );
 
-    let left = triggerRight + SUBMENU_GAP;
-    let placement: 'right' | 'left' = 'right';
-    if (left + submenuWidth > viewportBounds.right) {
-      left = triggerLeft - SUBMENU_GAP - submenuWidth;
-      placement = 'left';
-    }
-
-    if (left < viewportBounds.left) {
-      left = viewportBounds.left;
-    }
-
-    if (left + submenuWidth > viewportBounds.right) {
-      left = Math.max(viewportBounds.left, viewportBounds.right - submenuWidth);
-    }
-
-    let top = triggerTop - 6;
-    if (top < viewportBounds.top) {
-      top = viewportBounds.top;
-    }
-    if (top + submenuHeight > viewportBounds.bottom) {
-      top = Math.max(viewportBounds.top, viewportBounds.bottom - submenuHeight);
-    }
-
-    this.contextSubmenu.style.left = `${left}px`;
-    this.contextSubmenu.style.top = `${top}px`;
-    this.contextSubmenu.dataset.placement = placement;
-    this.contextSubmenu.style.transformOrigin = placement === 'right' ? 'left top' : 'right top';
+    this.contextSubmenu.style.left = `${position.left}px`;
+    this.contextSubmenu.style.top = `${position.top}px`;
+    this.contextSubmenu.dataset.placement = position.placement;
+    this.contextSubmenu.style.transformOrigin = getHtmlTableContextSubmenuTransformOrigin(position.placement);
   }
 
   private resolveOpenContextSubmenu(
@@ -913,9 +908,7 @@ export class HtmlTableMenuController {
   }
 
   private getEnabledContextMenuActionButtons(container: ParentNode): HTMLButtonElement[] {
-    return Array.from(container.querySelectorAll<HTMLButtonElement>('button[data-menu-key]')).filter(
-      (button) => !button.disabled,
-    );
+    return getEnabledMenuButtons(container, 'button[data-menu-key]');
   }
 
   private rerenderOpenContextMenu(): void {
@@ -950,7 +943,9 @@ export class HtmlTableMenuController {
     }
 
     if (this.focusFirstSubmenuActionOnOpen && submenuButtons.length > 0) {
-      submenuButtons[0]?.focus();
+      if (submenuButtons[0]) {
+        focusMenuButtonWithoutScroll(submenuButtons[0]);
+      }
       this.focusFirstSubmenuActionOnOpen = false;
       this.lastContextMenuOpen = menu.open;
       return;
@@ -960,7 +955,7 @@ export class HtmlTableMenuController {
       const trigger = menuButtons.find((button) => button.dataset.submenuId === this.submenuTriggerToFocus);
       this.submenuTriggerToFocus = null;
       if (trigger) {
-        trigger.focus();
+        focusMenuButtonWithoutScroll(trigger);
         this.lastContextMenuOpen = menu.open;
         return;
       }
@@ -969,7 +964,7 @@ export class HtmlTableMenuController {
     if (focusedMenuItemKey) {
       const focusedButton = enabledButtons.find((button) => button.dataset.menuKey === focusedMenuItemKey);
       if (focusedButton) {
-        focusedButton.focus();
+        focusMenuButtonWithoutScroll(focusedButton);
         this.lastContextMenuOpen = menu.open;
         return;
       }
@@ -980,7 +975,10 @@ export class HtmlTableMenuController {
       const primaryButton = primaryActionId
         ? menuButtons.find((button) => button.dataset.actionId === primaryActionId)
         : null;
-      (primaryButton ?? menuButtons[0] ?? submenuButtons[0])?.focus();
+      const nextButton = primaryButton ?? menuButtons[0] ?? submenuButtons[0];
+      if (nextButton) {
+        focusMenuButtonWithoutScroll(nextButton);
+      }
     }
 
     this.lastContextMenuOpen = menu.open;
@@ -993,7 +991,7 @@ export class HtmlTableMenuController {
     }
 
     if (canRestoreMenuFocus(this.contextMenuFocusTarget)) {
-      this.contextMenuFocusTarget.focus();
+      focusMenuButtonWithoutScroll(this.contextMenuFocusTarget);
     }
 
     this.restoreContextMenuFocusOnClose = false;
@@ -1075,6 +1073,7 @@ export class HtmlTableMenuController {
 
   private hideContextSubmenu(): void {
     this.contextSubmenu.hidden = true;
+    this.contextSubmenu.setAttribute('aria-hidden', 'true');
     this.contextSubmenu.replaceChildren();
     this.contextSubmenu.dataset.scope = '';
     this.contextSubmenu.dataset.placement = '';

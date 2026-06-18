@@ -1,6 +1,8 @@
 import type { HtmlTableInteractionState } from './html-table-interaction.js';
 import {
   getTableContextMenuPosition,
+  getTableContextSubmenuPosition,
+  getTableContextSubmenuTransformOrigin,
   getTableContextMenuTransformOrigin,
   getTableOverlayPositionState,
   getTableOverlayViewportBounds,
@@ -8,6 +10,8 @@ import {
   getVisibleTableSelectionRect,
   type TableContextMenuPlacement,
   type TableContextMenuPosition,
+  type TableContextSubmenuPlacement,
+  type TableContextSubmenuPosition,
   type TableOverlayPositionState,
   type TableOverlayViewportBounds,
 } from './table-interaction/overlay-geometry.js';
@@ -23,6 +27,8 @@ export interface HtmlTableSelectionAnchor {
 
 export type HtmlTableContextMenuPlacement = TableContextMenuPlacement;
 export type HtmlTableContextMenuPosition = TableContextMenuPosition;
+export type HtmlTableContextSubmenuPlacement = TableContextSubmenuPlacement;
+export type HtmlTableContextSubmenuPosition = TableContextSubmenuPosition;
 export type HtmlTableOverlayPositionState = TableOverlayPositionState;
 export type HtmlTableOverlayViewportBounds = TableOverlayViewportBounds;
 
@@ -123,6 +129,8 @@ export function getHtmlTableSelectionAnchor(
 
 export const getHtmlTableContextMenuPosition = getTableContextMenuPosition;
 export const getHtmlTableContextMenuTransformOrigin = getTableContextMenuTransformOrigin;
+export const getHtmlTableContextSubmenuPosition = getTableContextSubmenuPosition;
+export const getHtmlTableContextSubmenuTransformOrigin = getTableContextSubmenuTransformOrigin;
 export const getHtmlTableOverlayPositionState = getTableOverlayPositionState;
 export const getHtmlTableOverlayViewportBounds = getTableOverlayViewportBounds;
 export const getHtmlTableVisibleSelectionRect = getVisibleTableSelectionRect;

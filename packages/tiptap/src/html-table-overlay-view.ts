@@ -35,6 +35,7 @@ import {
 } from './html-table-overlay-geometry.js';
 import { getHtmlTableOverlayMount, HtmlTableOverlayHost } from './html-table-overlay-host.js';
 import { HtmlTableResizeController } from './html-table-resize-controller.js';
+import { createTableContextMenuElement } from './table-interaction/menu-controller.js';
 import { getRenderedTableContext } from './table-interaction/dom-adapter.js';
 import { measureHtmlTableGeometry } from './table-dom.js';
 import { getTableSelectionInfo } from './table-utils.js';
@@ -244,17 +245,14 @@ export class HtmlTableOverlayView {
   }
 
   private createContextMenu(): HTMLDivElement {
-    const menu = this.root.ownerDocument.createElement('div');
-    menu.className = 'html-table-overlay__context-menu';
-    menu.id = this.contextMenuId;
-    menu.dataset.testid = 'pmht-context-menu';
-    menu.hidden = true;
-    menu.setAttribute('role', 'menu');
-    menu.setAttribute('aria-orientation', 'vertical');
-    menu.addEventListener('mousedown', (event) => this.menuController.handleMenuMouseDown(event));
-    menu.addEventListener('click', (event) => this.menuController.handleMenuClick(event));
-    menu.addEventListener('keydown', (event) => this.menuController.handleMenuKeyDown(event));
-    return menu;
+    return createTableContextMenuElement(this.root.ownerDocument, {
+      className: 'html-table-overlay__context-menu',
+      id: this.contextMenuId,
+      testId: 'pmht-context-menu',
+      onMouseDown: (event) => this.menuController.handleMenuMouseDown(event),
+      onClick: (event) => this.menuController.handleMenuClick(event),
+      onKeyDown: (event) => this.menuController.handleMenuKeyDown(event),
+    });
   }
 
   private toggleContextMenuFromControl(

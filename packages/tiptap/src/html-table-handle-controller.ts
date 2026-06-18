@@ -23,6 +23,12 @@ import {
   type HtmlTableOverlayPositionState,
   type HtmlTableSelectionScope,
 } from './html-table-overlay-geometry.js';
+import {
+  isTableAxisHandleHovered,
+  isTableAxisHandleVisible,
+  shouldToggleTableContextMenuFromAxisHandle,
+  shouldToggleTableContextMenuFromTableHandle,
+} from './table-interaction/handle-state.js';
 import { measureHtmlTableGeometry } from './table-dom.js';
 import {
   createColumnSelectionTransaction,
@@ -53,19 +59,14 @@ export function shouldToggleHtmlTableContextMenuFromAxisHandle(
   index: number,
   tablePos: number,
 ): boolean {
-  return (
-    Boolean(interaction.selectedAxisExplicit) &&
-    interaction.selectedAxis.kind === axis &&
-    interaction.selectedAxis.index === index &&
-    interaction.selectedAxis.tablePos === tablePos
-  );
+  return shouldToggleTableContextMenuFromAxisHandle(interaction, axis, tablePos, index);
 }
 
 export function shouldToggleHtmlTableContextMenuFromTableHandle(
   interaction: HtmlTableInteractionState,
   tablePos: number,
 ): boolean {
-  return interaction.tableSelected && interaction.activeTable?.tablePos === tablePos;
+  return shouldToggleTableContextMenuFromTableHandle(interaction, tablePos);
 }
 
 export function isHtmlTableAxisHandleHovered(
@@ -74,15 +75,7 @@ export function isHtmlTableAxisHandleHovered(
   tablePos: number,
   index: number,
 ): boolean {
-  if (interaction.hovered?.tablePos !== tablePos) {
-    return false;
-  }
-
-  if (axis === 'row') {
-    return interaction.hovered.rowIndex === index;
-  }
-
-  return interaction.hovered.columnIndex === index;
+  return isTableAxisHandleHovered(interaction, axis, tablePos, index);
 }
 
 export function isHtmlTableAxisHandleVisible(
@@ -91,32 +84,7 @@ export function isHtmlTableAxisHandleVisible(
   tablePos: number,
   index: number,
 ): boolean {
-  const selected =
-    Boolean(interaction.selectedAxisExplicit) &&
-    interaction.selectedAxis.kind === axis &&
-    interaction.selectedAxis.index === index &&
-    interaction.selectedAxis.tablePos === tablePos;
-  const hovered = isHtmlTableAxisHandleHovered(interaction, axis, tablePos, index);
-  const hoveredAxisIndex =
-    interaction.hovered?.tablePos === tablePos
-      ? axis === 'row'
-        ? interaction.hovered.rowIndex
-        : interaction.hovered.columnIndex
-      : null;
-
-  if (interaction.tableSelected || interaction.resizing?.tablePos === tablePos) {
-    return false;
-  }
-
-  if (interaction.contextMenuOpen && !selected) {
-    return false;
-  }
-
-  if (hoveredAxisIndex !== null) {
-    return hovered;
-  }
-
-  return hovered || selected;
+  return isTableAxisHandleVisible(interaction, axis, tablePos, index);
 }
 
 export interface HtmlTableColumnHandleLayout {

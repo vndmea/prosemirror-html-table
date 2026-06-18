@@ -12,10 +12,16 @@ import {
   type S1000DContextMenuActionResolver,
   type S1000DContextMenuOptions,
 } from './menu.js';
-import { clamp, CONTEXT_MENU_SCOPE_LABELS, OVERLAY_SELECTOR, SUBMENU_GAP } from './s1000d-overlay-geometry.js';
+import { CONTEXT_MENU_SCOPE_LABELS, OVERLAY_SELECTOR, SUBMENU_GAP } from './s1000d-overlay-geometry.js';
 import {
   canRestoreMenuFocus,
+  focusFirstEnabledMenuButton,
+  focusMenuButtonWithoutScroll,
   getNextMenuActionIndex,
+  getTableContextMenuPosition,
+  getTableContextMenuTransformOrigin,
+  getTableContextSubmenuPosition,
+  getTableContextSubmenuTransformOrigin,
   isMenuDismissKey,
   isMenuExitKey,
   isMenuNavigationKey,
@@ -238,7 +244,7 @@ export class S1000DMenuAdapter {
       const nextIndex = getNextMenuActionIndex(activeIndex, enabledButtons.length, event.key);
       const nextButton = enabledButtons[nextIndex];
       if (nextButton) {
-        this.focusWithoutScroll(nextButton);
+        focusMenuButtonWithoutScroll(nextButton);
       }
       return;
     }
@@ -271,7 +277,7 @@ export class S1000DMenuAdapter {
         event.preventDefault();
         const nextButton = enabledButtons[nextIndex];
         if (nextButton) {
-          this.focusWithoutScroll(nextButton);
+          focusMenuButtonWithoutScroll(nextButton);
         }
       }
     }
@@ -304,7 +310,7 @@ export class S1000DMenuAdapter {
 
     if (restoreFocus) {
       if (canRestoreMenuFocus(this.cellHandle) && interaction.menuScope === 'cell') {
-        this.focusWithoutScroll(this.cellHandle);
+        focusMenuButtonWithoutScroll(this.cellHandle);
       } else {
         this.root.ownerDocument.dispatchEvent(new CustomEvent('s1000d-focus-selection-trigger'));
       }
@@ -452,19 +458,26 @@ export class S1000DMenuAdapter {
     const triggerRect = trigger.getBoundingClientRect();
     const submenuWidth = this.contextSubmenu.offsetWidth;
     const submenuHeight = this.contextSubmenu.offsetHeight;
-    let left = (rootRect.right - hostRect.left) + SUBMENU_GAP;
-    if (hostRect.left + left + submenuWidth > hostRect.right) {
-      left = (rootRect.left - hostRect.left) - submenuWidth - SUBMENU_GAP;
-    }
-    let top = triggerRect.top - hostRect.top;
-    left = clamp(left, 0, Math.max(0, hostRect.width - submenuWidth));
-    top = clamp(top, 0, Math.max(0, hostRect.height - submenuHeight));
+    const position = getTableContextSubmenuPosition(
+      rootRect.left - hostRect.left,
+      rootRect.right - hostRect.left,
+      triggerRect.top - hostRect.top,
+      submenuWidth,
+      submenuHeight,
+      0,
+      0,
+      hostRect.width,
+      hostRect.height,
+      SUBMENU_GAP,
+    );
 
     Object.assign(this.contextSubmenu.style, {
-      left: `${left}px`,
-      top: `${top}px`,
+      left: `${position.left}px`,
+      top: `${position.top}px`,
       position: 'absolute',
+      transformOrigin: getTableContextSubmenuTransformOrigin(position.placement),
     });
+    this.contextSubmenu.dataset.placement = position.placement;
 
     if (this.focusFirstSubmenuActionOnOpen) {
       this.focusFirstContextMenuAction(this.contextSubmenuActionElements);
@@ -541,10 +554,7 @@ export class S1000DMenuAdapter {
   }
 
   private focusFirstContextMenuAction(buttons: readonly HTMLButtonElement[]): void {
-    const nextButton = buttons.find((element) => !element.disabled);
-    if (nextButton) {
-      this.focusWithoutScroll(nextButton);
-    }
+    focusFirstEnabledMenuButton(buttons);
   }
 
   private positionContextMenu(
@@ -555,28 +565,25 @@ export class S1000DMenuAdapter {
     const anchor = this.getLiveAnchor(scope, fallback);
     const menuWidth = this.contextMenu.offsetWidth || 192;
     const menuHeight = this.contextMenu.offsetHeight || 320;
-    const inset = 12;
-    let left = anchor.left - hostRect.left + inset;
-    let top = scope === 'row' || scope === 'cell'
-      ? anchor.top - hostRect.top - (menuHeight / 2)
-      : anchor.top - hostRect.top + inset;
-
-    if (scope === 'column') {
-      left = anchor.left - hostRect.left - (menuWidth / 2);
-    }
-
-    if (scope !== 'column' && scope !== 'table' && left + menuWidth > hostRect.width - inset) {
-      left = anchor.left - hostRect.left - menuWidth - inset;
-    }
-
-    left = clamp(left, inset, Math.max(inset, hostRect.width - menuWidth - inset));
-    top = clamp(top, inset, Math.max(inset, hostRect.height - menuHeight - inset));
+    const position = getTableContextMenuPosition(
+      scope,
+      anchor.left - hostRect.left,
+      anchor.top - hostRect.top,
+      menuWidth,
+      menuHeight,
+      12,
+      12,
+      Math.max(12, hostRect.width - 12),
+      Math.max(12, hostRect.height - 12),
+    );
 
     Object.assign(this.contextMenu.style, {
-      left: `${left}px`,
-      top: `${top}px`,
+      left: `${position.left}px`,
+      top: `${position.top}px`,
       position: 'absolute',
+      transformOrigin: getTableContextMenuTransformOrigin(position.placement),
     });
+    this.contextMenu.dataset.placement = position.placement;
   }
 
   private getLiveAnchor(
@@ -649,13 +656,9 @@ export class S1000DMenuAdapter {
     if (restoreFocus) {
       const trigger = this.contextMenu.querySelector(`[data-submenu-id="${submenuId}"]`);
       if (trigger instanceof HTMLButtonElement) {
-        this.focusWithoutScroll(trigger);
+        focusMenuButtonWithoutScroll(trigger);
       }
     }
-  }
-
-  private focusWithoutScroll(element: HTMLButtonElement): void {
-    element.focus({ preventScroll: true });
   }
 
   private getContextMenuSignature(

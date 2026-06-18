@@ -10,6 +10,9 @@ import { findS1000DEntryPosition } from './position.js';
 import { isS1000DCellSelection } from './selection.js';
 import {
   getTableContextMenuPosition,
+  isTableAxisHandleHovered,
+  isTableAxisHandleSelected,
+  shouldToggleTableContextMenuFromAxisHandle,
   getVisibleTableRect,
   getVisibleTableSelectionRect,
   toTableRect,
@@ -66,11 +69,9 @@ export function shouldToggleContextMenuFromAxisHandle(
   tablePos: number,
   tgroupIndex?: number | null,
 ): boolean {
-  return Boolean(interaction.selectedAxisExplicit)
-    && interaction.selectedAxis.kind === axis
-    && interaction.selectedAxis.index === index
-    && interaction.selectedAxis.tablePos === tablePos
-    && (tgroupIndex == null || interaction.selectedAxis.tgroupIndex === tgroupIndex);
+  return shouldToggleTableContextMenuFromAxisHandle(interaction, axis, tablePos, index, {
+    matchesSelectedAxis: (selectedAxis) => tgroupIndex == null || selectedAxis.tgroupIndex === tgroupIndex,
+  });
 }
 
 export function isAxisHandleHovered(
@@ -81,13 +82,7 @@ export function isAxisHandleHovered(
   tablePos: number,
   index: number,
 ): boolean {
-  if (interaction.hovered?.tablePos !== tablePos) {
-    return false;
-  }
-
-  return axis === 'row'
-    ? interaction.hovered.rowIndex === index
-    : interaction.hovered.columnIndex === index;
+  return isTableAxisHandleHovered(interaction, axis, tablePos, index);
 }
 
 export function isAxisHandleSelected(
@@ -100,11 +95,9 @@ export function isAxisHandleSelected(
   index: number,
   tgroupIndex?: number | null,
 ): boolean {
-  return Boolean(interaction.selectedAxisExplicit)
-    && interaction.selectedAxis.kind === axis
-    && interaction.selectedAxis.index === index
-    && interaction.selectedAxis.tablePos === tablePos
-    && (tgroupIndex == null || interaction.selectedAxis.tgroupIndex === tgroupIndex);
+  return isTableAxisHandleSelected(interaction, axis, tablePos, index, {
+    matchesSelectedAxis: (selectedAxis) => tgroupIndex == null || selectedAxis.tgroupIndex === tgroupIndex,
+  });
 }
 
 export function getExtendRowIndex(

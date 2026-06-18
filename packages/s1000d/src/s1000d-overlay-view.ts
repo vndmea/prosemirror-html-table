@@ -69,6 +69,7 @@ import {
 import { S1000DResizeController } from './s1000d-resize-controller.js';
 import { ensureS1000DTableStyles } from './styles.js';
 import {
+  createTableContextMenuElement,
   getTableOverlayMount,
   isKeyboardClick,
   getTableOverlayPositionState,
@@ -868,35 +869,21 @@ export class S1000DTableOverlayView {
   }
 
   private createContextMenu(): HTMLDivElement {
-    const menu = this.root.ownerDocument.createElement('div');
-    menu.className = 's1000d-table-overlay__context-menu';
-    menu.id = 's1000d-context-menu';
-    menu.dataset.testid = 'selection-menu';
-    menu.hidden = true;
-    menu.setAttribute('role', 'menu');
-    menu.setAttribute('aria-hidden', 'true');
-    menu.setAttribute('aria-orientation', 'vertical');
-    Object.assign(menu.style, {
-      pointerEvents: 'auto',
-      zIndex: '6',
+    return createTableContextMenuElement(this.root.ownerDocument, {
+      className: 's1000d-table-overlay__context-menu',
+      id: 's1000d-context-menu',
+      testId: 'selection-menu',
+      zIndex: 6,
     });
-    return menu;
   }
 
   private createContextSubmenu(): HTMLDivElement {
-    const menu = this.root.ownerDocument.createElement('div');
-    menu.className = 's1000d-table-overlay__context-menu s1000d-table-overlay__context-menu--submenu';
-    menu.id = 's1000d-context-submenu';
-    menu.dataset.testid = 'selection-submenu';
-    menu.hidden = true;
-    menu.setAttribute('role', 'menu');
-    menu.setAttribute('aria-hidden', 'true');
-    menu.setAttribute('aria-orientation', 'vertical');
-    Object.assign(menu.style, {
-      pointerEvents: 'auto',
-      zIndex: '7',
+    return createTableContextMenuElement(this.root.ownerDocument, {
+      className: 's1000d-table-overlay__context-menu s1000d-table-overlay__context-menu--submenu',
+      id: 's1000d-context-submenu',
+      testId: 'selection-submenu',
+      zIndex: 7,
     });
-    return menu;
   }
 
   private handleAxisMouseDown(event: MouseEvent, axis: 'row' | 'column'): void {

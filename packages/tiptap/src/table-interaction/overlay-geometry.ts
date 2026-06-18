@@ -32,6 +32,14 @@ export interface TableOverlayViewportBounds {
   bottom: number;
 }
 
+export type TableContextSubmenuPlacement = 'right' | 'left';
+
+export interface TableContextSubmenuPosition {
+  left: number;
+  top: number;
+  placement: TableContextSubmenuPlacement;
+}
+
 export function getTableContextMenuPosition(
   scope: 'table' | 'row' | 'column' | 'cell',
   anchorLeft: number,
@@ -109,6 +117,53 @@ export function getTableContextMenuTransformOrigin(placement: TableContextMenuPl
     default:
       return 'left center';
   }
+}
+
+export function getTableContextSubmenuPosition(
+  triggerLeft: number,
+  triggerRight: number,
+  triggerTop: number,
+  submenuWidth: number,
+  submenuHeight: number,
+  viewportLeft: number,
+  viewportTop: number,
+  viewportRight: number,
+  viewportBottom: number,
+  gap = 6,
+  topOffset = 0,
+): TableContextSubmenuPosition {
+  let left = triggerRight + gap;
+  let placement: TableContextSubmenuPlacement = 'right';
+  if (left + submenuWidth > viewportRight) {
+    left = triggerLeft - gap - submenuWidth;
+    placement = 'left';
+  }
+
+  if (left < viewportLeft) {
+    left = viewportLeft;
+  }
+
+  if (left + submenuWidth > viewportRight) {
+    left = Math.max(viewportLeft, viewportRight - submenuWidth);
+  }
+
+  let top = triggerTop + topOffset;
+  if (top < viewportTop) {
+    top = viewportTop;
+  }
+  if (top + submenuHeight > viewportBottom) {
+    top = Math.max(viewportTop, viewportBottom - submenuHeight);
+  }
+
+  return {
+    left,
+    top,
+    placement,
+  };
+}
+
+export function getTableContextSubmenuTransformOrigin(placement: TableContextSubmenuPlacement): string {
+  return placement === 'right' ? 'left top' : 'right top';
 }
 
 export function getTableOverlayPositionState(

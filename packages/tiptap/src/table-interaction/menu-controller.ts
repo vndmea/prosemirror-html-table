@@ -83,6 +83,75 @@ export function canRestoreMenuFocus(target: HTMLButtonElement | null): target is
   return Boolean(target && target.isConnected && !target.hidden && target.tabIndex >= 0);
 }
 
+export interface TableContextMenuElementOptions {
+  className: string;
+  id: string;
+  testId: string;
+  zIndex?: number | string | undefined;
+  onClick?: ((event: MouseEvent) => void) | undefined;
+  onFocusIn?: ((event: FocusEvent) => void) | undefined;
+  onMouseDown?: ((event: MouseEvent) => void) | undefined;
+  onMouseOver?: ((event: MouseEvent) => void) | undefined;
+  onKeyDown?: ((event: KeyboardEvent) => void) | undefined;
+}
+
+export function createTableContextMenuElement(
+  ownerDocument: Document,
+  options: TableContextMenuElementOptions,
+): HTMLDivElement {
+  const menu = ownerDocument.createElement('div');
+  menu.className = options.className;
+  menu.id = options.id;
+  menu.dataset.testid = options.testId;
+  menu.hidden = true;
+  menu.setAttribute('role', 'menu');
+  menu.setAttribute('aria-hidden', 'true');
+  menu.setAttribute('aria-orientation', 'vertical');
+  Object.assign(menu.style, {
+    pointerEvents: 'auto',
+  });
+  if (options.zIndex !== undefined) {
+    menu.style.zIndex = String(options.zIndex);
+  }
+  if (options.onMouseDown) {
+    menu.addEventListener('mousedown', options.onMouseDown);
+  }
+  if (options.onClick) {
+    menu.addEventListener('click', options.onClick);
+  }
+  if (options.onKeyDown) {
+    menu.addEventListener('keydown', options.onKeyDown);
+  }
+  if (options.onMouseOver) {
+    menu.addEventListener('mouseover', options.onMouseOver);
+  }
+  if (options.onFocusIn) {
+    menu.addEventListener('focusin', options.onFocusIn);
+  }
+  return menu;
+}
+
+export function getEnabledMenuButtons(
+  container: ParentNode,
+  selector = 'button',
+): HTMLButtonElement[] {
+  return Array.from(container.querySelectorAll<HTMLButtonElement>(selector)).filter((button) => !button.disabled);
+}
+
+export function focusMenuButtonWithoutScroll(button: HTMLButtonElement): void {
+  button.focus({ preventScroll: true });
+}
+
+export function focusFirstEnabledMenuButton(
+  buttons: readonly HTMLButtonElement[],
+): HTMLButtonElement | null {
+  const nextButton = buttons.find((element) => !element.disabled) ?? null;
+  if (nextButton) {
+    focusMenuButtonWithoutScroll(nextButton);
+  }
+  return nextButton;
+}
+
 export class MenuTypeaheadController {
   private currentQuery = '';
   private resetTimer: ReturnType<typeof setTimeout> | null = null;

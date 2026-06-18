@@ -40,11 +40,15 @@ export type {
 
 export {
   getTableContextMenuPosition,
+  getTableContextSubmenuPosition,
+  getTableContextSubmenuTransformOrigin,
   getTableContextMenuTransformOrigin,
   getTableOverlayPositionState,
   getVisibleTableSelectionRect,
 } from './overlay-geometry.js';
 export type {
+  TableContextSubmenuPlacement,
+  TableContextSubmenuPosition,
   TableOverlayPositionState,
 } from './overlay-geometry.js';
 
@@ -59,6 +63,10 @@ export {
 } from './resize-lifecycle.js';
 
 export {
+  createTableContextMenuElement,
+  focusFirstEnabledMenuButton,
+  focusMenuButtonWithoutScroll,
+  getEnabledMenuButtons,
   getNextMenuActionIndex,
   isMenuTypeaheadKey,
   shouldCloseMenuForTarget,
@@ -70,3 +78,18 @@ export {
   canRestoreMenuFocus,
   MenuTypeaheadController,
 } from './menu-controller.js';
+
+export {
+  isTableAxisHandleHovered,
+  isTableAxisHandleSelected,
+  isTableAxisHandleVisible,
+  shouldToggleTableContextMenuFromAxisHandle,
+  shouldToggleTableContextMenuFromTableHandle,
+} from './handle-state.js';
+export type {
+  TableAxisInteractionStateLike,
+  TableAxisSelectionStateLike,
+  TableHoverStateLike,
+  TableResizeStateLike,
+  TableAxisStateMatchOptions,
+} from './handle-state.js';
