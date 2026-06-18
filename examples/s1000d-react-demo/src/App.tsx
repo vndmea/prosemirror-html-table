@@ -504,6 +504,53 @@ export function App() {
     }
   }
 
+  function syncContextMenuSelectionFromTarget(target: EventTarget | null): S1000DTableMenuScope | null {
+    if (!editor || !(target instanceof Element)) {
+      return null;
+    }
+
+    const rowHandle = target.closest('[data-testid="s1000d-row-handle"]');
+    if (rowHandle instanceof HTMLElement) {
+      const rowIndex = Number.parseInt(rowHandle.dataset.rowIndex ?? '', 10);
+      const tgroupIndex = Number.parseInt(rowHandle.dataset.tgroupIndex ?? '0', 10);
+      const tr = Number.isInteger(rowIndex) ? selectGridRow(editor.state, rowIndex, Number.isInteger(tgroupIndex) ? tgroupIndex : 0) : null;
+      if (!tr) {
+        return null;
+      }
+      editor.view.dispatch(tr);
+      editor.commands.focus();
+      return 'row';
+    }
+
+    const columnHandle = target.closest('[data-testid="s1000d-column-handle"]');
+    if (columnHandle instanceof HTMLElement) {
+      const columnIndex = Number.parseInt(columnHandle.dataset.columnIndex ?? '', 10);
+      const tgroupIndex = Number.parseInt(columnHandle.dataset.tgroupIndex ?? '0', 10);
+      const tr = Number.isInteger(columnIndex)
+        ? selectGridColumn(editor.state, columnIndex, Number.isInteger(tgroupIndex) ? tgroupIndex : 0)
+        : null;
+      if (!tr) {
+        return null;
+      }
+      editor.view.dispatch(tr);
+      editor.commands.focus();
+      return 'column';
+    }
+
+    const tableHandle = target.closest('[data-testid="s1000d-table-handle"]');
+    if (tableHandle instanceof HTMLElement) {
+      const tr = selectWholeTable(editor.state);
+      if (!tr) {
+        return null;
+      }
+      editor.view.dispatch(tr);
+      editor.commands.focus();
+      return 'table';
+    }
+
+    return null;
+  }
+
   void toolbarRevision;
 
   function runHistoryCommand(command: typeof undo | typeof redo): void {
@@ -784,10 +831,11 @@ export function App() {
           className="s1000d-demo__editor"
           data-testid="editor"
           onContextMenu={(event) => {
-            if (!hasActionMenu) {
+            const syncedScope = syncContextMenuSelectionFromTarget(event.target);
+            const scope = syncedScope ?? (selectionScope === 'multi-cell' ? 'cell' : selectionScope);
+            if (!hasActionMenu && !syncedScope) {
               return;
             }
-            const scope = selectionScope === 'multi-cell' ? 'cell' : selectionScope;
             if (scope === 'none') {
               return;
             }

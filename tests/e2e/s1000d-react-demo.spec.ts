@@ -273,6 +273,33 @@ test.describe('S1000D React demo', () => {
     expect(afterRows).toBe(beforeRows - 1);
   });
 
+  test('row handle right-click deletes body rows and disables delete for an undeletable header row', async ({ page }) => {
+    await page.goto('/');
+    await expectDemoApi(page);
+    await loadDemoSample(page, 'proced');
+
+    const table = page.getByTestId('editor').getByTestId('s1000d-table');
+
+    await table.locator('thead tr').first().locator('td,th').first().hover();
+    await page.locator('[data-testid="s1000d-row-handle"][data-row-index="0"]').click({ button: 'right' });
+    await expect(page.getByTestId('selection-menu')).toHaveAttribute('data-scope', 'row');
+    await expect(page.getByTestId('selection-menu-item-delete-row')).toBeDisabled();
+
+    await page.keyboard.press('Escape');
+    await expect(page.getByTestId('selection-menu')).toBeHidden();
+
+    await table.locator('tbody[data-s1000d="tbody"] tr').first().locator('td,th').first().hover();
+    const beforeRows = (await exportDemoXml(page).then((xml) => xml.match(/<row\b/g)?.length ?? 0));
+
+    await page.locator('[data-testid="s1000d-row-handle"][data-row-index="1"]').click({ button: 'right' });
+    await expect(page.getByTestId('selection-menu')).toHaveAttribute('data-scope', 'row');
+    await expect(page.getByTestId('selection-menu-item-delete-row')).toBeEnabled();
+    await page.getByTestId('selection-menu-item-delete-row').click();
+
+    const afterRows = (await exportDemoXml(page).then((xml) => xml.match(/<row\b/g)?.length ?? 0));
+    expect(afterRows).toBe(beforeRows - 1);
+  });
+
   test('row context menu exposes duplicate and section move actions for body rows', async ({ page }) => {
     await page.goto('/');
     await expectDemoApi(page);

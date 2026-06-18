@@ -327,6 +327,7 @@ const s1000dTableStyles = `
 }
 
 .s1000d-table-overlay .s1000d-table-overlay__handle--table {
+  z-index: 2;
   min-width: 0.95rem;
   min-height: 0.95rem;
   cursor: pointer;

@@ -5,6 +5,7 @@ import { applyS1000DColumnWidthsToTgroup } from './column-widths.js';
 import { getRenderedS1000DTableContext, type S1000DTableDOMContext } from './dom-adapter.js';
 import { setS1000DTableInteractionMeta, type S1000DTableInteractionMeta, type S1000DTableInteractionState } from './interaction.js';
 import { replaceActiveS1000DTgroup, replaceS1000DTable } from './mutation.js';
+import { isS1000DCellSelection } from './selection.js';
 import {
   measureS1000DRenderedTableGeometry,
   MIN_COLUMN_WIDTH,
@@ -77,20 +78,30 @@ export class S1000DResizeController {
       this.view.hasFocus()
       && Boolean(selectionInfo)
     ) || isWholeS1000DTableSelection(this.view.state, { tablePos: context.tablePos });
-    const interactionVisible = Boolean(interaction.resizing && interaction.resizing.tablePos === context.tablePos)
+    const explicitAxisSelection = interaction.selectedAxis.tablePos === context.tablePos
+      && interaction.selectedAxisExplicit
+      && (
+        interaction.selectedAxis.kind === 'row'
+        || interaction.selectedAxis.kind === 'column'
+      );
+    const cursorSelectionInTable = Boolean(selectionInfo)
+      && this.view.hasFocus()
+      && !isS1000DCellSelection(this.view.state.selection)
+      && interaction.hovered?.tablePos === context.tablePos
+      && interaction.hoveredControl === 'cell';
+    const interactiveHandles = Boolean(interaction.resizing && interaction.resizing.tablePos === context.tablePos)
       || (
         interaction.hovered?.tablePos === context.tablePos
-        && (
-          interaction.hoveredControl === 'cell'
-          || interaction.hoveredControl === 'column-handle'
-        )
+        && interaction.hoveredControl === 'column-handle'
       )
+      || explicitAxisSelection
+      || cursorSelectionInTable
       || (
         interaction.contextMenuOpen
         && interaction.selectedAxis.tablePos === context.tablePos
         && interaction.selectedAxis.kind === 'column'
-      )
-      || selectionVisible;
+      );
+    const interactionVisible = interactiveHandles || selectionVisible;
 
     for (let index = 0; index < geometry.columns.length; index += 1) {
       const handle = resizersParent.children[index] as HTMLButtonElement | undefined;
@@ -107,7 +118,7 @@ export class S1000DResizeController {
       handle.dataset.tablePos = String(context.tablePos);
       handle.dataset.tgroupIndex = String(context.activeTgroupIndex);
       handle.dataset.columnIndex = String(column.index);
-      handle.style.pointerEvents = interactionVisible && !axisDragHasDragged ? 'auto' : 'none';
+      handle.style.pointerEvents = interactiveHandles && !axisDragHasDragged ? 'auto' : 'none';
       handle.classList.toggle(
         'is-active',
         Boolean(interaction.resizing && interaction.resizing.tablePos === context.tablePos && interaction.resizing.columnIndex === column.index),
