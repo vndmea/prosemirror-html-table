@@ -1,8 +1,7 @@
 import Document from '@tiptap/extension-document';
 import Paragraph from '@tiptap/extension-paragraph';
 import Text from '@tiptap/extension-text';
-import { Extension } from '@tiptap/core';
-import { history, redo, undo } from '@tiptap/pm/history';
+import { redo, undo } from '@tiptap/pm/history';
 import { EditorContent, useEditor } from '@tiptap/react';
 import type { Editor as TiptapEditor } from '@tiptap/core';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -58,6 +57,7 @@ import {
   sampleTsv,
   unsafeRawAttrsSampleXml,
 } from './samples';
+import { TiptapHistoryExtension } from '../../shared/tiptap-history';
 
 type ClipboardOutput = {
   html: string;
@@ -116,22 +116,6 @@ declare global {
     __S1000D_DEMO__?: DemoApi;
   }
 }
-
-const HistoryExtension = Extension.create({
-  name: 'history',
-
-  addKeyboardShortcuts() {
-    return {
-      'Mod-z': () => undo(this.editor.state, this.editor.view.dispatch),
-      'Mod-y': () => redo(this.editor.state, this.editor.view.dispatch),
-      'Mod-Shift-z': () => redo(this.editor.state, this.editor.view.dispatch),
-    };
-  },
-
-  addProseMirrorPlugins() {
-    return [history()];
-  },
-});
 
 type SampleKind = 'proced' | 'extended' | 'unsafe';
 
@@ -251,7 +235,7 @@ export function App() {
     Document,
     Paragraph,
     Text,
-    HistoryExtension,
+    TiptapHistoryExtension,
     ...createS1000DTableExtensions({
       profile: 'extended',
       table: {
