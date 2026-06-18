@@ -15,26 +15,15 @@ import {
 import { CONTEXT_MENU_SCOPE_LABELS, OVERLAY_SELECTOR, SUBMENU_GAP } from './s1000d-overlay-geometry.js';
 import {
   canRestoreMenuFocus,
-  closeTableContextSubmenu,
-  consumeTableContextSubmenuAutoFocus,
   createTableContextMenuActionButton,
   createTableContextMenuPanel,
   createTableContextMenuSubmenuButton,
-  createTableContextSubmenuState,
-  focusFirstEnabledMenuButton,
   focusMenuButtonWithoutScroll,
-  getNextMenuActionIndex,
+  GenericTableMenuController,
   getTableMenuLiveAnchor,
   isKeyboardClick,
-  isMenuDismissKey,
-  isMenuExitKey,
-  isMenuNavigationKey,
-  isMenuTypeaheadKey,
-  MenuTypeaheadController,
-  openTableContextSubmenu,
   positionTableContextMenuElement,
   positionTableContextSubmenuElement,
-  resetTableContextSubmenuState,
   resolveOpenTableContextSubmenu,
   shouldCloseMenuForTarget,
   syncTableContextSubmenuTriggerExpandedState,
@@ -108,13 +97,11 @@ export class S1000DMenuAdapter {
   private readonly contextSubmenu: HTMLDivElement;
   private readonly onRender: () => void;
   private readonly contextMenuActionResolver?: S1000DContextMenuActionResolver | undefined;
-  private readonly typeahead = new MenuTypeaheadController();
-  private readonly submenuState = createTableContextSubmenuState();
-  private contextMenuActionElements: HTMLButtonElement[] = [];
-  private contextSubmenuActionElements: HTMLButtonElement[] = [];
+  private readonly genericController: GenericTableMenuController;
   private previousMenuOpen = false;
   private pendingRepositionFrame: number | null = null;
   private forceClosed = false;
+  private focusRestoreScope: S1000DTableMenuScope | null = null;
   private currentMenuSignature = '';
   private currentSubmenuSignature = '';
 
@@ -126,6 +113,13 @@ export class S1000DMenuAdapter {
     this.contextSubmenu = options.contextSubmenu;
     this.onRender = options.onRender;
     this.contextMenuActionResolver = options.contextMenuActionResolver;
+    this.genericController = new GenericTableMenuController({
+      contextMenu: this.contextMenu,
+      contextSubmenu: this.contextSubmenu,
+      onCloseMenu: () => this.dispatchContextMenuClosed(),
+      onRerender: () => this.onRender(),
+      onRestoreFocus: () => this.restoreContextMenuFocus(),
+    });
   }
 
   update(view: EditorView): void {
@@ -141,7 +135,7 @@ export class S1000DMenuAdapter {
       cancelAnimationFrame(this.pendingRepositionFrame);
       this.pendingRepositionFrame = null;
     }
-    this.typeahead.destroy();
+    this.genericController.destroy();
   }
 
   render(
@@ -170,12 +164,10 @@ export class S1000DMenuAdapter {
       this.contextSubmenu.replaceChildren();
       this.contextSubmenu.hidden = true;
       this.contextSubmenu.setAttribute('aria-hidden', 'true');
-      this.contextMenuActionElements = [];
-      this.contextSubmenuActionElements = [];
       this.previousMenuOpen = false;
       this.currentMenuSignature = '';
       this.currentSubmenuSignature = '';
-      resetTableContextSubmenuState(this.submenuState);
+      this.genericController.syncHidden();
       if (this.pendingRepositionFrame !== null) {
         cancelAnimationFrame(this.pendingRepositionFrame);
         this.pendingRepositionFrame = null;
@@ -187,10 +179,9 @@ export class S1000DMenuAdapter {
     const menuSignature = this.getContextMenuSignature(menu.scope ?? 'cell', entries);
     if (!this.previousMenuOpen || this.currentMenuSignature !== menuSignature) {
       this.contextMenu.replaceChildren(this.createContextMenuPanel(entries));
-      this.contextMenuActionElements = Array.from(this.contextMenu.querySelectorAll('button'));
       this.currentMenuSignature = menuSignature;
     } else {
-      syncTableContextSubmenuTriggerExpandedState(this.contextMenu, this.submenuState.openSubmenuId);
+      syncTableContextSubmenuTriggerExpandedState(this.contextMenu, this.genericController.openSubmenuId);
     }
     positionTableContextMenuElement(this.contextMenu, {
       anchor: getTableMenuLiveAnchor(this.root, menu.scope ?? 'cell', menu.anchor, LIVE_ANCHOR_SELECTORS),
@@ -206,10 +197,6 @@ export class S1000DMenuAdapter {
     this.renderContextSubmenu(entries, hostRect);
 
     if (!this.previousMenuOpen) {
-      if (menu.scope !== 'cell') {
-        this.focusFirstContextMenuAction(this.contextMenuActionElements);
-      }
-      this.typeahead.reset();
       if (this.pendingRepositionFrame !== null) {
         cancelAnimationFrame(this.pendingRepositionFrame);
       }
@@ -220,6 +207,10 @@ export class S1000DMenuAdapter {
         }
       }) ?? null;
     }
+    this.genericController.syncAfterRender({
+      focusOnOpen: menu.scope !== 'cell',
+      menuOpen,
+    });
     this.previousMenuOpen = true;
   }
 
@@ -249,76 +240,17 @@ export class S1000DMenuAdapter {
     if (!interaction.contextMenuOpen) {
       return;
     }
-
-    const activeButtons = this.submenuState.openSubmenuId
-      ? this.contextSubmenuActionElements
-      : this.contextMenuActionElements;
-    const enabledButtons = activeButtons.filter((button) => !button.disabled);
-    if (enabledButtons.length === 0) {
-      return;
-    }
-
-    const activeIndex = enabledButtons.findIndex((button) => button === this.root.ownerDocument.activeElement);
-    if (isMenuDismissKey(event.key)) {
-      event.preventDefault();
-      if (this.submenuState.openSubmenuId) {
-        this.closeContextSubmenu(true);
-        return;
-      }
-      this.closeContextMenu(true);
-      return;
-    }
-
-    if (isMenuExitKey(event.key)) {
-      this.closeContextMenu(false);
-      return;
-    }
-
-    if (isMenuNavigationKey(event.key)) {
-      event.preventDefault();
-      const nextIndex = getNextMenuActionIndex(activeIndex, enabledButtons.length, event.key);
-      const nextButton = enabledButtons[nextIndex];
-      if (nextButton) {
-        focusMenuButtonWithoutScroll(nextButton);
-      }
-      return;
-    }
-
-    const activeElement = this.root.ownerDocument.activeElement;
-    if (event.key === 'ArrowRight' && activeElement instanceof HTMLButtonElement && activeElement.dataset.submenuId) {
-      event.preventDefault();
-      this.openContextSubmenu(activeElement.dataset.submenuId, true);
-      return;
-    }
-
-    if (event.key === 'ArrowLeft' && this.submenuState.openSubmenuId) {
-      event.preventDefault();
-      this.closeContextSubmenu(true);
-      return;
-    }
-
-    if (event.key === 'Enter' || event.key === ' ') {
-      if (activeElement instanceof HTMLButtonElement && !activeElement.disabled) {
-        event.preventDefault();
-        activeElement.click();
-      }
-      return;
-    }
-
-    if (isMenuTypeaheadKey(event)) {
-      const labels = enabledButtons.map((button) => button.textContent ?? '');
-      const nextIndex = this.typeahead.advance(labels, activeIndex, event.key);
-      if (nextIndex >= 0) {
-        event.preventDefault();
-        const nextButton = enabledButtons[nextIndex];
-        if (nextButton) {
-          focusMenuButtonWithoutScroll(nextButton);
-        }
-      }
-    }
+    this.genericController.handleKeyDown(event, {
+      activateOnEnterOrSpace: true,
+      stopPropagation: false,
+    });
   }
 
   closeContextMenu(restoreFocus: boolean): void {
+    this.genericController.closeMenu(restoreFocus);
+  }
+
+  private dispatchContextMenuClosed(): void {
     this.forceClosed = true;
     this.contextMenu.hidden = true;
     this.contextMenu.setAttribute('aria-hidden', 'true');
@@ -326,29 +258,27 @@ export class S1000DMenuAdapter {
     this.contextSubmenu.setAttribute('aria-hidden', 'true');
     this.root.dataset.contextMenuOpen = 'false';
     this.previousMenuOpen = false;
-    this.contextMenuActionElements = [];
-    this.contextSubmenuActionElements = [];
     this.currentSubmenuSignature = '';
-    resetTableContextSubmenuState(this.submenuState);
     const interaction = getS1000DTableInteractionState(this.view.state);
     if (!interaction.contextMenuOpen) {
       return;
     }
+    this.focusRestoreScope = interaction.menuScope;
 
     setS1000DTableInteractionMeta(this.view, {
       contextMenuOpen: false,
       menuScope: null,
       menuAnchor: null,
     });
-    this.typeahead.reset();
+  }
 
-    if (restoreFocus) {
-      if (canRestoreMenuFocus(this.cellHandle) && interaction.menuScope === 'cell') {
-        focusMenuButtonWithoutScroll(this.cellHandle);
-      } else {
-        this.root.ownerDocument.dispatchEvent(new CustomEvent('s1000d-focus-selection-trigger'));
-      }
+  private restoreContextMenuFocus(): void {
+    if (this.focusRestoreScope === 'cell' && canRestoreMenuFocus(this.cellHandle)) {
+      focusMenuButtonWithoutScroll(this.cellHandle);
+    } else {
+      this.root.ownerDocument.dispatchEvent(new CustomEvent('s1000d-focus-selection-trigger'));
     }
+    this.focusRestoreScope = null;
   }
 
   private buildContextMenuEntries(
@@ -450,12 +380,11 @@ export class S1000DMenuAdapter {
   }
 
   private renderContextSubmenu(entries: readonly S1000DContextMenuEntry[], hostRect: DOMRect): void {
-    const submenuEntry = resolveOpenTableContextSubmenu(entries, this.submenuState.openSubmenuId);
+    const submenuEntry = resolveOpenTableContextSubmenu(entries, this.genericController.openSubmenuId);
     if (!submenuEntry) {
       this.contextSubmenu.replaceChildren();
       this.contextSubmenu.hidden = true;
       this.contextSubmenu.setAttribute('aria-hidden', 'true');
-      this.contextSubmenuActionElements = [];
       this.currentSubmenuSignature = '';
       return;
     }
@@ -465,7 +394,6 @@ export class S1000DMenuAdapter {
       this.contextSubmenu.replaceChildren();
       this.contextSubmenu.hidden = true;
       this.contextSubmenu.setAttribute('aria-hidden', 'true');
-      this.contextSubmenuActionElements = [];
       this.currentSubmenuSignature = '';
       return;
     }
@@ -476,7 +404,6 @@ export class S1000DMenuAdapter {
     const submenuSignature = `${submenuEntry.key}:${submenuEntry.items.map((action) => `${action.actionId}:${action.enabled}:${action.active ? '1' : '0'}`).join(',')}`;
     if (this.currentSubmenuSignature !== submenuSignature) {
       this.contextSubmenu.replaceChildren(this.createContextMenuPanel(submenuEntry.items));
-      this.contextSubmenuActionElements = Array.from(this.contextSubmenu.querySelectorAll('button'));
       this.currentSubmenuSignature = submenuSignature;
     }
 
@@ -500,35 +427,24 @@ export class S1000DMenuAdapter {
       } as Pick<DOMRect, 'left' | 'right' | 'top'>,
     });
 
-    if (consumeTableContextSubmenuAutoFocus(this.submenuState)) {
-      this.focusFirstContextMenuAction(this.contextSubmenuActionElements);
-    }
   }
 
   private createContextMenuSubmenuTrigger(entry: S1000DContextMenuSubmenuEntry): HTMLButtonElement {
     return createTableContextMenuSubmenuButton(this.root.ownerDocument, {
       className: 's1000d-table-overlay__context-menu-action has-submenu',
-      expanded: this.submenuState.openSubmenuId === entry.key,
+      expanded: this.genericController.openSubmenuId === entry.key,
       key: entry.key,
       label: entry.label,
       onClick: (event) => {
         if (isKeyboardClick(event)) {
           event.preventDefault();
-          if (this.submenuState.openSubmenuId === entry.key) {
-            this.closeContextSubmenu(true);
-          } else {
-            this.openContextSubmenu(entry.key, true);
-          }
+          this.genericController.toggleSubmenu(entry.key, true);
         }
       },
       onMouseDown: (event) => {
         event.preventDefault();
         event.stopPropagation();
-        if (this.submenuState.openSubmenuId === entry.key) {
-          this.closeContextSubmenu(true);
-        } else {
-          this.openContextSubmenu(entry.key, true);
-        }
+        this.genericController.toggleSubmenu(entry.key, true);
       },
       testId: `selection-menu-submenu-${entry.key}`,
     });
@@ -564,34 +480,6 @@ export class S1000DMenuAdapter {
       tabIndex: action.enabled ? 0 : -1,
       testId: `selection-menu-item-${action.id}`,
     });
-  }
-
-  private focusFirstContextMenuAction(buttons: readonly HTMLButtonElement[]): void {
-    focusFirstEnabledMenuButton(buttons);
-  }
-
-  private openContextSubmenu(submenuId: string, focusFirstAction: boolean): void {
-    if (!openTableContextSubmenu(this.submenuState, submenuId, focusFirstAction)) {
-      return;
-    }
-    this.typeahead.reset();
-    this.onRender();
-  }
-
-  private closeContextSubmenu(restoreFocus: boolean): void {
-    const submenuId = closeTableContextSubmenu(this.submenuState, restoreFocus);
-    if (!submenuId) {
-      return;
-    }
-    this.typeahead.reset();
-    this.onRender();
-
-    if (restoreFocus) {
-      const trigger = this.contextMenu.querySelector(`[data-submenu-id="${submenuId}"]`);
-      if (trigger instanceof HTMLButtonElement) {
-        focusMenuButtonWithoutScroll(trigger);
-      }
-    }
   }
 
   private getContextMenuSignature(

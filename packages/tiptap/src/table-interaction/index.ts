@@ -80,6 +80,7 @@ export {
   getTableMenuLiveAnchor,
   getTableMenuAnchorForElement,
   getTableMenuToggleAction,
+  GenericTableMenuController,
   isMenuTypeaheadKey,
   openTableContextSubmenu,
   positionTableContextMenuElement,
@@ -97,6 +98,8 @@ export {
   syncTableContextSubmenuTriggerExpandedState,
 } from './menu-controller.js';
 export type {
+  GenericTableMenuControllerOptions,
+  GenericTableMenuRenderOptions,
   TableContextMenuActionEntryLike,
   TableContextMenuPanelEntryLike,
   TableContextMenuSubmenuEntryLike,

@@ -29,30 +29,17 @@ import {
   type HtmlTableSelectionScope,
 } from './html-table-overlay-geometry.js';
 import {
-  closeTableContextSubmenu,
-  consumeTableContextSubmenuAutoFocus,
-  consumeTableContextSubmenuTriggerToFocus,
   createTableContextMenuActionButton,
   createTableContextMenuElement,
   createTableContextMenuPanel,
   createTableContextMenuSubmenuButton,
-  createTableContextSubmenuState,
-  focusMenuButtonWithoutScroll,
-  getEnabledMenuButtons,
-  MenuTypeaheadController,
   canRestoreMenuFocus,
+  GenericTableMenuController,
   getTableMenuToggleAction,
-  openTableContextSubmenu,
   positionTableContextMenuElement,
   positionTableContextSubmenuElement,
-  resetTableContextSubmenuState,
   resolveOpenTableContextSubmenu,
-  getNextMenuActionIndex,
   isKeyboardClick,
-  isMenuDismissKey,
-  isMenuExitKey,
-  isMenuNavigationKey,
-  isMenuTypeaheadKey,
   shouldCloseMenuForTarget,
   type TableContextMenuActionEntryLike,
   type TableContextMenuSubmenuEntryLike,
@@ -353,11 +340,8 @@ export class HtmlTableMenuController {
   private readonly contextTriggerButton: HTMLButtonElement;
   private readonly cellSelectionHandle: HTMLButtonElement;
   private readonly suppressPointerClick: () => void;
-  private readonly menuTypeahead = new MenuTypeaheadController();
-  private readonly submenuState = createTableContextSubmenuState();
-  private lastContextMenuOpen = false;
+  private readonly genericController: GenericTableMenuController;
   private contextMenuFocusTarget: HTMLButtonElement | null = null;
-  private restoreContextMenuFocusOnClose = false;
   private contextMenuContext: HtmlTableMenuContext | null = null;
   private lastHostRect: DOMRect | null = null;
   private lastViewportInset = 12;
@@ -373,18 +357,29 @@ export class HtmlTableMenuController {
     this.contextTriggerButton = options.contextTriggerButton;
     this.cellSelectionHandle = options.cellSelectionHandle;
     this.suppressPointerClick = options.suppressPointerClick;
+    this.genericController = new GenericTableMenuController({
+      contextMenu: this.contextMenu,
+      contextSubmenu: this.contextSubmenu,
+      onCloseMenu: () => this.dispatchContextMenuClosed(),
+      onRerender: () => this.rerenderOpenContextMenu(),
+      onRestoreFocus: () => {
+        if (canRestoreMenuFocus(this.contextMenuFocusTarget)) {
+          this.contextMenuFocusTarget.focus({ preventScroll: true });
+        }
+      },
+    });
     this.root.append(this.contextSubmenu);
   }
 
   destroy(): void {
-    this.menuTypeahead.destroy();
+    this.genericController.destroy();
   }
 
   sync(menu: HtmlTableContextMenuState, hostRect: DOMRect, viewportInset: number): void {
     this.lastHostRect = hostRect;
     this.lastViewportInset = viewportInset;
     const renderState = getHtmlTableContextMenuRenderState(menu);
-    const focusedMenuItemKey = this.getFocusedContextMenuItemKey();
+    const focusedMenuItemKey = this.genericController.captureFocusedMenuItemKey();
 
     this.contextMenu.hidden = !renderState.visible;
     this.contextMenu.setAttribute('aria-hidden', String(!renderState.visible));
@@ -395,9 +390,7 @@ export class HtmlTableMenuController {
 
     if (!renderState.visible || renderState.left === null || renderState.top === null) {
       this.contextMenuContext = null;
-      resetTableContextSubmenuState(this.submenuState);
-      this.resetContextMenuTypeahead();
-      this.restoreContextMenuFocusIfNeeded();
+      this.genericController.syncHidden();
       this.contextMenu.replaceChildren();
       this.contextMenu.dataset.placement = '';
       this.contextMenu.style.removeProperty('left');
@@ -405,12 +398,11 @@ export class HtmlTableMenuController {
       this.contextMenu.style.removeProperty('max-height');
       this.contextMenu.style.removeProperty('transform-origin');
       this.hideContextSubmenu();
-      this.lastContextMenuOpen = false;
       return;
     }
 
     if (!menu.open) {
-      resetTableContextSubmenuState(this.submenuState);
+      this.genericController.reset();
     }
 
     const rootEntries = this.buildContextMenuEntries(menu);
@@ -442,7 +434,11 @@ export class HtmlTableMenuController {
       scope: renderState.scope ?? 'table',
     });
     this.syncContextSubmenu(menu, hostRect, viewportBounds, availableHeight);
-    this.restoreContextMenuFocus(menu, focusedMenuItemKey);
+    this.genericController.syncAfterRender({
+      focusedMenuItemKey,
+      menuOpen: menu.open,
+      primaryActionId: menu.primaryAction?.id ?? null,
+    });
   }
 
   toggleFromControl(
@@ -451,9 +447,14 @@ export class HtmlTableMenuController {
   ): void {
     const nextOpen = getTableMenuToggleAction(interaction.contextMenuOpen) === 'open';
     this.contextMenuFocusTarget = focusTarget;
-    this.restoreContextMenuFocusOnClose = !nextOpen;
-    this.contextMenuContext = nextOpen ? this.captureContextMenuContext(interaction) : null;
-    resetTableContextSubmenuState(this.submenuState);
+    if (!nextOpen) {
+      this.contextMenuContext = null;
+      this.genericController.closeMenu(true);
+      return;
+    }
+
+    this.contextMenuContext = this.captureContextMenuContext(interaction);
+    this.genericController.reset();
     this.view.dispatch(
       this.view.state.tr.setMeta(htmlTableInteractionPluginKey, {
         contextMenuOpen: nextOpen,
@@ -467,11 +468,11 @@ export class HtmlTableMenuController {
   }
 
   handleMenuPointerOver(event: MouseEvent): void {
-    this.syncHoveredContextSubmenuFromEventTarget(event.target);
+    this.genericController.handlePointerTarget(event.target);
   }
 
   handleMenuFocusIn(event: FocusEvent): void {
-    this.syncHoveredContextSubmenuFromEventTarget(event.target);
+    this.genericController.handlePointerTarget(event.target);
   }
 
   handleMenuClick(event: MouseEvent): void {
@@ -483,58 +484,7 @@ export class HtmlTableMenuController {
   }
 
   handleMenuKeyDown(event: KeyboardEvent): void {
-    if (isMenuExitKey(event.key)) {
-      this.closeContextMenu(false);
-      return;
-    }
-
-    if (isMenuDismissKey(event.key)) {
-      if (this.submenuState.openSubmenuId) {
-        event.preventDefault();
-        event.stopPropagation();
-        this.closeContextSubmenu(true);
-        return;
-      }
-
-      this.closeContextMenu(true);
-      return;
-    }
-
-    const activePanel = this.getActiveContextMenuPanel();
-    const enabledButtons = this.getEnabledContextMenuActionButtons(activePanel);
-    if (enabledButtons.length === 0) {
-      return;
-    }
-
-    if (isMenuNavigationKey(event.key)) {
-      event.preventDefault();
-      event.stopPropagation();
-
-      const currentIndex = enabledButtons.findIndex((button) => button === this.root.ownerDocument.activeElement);
-      const nextIndex = getNextMenuActionIndex(currentIndex, enabledButtons.length, event.key);
-      if (enabledButtons[nextIndex]) {
-        focusMenuButtonWithoutScroll(enabledButtons[nextIndex]);
-      }
-      return;
-    }
-
-    if (!isMenuTypeaheadKey(event)) {
-      return;
-    }
-
-    event.preventDefault();
-    event.stopPropagation();
-
-    const labels = enabledButtons.map((button) => button.textContent?.trim() ?? '');
-    const currentIndex = enabledButtons.findIndex((button) => button === this.root.ownerDocument.activeElement);
-    const nextIndex = this.menuTypeahead.advance(labels, currentIndex, event.key);
-    if (nextIndex < 0) {
-      return;
-    }
-
-    if (enabledButtons[nextIndex]) {
-      focusMenuButtonWithoutScroll(enabledButtons[nextIndex]);
-    }
+    this.genericController.handleKeyDown(event);
   }
 
   handleDocumentMouseDown(event: MouseEvent): void {
@@ -553,18 +503,18 @@ export class HtmlTableMenuController {
       return;
     }
 
-    this.closeContextMenu(false);
+    this.genericController.closeMenu(false);
   }
 
   handleDocumentKeyDown(event: KeyboardEvent): void {
     const interaction = getHtmlTableInteractionState(this.view.state);
-    if (!interaction.contextMenuOpen || !isMenuDismissKey(event.key)) {
+    if (!interaction.contextMenuOpen || event.key !== 'Escape') {
       return;
     }
 
     event.preventDefault();
     event.stopPropagation();
-    this.closeContextMenu(true);
+    this.genericController.closeMenu(true);
   }
 
   private get view(): EditorView {
@@ -731,7 +681,7 @@ export class HtmlTableMenuController {
   private createContextMenuSubmenuButton(entry: HtmlTableContextMenuSubmenuEntry): HTMLButtonElement {
     return createTableContextMenuSubmenuButton(this.root.ownerDocument, {
       className: 'html-table-overlay__context-menu-action has-submenu',
-      expanded: this.submenuState.openSubmenuId === entry.key,
+      expanded: this.genericController.openSubmenuId === entry.key,
       key: entry.key,
       label: entry.label,
       testId: 'pmht-context-menu-action',
@@ -804,7 +754,7 @@ export class HtmlTableMenuController {
 
     const trigger = this.contextMenu.querySelector<HTMLButtonElement>(`button[data-submenu-id="${submenu.key}"]`);
     if (!trigger) {
-      this.submenuState.openSubmenuId = null;
+      this.genericController.reset();
       this.hideContextSubmenu();
       return;
     }
@@ -834,34 +784,14 @@ export class HtmlTableMenuController {
   ): HtmlTableContextMenuSubmenuEntry | null {
     const submenu = resolveOpenTableContextSubmenu(
       this.buildContextMenuEntries(menu),
-      this.submenuState.openSubmenuId,
+      this.genericController.openSubmenuId,
     );
     if (!submenu) {
-      this.submenuState.openSubmenuId = null;
+      this.genericController.reset();
       return null;
     }
 
     return submenu;
-  }
-
-  private getFocusedContextMenuItemKey(): string | null {
-    const activeElement = this.root.ownerDocument.activeElement;
-    return activeElement instanceof HTMLButtonElement && this.root.contains(activeElement)
-      ? activeElement.dataset.menuKey ?? null
-      : null;
-  }
-
-  private getActiveContextMenuPanel(): HTMLDivElement {
-    const activeElement = this.root.ownerDocument.activeElement;
-    if (activeElement instanceof HTMLElement && this.contextSubmenu.contains(activeElement) && !this.contextSubmenu.hidden) {
-      return this.contextSubmenu;
-    }
-
-    return this.contextMenu;
-  }
-
-  private getEnabledContextMenuActionButtons(container: ParentNode): HTMLButtonElement[] {
-    return getEnabledMenuButtons(container, 'button[data-menu-key]');
   }
 
   private rerenderOpenContextMenu(): void {
@@ -877,140 +807,25 @@ export class HtmlTableMenuController {
       menu.scope ?? 'table',
       menu.primaryAction?.id ?? null,
     ));
-    this.restoreContextMenuFocus(menu, null);
+    this.genericController.syncAfterRender({
+      focusedMenuItemKey: null,
+      menuOpen: menu.open,
+      primaryActionId: menu.primaryAction?.id ?? null,
+    });
   }
 
-  private resetContextMenuTypeahead(): void {
-    this.menuTypeahead.reset();
-  }
-
-  private restoreContextMenuFocus(menu: HtmlTableContextMenuState, focusedMenuItemKey: string | null): void {
-    const menuButtons = this.getEnabledContextMenuActionButtons(this.contextMenu);
-    const submenuButtons = this.contextSubmenu.hidden
-      ? []
-      : this.getEnabledContextMenuActionButtons(this.contextSubmenu);
-    const enabledButtons = menuButtons.concat(submenuButtons);
-    if (enabledButtons.length === 0) {
-      this.lastContextMenuOpen = menu.open;
-      return;
-    }
-
-    if (consumeTableContextSubmenuAutoFocus(this.submenuState) && submenuButtons.length > 0) {
-      if (submenuButtons[0]) {
-        focusMenuButtonWithoutScroll(submenuButtons[0]);
-      }
-      this.lastContextMenuOpen = menu.open;
-      return;
-    }
-
-    const submenuTriggerToFocus = consumeTableContextSubmenuTriggerToFocus(this.submenuState);
-    if (submenuTriggerToFocus) {
-      const trigger = menuButtons.find((button) => button.dataset.submenuId === submenuTriggerToFocus);
-      if (trigger) {
-        focusMenuButtonWithoutScroll(trigger);
-        this.lastContextMenuOpen = menu.open;
-        return;
-      }
-    }
-
-    if (focusedMenuItemKey) {
-      const focusedButton = enabledButtons.find((button) => button.dataset.menuKey === focusedMenuItemKey);
-      if (focusedButton) {
-        focusMenuButtonWithoutScroll(focusedButton);
-        this.lastContextMenuOpen = menu.open;
-        return;
-      }
-    }
-
-    if (menu.open && !this.lastContextMenuOpen) {
-      const primaryActionId = menu.primaryAction?.id ?? null;
-      const primaryButton = primaryActionId
-        ? menuButtons.find((button) => button.dataset.actionId === primaryActionId)
-        : null;
-      const nextButton = primaryButton ?? menuButtons[0] ?? submenuButtons[0];
-      if (nextButton) {
-        focusMenuButtonWithoutScroll(nextButton);
-      }
-    }
-
-    this.lastContextMenuOpen = menu.open;
-  }
-
-  private restoreContextMenuFocusIfNeeded(): void {
-    if (!this.lastContextMenuOpen || !this.restoreContextMenuFocusOnClose) {
-      this.restoreContextMenuFocusOnClose = false;
-      return;
-    }
-
-    if (canRestoreMenuFocus(this.contextMenuFocusTarget)) {
-      focusMenuButtonWithoutScroll(this.contextMenuFocusTarget);
-    }
-
-    this.restoreContextMenuFocusOnClose = false;
-  }
-
-  private closeContextMenu(restoreFocus: boolean): void {
+  private dispatchContextMenuClosed(): void {
     const interaction = getHtmlTableInteractionState(this.view.state);
     if (!interaction.contextMenuOpen) {
       return;
     }
 
-    this.restoreContextMenuFocusOnClose = restoreFocus;
     this.contextMenuContext = null;
-    resetTableContextSubmenuState(this.submenuState);
     this.view.dispatch(
       this.view.state.tr.setMeta(htmlTableInteractionPluginKey, {
         contextMenuOpen: false,
       }),
     );
-  }
-
-  private closeContextSubmenu(restoreFocusToTrigger: boolean): void {
-    if (!closeTableContextSubmenu(this.submenuState, restoreFocusToTrigger)) {
-      return;
-    }
-    this.resetContextMenuTypeahead();
-    this.rerenderOpenContextMenu();
-  }
-
-  private openContextSubmenu(submenuId: string, focusFirstAction: boolean): void {
-    if (!openTableContextSubmenu(this.submenuState, submenuId, focusFirstAction)) {
-      return;
-    }
-    this.resetContextMenuTypeahead();
-    this.rerenderOpenContextMenu();
-  }
-
-  private syncHoveredContextSubmenuFromEventTarget(target: EventTarget | null): void {
-    const button =
-      target instanceof HTMLElement
-        ? (target.closest('button[data-menu-key]') as HTMLButtonElement | null)
-        : null;
-    if (!button) {
-      return;
-    }
-
-    const submenuId = button.dataset.submenuId;
-    if (submenuId) {
-      this.clearContextMenuFocusForPointerHover();
-      this.openContextSubmenu(submenuId, false);
-      return;
-    }
-
-    if (button.dataset.actionId && this.submenuState.openSubmenuId && this.contextMenu.contains(button)) {
-      this.clearContextMenuFocusForPointerHover();
-      this.closeContextSubmenu(false);
-    }
-  }
-
-  private clearContextMenuFocusForPointerHover(): void {
-    const activeElement = this.root.ownerDocument.activeElement;
-    if (
-      activeElement instanceof HTMLElement &&
-      (this.contextMenu.contains(activeElement) || this.contextSubmenu.contains(activeElement))
-    ) {
-      activeElement.blur();
-    }
   }
 
   private hideContextSubmenu(): void {
@@ -1151,11 +966,7 @@ export class HtmlTableMenuController {
     if (submenuId) {
       event.preventDefault();
       event.stopPropagation();
-      if (this.submenuState.openSubmenuId === submenuId) {
-        this.closeContextSubmenu(true);
-      } else {
-        this.openContextSubmenu(submenuId, true);
-      }
+      this.genericController.toggleSubmenu(submenuId, true);
       return;
     }
 
@@ -1178,8 +989,7 @@ export class HtmlTableMenuController {
 
     runHtmlTableContextMenuAction(state, interaction, actionId as HtmlTableContextActionId, (transaction) => {
       this.contextMenuContext = null;
-      this.restoreContextMenuFocusOnClose = false;
-      resetTableContextSubmenuState(this.submenuState);
+      this.genericController.reset();
       this.view.dispatch(
         transaction.setMeta(htmlTableInteractionPluginKey, {
           contextMenuOpen: false,
@@ -1214,8 +1024,7 @@ export class HtmlTableMenuController {
 
     return command(state, (transaction: Transaction) => {
       this.contextMenuContext = null;
-      this.restoreContextMenuFocusOnClose = false;
-      resetTableContextSubmenuState(this.submenuState);
+      this.genericController.reset();
       this.view.dispatch(
         transaction.setMeta(htmlTableInteractionPluginKey, {
           contextMenuOpen: false,

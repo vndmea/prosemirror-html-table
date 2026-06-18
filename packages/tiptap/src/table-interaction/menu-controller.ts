@@ -581,6 +581,285 @@ export class MenuTypeaheadController {
   }
 }
 
+export interface GenericTableMenuControllerOptions {
+  contextMenu: HTMLDivElement;
+  contextSubmenu: HTMLDivElement;
+  onCloseMenu: (restoreFocus: boolean) => void;
+  onRerender: () => void;
+  onRestoreFocus?: (() => void) | undefined;
+}
+
+export interface GenericTableMenuRenderOptions {
+  focusOnOpen?: boolean | undefined;
+  focusedMenuItemKey?: string | null | undefined;
+  menuOpen: boolean;
+  primaryActionId?: string | null | undefined;
+}
+
+export class GenericTableMenuController {
+  private readonly contextMenu: HTMLDivElement;
+  private readonly contextSubmenu: HTMLDivElement;
+  private readonly onCloseMenu: (restoreFocus: boolean) => void;
+  private readonly onRerender: () => void;
+  private readonly onRestoreFocus?: (() => void) | undefined;
+  private readonly typeahead = new MenuTypeaheadController();
+  private readonly submenuState = createTableContextSubmenuState();
+  private lastMenuOpen = false;
+  private restoreFocusOnClose = false;
+
+  constructor(options: GenericTableMenuControllerOptions) {
+    this.contextMenu = options.contextMenu;
+    this.contextSubmenu = options.contextSubmenu;
+    this.onCloseMenu = options.onCloseMenu;
+    this.onRerender = options.onRerender;
+    this.onRestoreFocus = options.onRestoreFocus;
+  }
+
+  get openSubmenuId(): string | null {
+    return this.submenuState.openSubmenuId;
+  }
+
+  destroy(): void {
+    this.typeahead.destroy();
+  }
+
+  reset(): void {
+    resetTableContextSubmenuState(this.submenuState);
+    this.typeahead.reset();
+  }
+
+  closeMenu(restoreFocus: boolean): void {
+    this.restoreFocusOnClose = restoreFocus;
+    this.reset();
+    this.onCloseMenu(restoreFocus);
+  }
+
+  openSubmenu(submenuId: string, focusFirstAction: boolean): boolean {
+    if (!openTableContextSubmenu(this.submenuState, submenuId, focusFirstAction)) {
+      return false;
+    }
+
+    this.typeahead.reset();
+    this.onRerender();
+    return true;
+  }
+
+  closeSubmenu(restoreFocusToTrigger: boolean): boolean {
+    if (!closeTableContextSubmenu(this.submenuState, restoreFocusToTrigger)) {
+      return false;
+    }
+
+    this.typeahead.reset();
+    this.onRerender();
+    return true;
+  }
+
+  toggleSubmenu(submenuId: string, focusFirstAction: boolean): void {
+    if (this.submenuState.openSubmenuId === submenuId) {
+      this.closeSubmenu(true);
+    } else {
+      this.openSubmenu(submenuId, focusFirstAction);
+    }
+  }
+
+  handleKeyDown(
+    event: KeyboardEvent,
+    options: {
+      activateOnEnterOrSpace?: boolean | undefined;
+      stopPropagation?: boolean | undefined;
+    } = {},
+  ): boolean {
+    const stopPropagation = options.stopPropagation ?? true;
+    if (isMenuExitKey(event.key)) {
+      this.closeMenu(false);
+      return true;
+    }
+
+    if (isMenuDismissKey(event.key)) {
+      this.consumeKeyEvent(event, stopPropagation);
+      if (this.submenuState.openSubmenuId) {
+        this.closeSubmenu(true);
+      } else {
+        this.closeMenu(true);
+      }
+      return true;
+    }
+
+    const activePanel = this.getActivePanel();
+    const enabledButtons = getEnabledMenuButtons(activePanel, 'button[data-menu-key]');
+    if (enabledButtons.length === 0) {
+      return false;
+    }
+
+    const activeElement = this.contextMenu.ownerDocument.activeElement;
+    const activeIndex = enabledButtons.findIndex((button) => button === activeElement);
+    if (isMenuNavigationKey(event.key)) {
+      this.consumeKeyEvent(event, stopPropagation);
+      const nextButton = enabledButtons[getNextMenuActionIndex(activeIndex, enabledButtons.length, event.key)];
+      if (nextButton) {
+        focusMenuButtonWithoutScroll(nextButton);
+      }
+      return true;
+    }
+
+    if (
+      event.key === 'ArrowRight' &&
+      activeElement instanceof HTMLButtonElement &&
+      activeElement.dataset.submenuId
+    ) {
+      this.consumeKeyEvent(event, stopPropagation);
+      this.openSubmenu(activeElement.dataset.submenuId, true);
+      return true;
+    }
+
+    if (event.key === 'ArrowLeft' && this.submenuState.openSubmenuId) {
+      this.consumeKeyEvent(event, stopPropagation);
+      this.closeSubmenu(true);
+      return true;
+    }
+
+    if (
+      options.activateOnEnterOrSpace &&
+      (event.key === 'Enter' || event.key === ' ') &&
+      activeElement instanceof HTMLButtonElement &&
+      !activeElement.disabled
+    ) {
+      this.consumeKeyEvent(event, stopPropagation);
+      activeElement.click();
+      return true;
+    }
+
+    if (!isMenuTypeaheadKey(event)) {
+      return false;
+    }
+
+    const labels = enabledButtons.map((button) => button.textContent?.trim() ?? '');
+    const nextIndex = this.typeahead.advance(labels, activeIndex, event.key);
+    if (nextIndex < 0) {
+      return false;
+    }
+
+    this.consumeKeyEvent(event, stopPropagation);
+    const nextButton = enabledButtons[nextIndex];
+    if (nextButton) {
+      focusMenuButtonWithoutScroll(nextButton);
+    }
+    return true;
+  }
+
+  handlePointerTarget(target: EventTarget | null): void {
+    const button = target instanceof HTMLElement
+      ? (target.closest('button[data-menu-key]') as HTMLButtonElement | null)
+      : null;
+    if (!button) {
+      return;
+    }
+
+    const submenuId = button.dataset.submenuId;
+    if (submenuId) {
+      this.clearMenuFocus();
+      this.openSubmenu(submenuId, false);
+      return;
+    }
+
+    if (button.dataset.actionId && this.submenuState.openSubmenuId && this.contextMenu.contains(button)) {
+      this.clearMenuFocus();
+      this.closeSubmenu(false);
+    }
+  }
+
+  captureFocusedMenuItemKey(): string | null {
+    const activeElement = this.contextMenu.ownerDocument.activeElement;
+    return activeElement instanceof HTMLButtonElement &&
+      (this.contextMenu.contains(activeElement) || this.contextSubmenu.contains(activeElement))
+      ? activeElement.dataset.menuKey ?? null
+      : null;
+  }
+
+  syncAfterRender(options: GenericTableMenuRenderOptions): void {
+    const menuButtons = getEnabledMenuButtons(this.contextMenu, 'button[data-menu-key]');
+    const submenuButtons = this.contextSubmenu.hidden
+      ? []
+      : getEnabledMenuButtons(this.contextSubmenu, 'button[data-menu-key]');
+    const enabledButtons = menuButtons.concat(submenuButtons);
+
+    if (consumeTableContextSubmenuAutoFocus(this.submenuState) && submenuButtons[0]) {
+      focusMenuButtonWithoutScroll(submenuButtons[0]);
+      this.lastMenuOpen = options.menuOpen;
+      return;
+    }
+
+    const triggerId = consumeTableContextSubmenuTriggerToFocus(this.submenuState);
+    const trigger = triggerId
+      ? menuButtons.find((button) => button.dataset.submenuId === triggerId)
+      : null;
+    if (trigger) {
+      focusMenuButtonWithoutScroll(trigger);
+      this.lastMenuOpen = options.menuOpen;
+      return;
+    }
+
+    const focusedButton = options.focusedMenuItemKey
+      ? enabledButtons.find((button) => button.dataset.menuKey === options.focusedMenuItemKey)
+      : null;
+    if (focusedButton) {
+      focusMenuButtonWithoutScroll(focusedButton);
+      this.lastMenuOpen = options.menuOpen;
+      return;
+    }
+
+    if (options.menuOpen && !this.lastMenuOpen && options.focusOnOpen !== false) {
+      const primaryButton = options.primaryActionId
+        ? menuButtons.find((button) => button.dataset.actionId === options.primaryActionId)
+        : null;
+      const nextButton = primaryButton ?? menuButtons[0] ?? submenuButtons[0];
+      if (nextButton) {
+        focusMenuButtonWithoutScroll(nextButton);
+      }
+    }
+
+    this.lastMenuOpen = options.menuOpen;
+  }
+
+  syncHidden(): void {
+    if (this.lastMenuOpen && this.restoreFocusOnClose) {
+      this.onRestoreFocus?.();
+    }
+    this.restoreFocusOnClose = false;
+    this.lastMenuOpen = false;
+    this.reset();
+  }
+
+  private getActivePanel(): HTMLDivElement {
+    const activeElement = this.contextMenu.ownerDocument.activeElement;
+    if (
+      activeElement instanceof HTMLElement &&
+      this.contextSubmenu.contains(activeElement) &&
+      !this.contextSubmenu.hidden
+    ) {
+      return this.contextSubmenu;
+    }
+    return this.contextMenu;
+  }
+
+  private clearMenuFocus(): void {
+    const activeElement = this.contextMenu.ownerDocument.activeElement;
+    if (
+      activeElement instanceof HTMLElement &&
+      (this.contextMenu.contains(activeElement) || this.contextSubmenu.contains(activeElement))
+    ) {
+      activeElement.blur();
+    }
+  }
+
+  private consumeKeyEvent(event: KeyboardEvent, stopPropagation: boolean): void {
+    event.preventDefault();
+    if (stopPropagation) {
+      event.stopPropagation();
+    }
+  }
+}
+
 function containsEventTarget(
   element: Pick<Element, 'contains'>,
   target: EventTarget | null,
