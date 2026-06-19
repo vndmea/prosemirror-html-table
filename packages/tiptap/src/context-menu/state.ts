@@ -9,15 +9,15 @@ import {
   type HtmlTableContextActionOptions,
   type HtmlTableContextActionId,
   type HtmlTableContextActionGroup,
-} from './html-table-actions.js';
-import type { HtmlTableInteractionState } from './html-table-interaction.js';
+} from './actions.js';
+import type { HtmlTableInteractionState } from '../interaction/plugin.js';
 import {
   getHtmlTableSelectionAnchor,
   getHtmlTableSelectionScope,
   type HtmlTableSelectionAnchor,
   type HtmlTableSelectionScope,
-} from './html-table-overlay-geometry.js';
-import { getTableSelectionInfo } from './table-utils.js';
+} from '../overlay/geometry.js';
+import { getTableSelectionInfo } from '../table-utils.js';
 
 export interface HtmlTableContextMenuState {
   visible: boolean;

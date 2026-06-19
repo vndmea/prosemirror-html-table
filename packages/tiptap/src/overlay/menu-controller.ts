@@ -11,23 +11,23 @@ import {
   getHtmlTableContextActionMenuItemState,
   getHtmlTableContextActionShortcutState,
   type HtmlTableContextActionId,
-} from './html-table-actions.js';
+} from '../context-menu/actions.js';
 import {
   getHtmlTableContextMenuState,
   runHtmlTableContextMenuAction,
   type HtmlTableContextMenuState,
   type HtmlTableContextTriggerButtonState,
-} from './html-table-context-menu.js';
+} from '../context-menu/state.js';
 import {
   getHtmlTableInteractionState,
   type HtmlTableInteractionState,
   htmlTableInteractionPluginKey,
-} from './html-table-interaction.js';
+} from '../interaction/plugin.js';
 import {
   getHtmlTableOverlayViewportBounds,
   getHtmlTableSelectionScope,
   type HtmlTableSelectionScope,
-} from './html-table-overlay-geometry.js';
+} from './geometry.js';
 import {
   createTableContextMenuActionButton,
   createTableContextMenuElement,
@@ -43,14 +43,14 @@ import {
   shouldCloseMenuForTarget,
   type TableContextMenuActionEntryLike,
   type TableContextMenuSubmenuEntryLike,
-} from './table-interaction/menu-controller.js';
-import { getRenderedHtmlTableContext } from './table-dom.js';
+} from '../table-interaction/menu-controller.js';
+import { getRenderedHtmlTableContext } from '../table-dom.js';
 import {
   createColumnSelectionTransaction,
   createRowSelectionTransaction,
   getTableSelectionInfo,
-} from './table-utils.js';
-import type { HtmlTableTiptapOptions } from './options.js';
+} from '../table-utils.js';
+import type { HtmlTableTiptapOptions } from '../options.js';
 
 const SUBMENU_GAP = 6;
 
@@ -313,7 +313,7 @@ export {
   isMenuNavigationKey as isHtmlTableContextMenuNavigationKey,
   isMenuTypeaheadKey as isHtmlTableContextMenuTypeaheadKey,
   shouldCloseMenuForTarget as shouldCloseHtmlTableContextMenuForTarget,
-} from './table-interaction/menu-controller.js';
+} from '../table-interaction/menu-controller.js';
 
 export function getHtmlTableCellContextTriggerRenderState(
   menu: HtmlTableContextMenuState,

@@ -6,36 +6,36 @@ import {
   getHtmlTableContextTriggerButtonState,
   type HtmlTableContextMenuState,
   type HtmlTableContextTriggerButtonState,
-} from './html-table-context-menu.js';
+} from '../context-menu/state.js';
 import {
   getHtmlTableInteractionState,
   type HtmlTableInteractionState,
   htmlTableInteractionPluginKey,
-} from './html-table-interaction.js';
+} from '../interaction/plugin.js';
 import {
   getHtmlTableContextMenuAriaControls,
   getHtmlTableContextTriggerRenderState,
   getHtmlTableOverlayHandleText,
   isHtmlTableKeyboardClick,
-} from './html-table-menu-controller.js';
+} from './menu-controller.js';
 import {
   getHtmlTableVisibleSelectionRect,
   type HtmlTableOverlayPositionState,
   type HtmlTableSelectionScope,
-} from './html-table-overlay-geometry.js';
+} from './geometry.js';
 import {
   isTableAxisHandleHovered,
   isTableAxisHandleVisible,
   shouldToggleTableContextMenuFromAxisHandle,
   shouldToggleTableContextMenuFromTableHandle,
-} from './table-interaction/handle-state.js';
-import { canToggleTableContextTriggerMenu } from './table-interaction/menu-controller.js';
-import { measureHtmlTableGeometry } from './table-dom.js';
+} from '../table-interaction/handle-state.js';
+import { canToggleTableContextTriggerMenu } from '../table-interaction/menu-controller.js';
+import { measureHtmlTableGeometry } from '../table-dom.js';
 import {
   createColumnSelectionTransaction,
   createRowSelectionTransaction,
-} from './table-utils.js';
-import type { HtmlTableTiptapOptions } from './options.js';
+} from '../table-utils.js';
+import type { HtmlTableTiptapOptions } from '../options.js';
 
 export function isTableHandleVisible(
   _allowTableNodeSelection: boolean,
@@ -439,7 +439,7 @@ export class HtmlTableHandleController {
     } else {
       this.contextTriggerButton.removeAttribute('aria-controls');
     }
-    this.contextTriggerButton.textContent = renderState.label ? '...' : '';
+    this.contextTriggerButton.textContent = renderState.label ? '../index.js' : '';
     this.contextTriggerButton.setAttribute('aria-label', renderState.label ?? 'Context actions');
     this.contextTriggerButton.title = renderState.title ?? renderState.label ?? '';
     this.root.dataset.contextMenuOpen = renderState.expanded ? 'true' : 'false';

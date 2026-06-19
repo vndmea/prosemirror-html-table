@@ -8,7 +8,7 @@ import {
   getRenderedHtmlTableContext,
   measureHtmlTableGeometry,
   type HtmlTableGeometry,
-} from './table-dom.js';
+} from '../table-dom.js';
 import {
   buildTableInteractionState,
   createDefaultTableInteractionState,
@@ -23,8 +23,8 @@ import {
   type TableResizeState,
   type TableSelectedAxisKind,
   type TableSelectedAxisState,
-} from './table-interaction/interaction-state.js';
-import { getTableSelectionInfo } from './table-utils.js';
+} from '../table-interaction/interaction-state.js';
+import { getTableSelectionInfo } from '../table-utils.js';
 
 export type HtmlTableHoverKind = TableHoverKind;
 export type HtmlTableSelectedAxisKind = TableSelectedAxisKind;

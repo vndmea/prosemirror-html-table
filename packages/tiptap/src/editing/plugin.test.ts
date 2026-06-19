@@ -5,8 +5,8 @@ import { describe, expect, it } from 'vitest';
 
 import { CellSelection, createHtmlTableNode, createHtmlTableNodeSpecs } from 'prosemirror-html-table';
 
-import { createHtmlTableEditingPlugin } from './html-table-editing-plugin.js';
-import { defaultHtmlTableTiptapOptions } from './options.js';
+import { createHtmlTableEditingPlugin } from './plugin.js';
+import { defaultHtmlTableTiptapOptions } from '../options.js';
 
 const schema = new Schema({
   nodes: {

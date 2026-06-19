@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import type { HtmlTableInteractionState } from './html-table-interaction.js';
+import type { HtmlTableInteractionState } from '../interaction/plugin.js';
 import {
   canRestoreHtmlTableContextMenuFocus,
   getHtmlTableColumnHandleLayout,
@@ -36,11 +36,11 @@ import {
   shouldToggleHtmlTableContextMenuFromTableHandle,
   shouldToggleHtmlTableContextMenuFromAxisHandle,
   shouldCloseHtmlTableContextMenuForTarget,
-} from './html-table-handles.js';
-import type { HtmlTableContextTriggerButtonState } from './html-table-context-menu.js';
-import type { HtmlTableContextMenuState } from './html-table-context-menu.js';
-import { getHtmlTableVisibleSelectionRect } from './html-table-overlay-geometry.js';
-import type { HtmlTableGeometry } from './table-dom.js';
+} from './plugin.js';
+import type { HtmlTableContextTriggerButtonState } from '../context-menu/state.js';
+import type { HtmlTableContextMenuState } from '../context-menu/state.js';
+import { getHtmlTableVisibleSelectionRect } from './geometry.js';
+import type { HtmlTableGeometry } from '../table-dom.js';
 
 function createInteractionState(
   overrides: Partial<HtmlTableInteractionState> = {},

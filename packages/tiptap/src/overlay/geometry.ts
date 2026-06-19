@@ -1,4 +1,4 @@
-import type { HtmlTableInteractionState } from './html-table-interaction.js';
+import type { HtmlTableInteractionState } from '../interaction/plugin.js';
 import {
   getTableContextMenuPosition,
   getTableContextSubmenuPosition,
@@ -14,9 +14,9 @@ import {
   type TableContextSubmenuPosition,
   type TableOverlayPositionState,
   type TableOverlayViewportBounds,
-} from './table-interaction/overlay-geometry.js';
-import type { HtmlTableGeometry } from './table-dom.js';
-import { getTableSelectionInfo } from './table-utils.js';
+} from '../table-interaction/overlay-geometry.js';
+import type { HtmlTableGeometry } from '../table-dom.js';
+import { getTableSelectionInfo } from '../table-utils.js';
 
 export type HtmlTableSelectionScope = 'table' | 'row' | 'column' | 'cell';
 

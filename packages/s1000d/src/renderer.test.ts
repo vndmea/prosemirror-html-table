@@ -133,7 +133,7 @@ describe('S1000D HTML renderer', () => {
   });
 
   it('keeps renderer free of tiptap and prosemirror-view imports', () => {
-    const rendererSource = readFileSync(new URL('./renderer.ts', import.meta.url), 'utf8');
+    const rendererSource = readFileSync(new URL('./renderer.js', import.meta.url), 'utf8');
 
     expect(rendererSource).not.toContain('@tiptap/core');
     expect(rendererSource).not.toContain('prosemirror-view');

@@ -1,6 +1,6 @@
 import type { EditorView } from '@tiptap/pm/view';
 
-import { htmlTableDomAdapter, type HtmlTableDOMContext } from './html-table-dom-adapter.js';
+import { htmlTableDomAdapter, type HtmlTableDOMContext } from './dom/adapter.js';
 import {
   findTableAtDOM,
   getRenderedTableContext,

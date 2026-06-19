@@ -9,10 +9,10 @@ import {
   getHtmlTableContextMenuState,
   getHtmlTableContextTriggerButtonState,
   runHtmlTableContextMenuAction,
-} from './html-table-context-menu.js';
-import { htmlTableInteractionPluginKey } from './html-table-interaction.js';
-import type { HtmlTableInteractionState } from './html-table-interaction.js';
-import { createColumnSelectionTransaction, createRowSelectionTransaction } from './table-utils.js';
+} from './state.js';
+import { htmlTableInteractionPluginKey } from '../interaction/plugin.js';
+import type { HtmlTableInteractionState } from '../interaction/plugin.js';
+import { createColumnSelectionTransaction, createRowSelectionTransaction } from '../table-utils.js';
 
 const schema = new Schema({
   nodes: {

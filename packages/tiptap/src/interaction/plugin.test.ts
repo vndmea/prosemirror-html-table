@@ -10,13 +10,13 @@ import {
   getHtmlTableContextTriggerState,
   getHtmlTableInteractionState,
   htmlTableInteractionPluginKey,
-} from './html-table-interaction.js';
-import { createHtmlTableSelectionPlugin } from './table-utils.js';
-import { defaultHtmlTableTiptapOptions } from './options.js';
+} from './plugin.js';
+import { createHtmlTableSelectionPlugin } from '../table-utils.js';
+import { defaultHtmlTableTiptapOptions } from '../options.js';
 import {
   createColumnSelectionTransaction,
   createRowSelectionTransaction,
-} from './table-utils.js';
+} from '../table-utils.js';
 
 const schema = new Schema({
   nodes: {

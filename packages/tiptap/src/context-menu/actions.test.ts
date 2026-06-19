@@ -12,16 +12,16 @@ import {
   getHtmlTableContextActions,
   getPrimaryHtmlTableContextAction,
   runHtmlTableContextAction,
-} from './html-table-actions.js';
+} from './actions.js';
 import {
   createHtmlTableInteractionPlugin,
   getHtmlTableInteractionState,
   htmlTableInteractionPluginKey,
-} from './html-table-interaction.js';
+} from '../interaction/plugin.js';
 import {
   createColumnSelectionTransaction,
   createRowSelectionTransaction,
-} from './table-utils.js';
+} from '../table-utils.js';
 
 const schema = new Schema({
   nodes: {

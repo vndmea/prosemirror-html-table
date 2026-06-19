@@ -12,7 +12,7 @@ import {
   type S1000DContextMenuActionResolver,
   type S1000DContextMenuOptions,
 } from './menu.js';
-import { CONTEXT_MENU_SCOPE_LABELS, OVERLAY_SELECTOR, SUBMENU_GAP } from './s1000d-overlay-geometry.js';
+import { CONTEXT_MENU_SCOPE_LABELS, OVERLAY_SELECTOR, SUBMENU_GAP } from './overlay-geometry.js';
 import {
   canRestoreMenuFocus,
   createTableContextMenuActionButton,

@@ -1,15 +1,15 @@
 import type { EditorView } from '@tiptap/pm/view';
 
-import { htmlTableDomAdapter } from './html-table-dom-adapter.js';
-import type { HtmlTableTiptapOptions } from './options.js';
-import { getHtmlTableInteractionState, type HtmlTableInteractionState, htmlTableInteractionPluginKey } from './html-table-interaction.js';
-import { getRenderedTableContext } from './table-interaction/dom-adapter.js';
-import { TableResizeLifecycle, applyTableColumnPreviewWidths } from './table-interaction/resize-lifecycle.js';
-import { measureHtmlTableGeometry } from './table-dom.js';
+import { htmlTableDomAdapter } from '../dom/adapter.js';
+import type { HtmlTableTiptapOptions } from '../options.js';
+import { getHtmlTableInteractionState, type HtmlTableInteractionState, htmlTableInteractionPluginKey } from '../interaction/plugin.js';
+import { getRenderedTableContext } from '../table-interaction/dom-adapter.js';
+import { TableResizeLifecycle, applyTableColumnPreviewWidths } from '../table-interaction/resize-lifecycle.js';
+import { measureHtmlTableGeometry } from '../table-dom.js';
 import {
   createColumnResizeTransaction,
   getTableColumnWidths,
-} from './table-utils.js';
+} from '../table-utils.js';
 
 export function isHtmlTableInteractionLockedByResize(
   interaction: HtmlTableInteractionState,

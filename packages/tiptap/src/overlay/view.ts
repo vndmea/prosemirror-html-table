@@ -2,19 +2,19 @@ import { PluginKey } from '@tiptap/pm/state';
 import type { EditorView } from '@tiptap/pm/view';
 import { CellSelection } from 'prosemirror-html-table';
 
-import { htmlTableDomAdapter } from './html-table-dom-adapter.js';
-import type { HtmlTableTiptapOptions } from './options.js';
+import { htmlTableDomAdapter } from '../dom/adapter.js';
+import type { HtmlTableTiptapOptions } from '../options.js';
 import {
   getHtmlTableContextMenuState,
   getHtmlTableContextTriggerButtonState,
-} from './html-table-context-menu.js';
+} from '../context-menu/state.js';
 import {
   getHtmlTableInteractionState,
   type HtmlTableInteractionState,
-} from './html-table-interaction.js';
-import { HtmlTableCellSelectionController } from './html-table-cell-selection-controller.js';
-import { HtmlTableExtendController } from './html-table-extend-controller.js';
-import { HtmlTableHandleController } from './html-table-handle-controller.js';
+} from '../interaction/plugin.js';
+import { HtmlTableCellSelectionController } from './cell-selection-controller.js';
+import { HtmlTableExtendController } from './extend-controller.js';
+import { HtmlTableHandleController } from './handle-controller.js';
 import {
   HtmlTableMenuController,
   type HtmlTableContextMenuAccessibleState,
@@ -25,20 +25,20 @@ import {
   type HtmlTableContextTriggerRenderState,
   type HtmlTableOverlayHandleText,
   type HtmlTableCellContextTriggerRenderState,
-} from './html-table-menu-controller.js';
+} from './menu-controller.js';
 import {
   getHtmlTableOverlayPositionState,
   type HtmlTableContextMenuPlacement,
   type HtmlTableContextMenuPosition,
   type HtmlTableSelectionAnchor,
   type HtmlTableSelectionScope,
-} from './html-table-overlay-geometry.js';
-import { getHtmlTableOverlayMount, HtmlTableOverlayHost } from './html-table-overlay-host.js';
-import { HtmlTableResizeController } from './html-table-resize-controller.js';
-import { createTableContextMenuElement } from './table-interaction/menu-controller.js';
-import { getRenderedTableContext } from './table-interaction/dom-adapter.js';
-import { measureHtmlTableGeometry } from './table-dom.js';
-import { getTableSelectionInfo } from './table-utils.js';
+} from './geometry.js';
+import { getHtmlTableOverlayMount, HtmlTableOverlayHost } from './host.js';
+import { HtmlTableResizeController } from './resize-controller.js';
+import { createTableContextMenuElement } from '../table-interaction/menu-controller.js';
+import { getRenderedTableContext } from '../table-interaction/dom-adapter.js';
+import { measureHtmlTableGeometry } from '../table-dom.js';
+import { getTableSelectionInfo } from '../table-utils.js';
 
 const ROW_HANDLE_OFFSET = 10;
 const COLUMN_HANDLE_OFFSET = 10;

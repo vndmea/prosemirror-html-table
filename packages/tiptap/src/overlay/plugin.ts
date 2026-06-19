@@ -1,6 +1,6 @@
 import { Plugin } from '@tiptap/pm/state';
 
-import type { HtmlTableTiptapOptions } from './options.js';
+import type { HtmlTableTiptapOptions } from '../options.js';
 import {
   HtmlTableOverlayView,
   htmlTableHandlePluginKey,
@@ -16,7 +16,7 @@ import {
   type HtmlTableOverlayHandleText,
   type HtmlTableSelectionAnchor,
   type HtmlTableSelectionScope,
-} from './html-table-overlay-view.js';
+} from './view.js';
 
 export {
   canRestoreHtmlTableContextMenuFocus,
@@ -37,13 +37,13 @@ export {
   isHtmlTableContextMenuTypeaheadKey,
   isHtmlTableKeyboardClick,
   shouldCloseHtmlTableContextMenuForTarget,
-} from './html-table-menu-controller.js';
+} from './menu-controller.js';
 export {
   getHtmlTableContextMenuPosition,
   getHtmlTableContextMenuTransformOrigin,
   getHtmlTableSelectionAnchor,
   getHtmlTableSelectionScope,
-} from './html-table-overlay-geometry.js';
+} from './geometry.js';
 export {
   getHtmlTableColumnHandleLayout,
   isHtmlTableAxisHandleHovered,
@@ -52,14 +52,14 @@ export {
   isTableHandleVisible,
   shouldToggleHtmlTableContextMenuFromAxisHandle,
   shouldToggleHtmlTableContextMenuFromTableHandle,
-} from './html-table-handle-controller.js';
-export { isHtmlTableCellHandleVisible } from './html-table-cell-selection-controller.js';
-export { shouldHideHtmlTableExtendButtons } from './html-table-extend-controller.js';
+} from './handle-controller.js';
+export { isHtmlTableCellHandleVisible } from './cell-selection-controller.js';
+export { shouldHideHtmlTableExtendButtons } from './extend-controller.js';
 export {
   isHtmlTableInteractionLockedByResize,
   getHtmlTableResizeHandleLayout,
   isHtmlTableResizeHandleVisible,
-} from './html-table-resize-controller.js';
+} from './resize-controller.js';
 
 export {
   htmlTableHandlePluginKey,

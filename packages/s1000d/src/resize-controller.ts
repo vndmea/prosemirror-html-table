@@ -11,7 +11,7 @@ import {
   MIN_COLUMN_WIDTH,
   RESIZE_HANDLE_WIDTH,
   syncCount,
-} from './s1000d-overlay-geometry.js';
+} from './overlay-geometry.js';
 import {
   applyTableColumnPreviewWidths,
   getVisibleTableRect,

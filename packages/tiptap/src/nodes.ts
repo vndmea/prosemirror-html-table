@@ -7,9 +7,9 @@ import {
 } from 'prosemirror-html-table';
 
 import { createHtmlTableCommands } from './commands.js';
-import { createHtmlTableEditingPlugin } from './html-table-editing-plugin.js';
-import { createHtmlTableHandlePlugin } from './html-table-handles.js';
-import { createHtmlTableInteractionPlugin } from './html-table-interaction.js';
+import { createHtmlTableEditingPlugin } from './editing/plugin.js';
+import { createHtmlTableHandlePlugin } from './overlay/plugin.js';
+import { createHtmlTableInteractionPlugin } from './interaction/plugin.js';
 import { defaultHtmlTableTiptapOptions, type HtmlTableTiptapOptions } from './options.js';
 import { HtmlTableNodeView } from './table-view.js';
 import { createHtmlTableSelectionPlugin, findAdjacentCell, getTableSelectionInfo } from './table-utils.js';

@@ -3,7 +3,7 @@ import { afterAll, describe, expect, it } from 'vitest';
 import {
   measureS1000DRenderedTableGeometry,
   measureS1000DTableRect,
-} from './s1000d-overlay-geometry.js';
+} from './overlay-geometry.js';
 
 const OriginalHTMLElement = globalThis.HTMLElement;
 const OriginalHTMLTableCellElement = globalThis.HTMLTableCellElement;

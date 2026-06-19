@@ -1,21 +1,21 @@
 import type { EditorView } from '@tiptap/pm/view';
 
-import type { HtmlTableContextMenuState } from './html-table-context-menu.js';
-import { getHtmlTableContextMenuState } from './html-table-context-menu.js';
-import { getHtmlTableInteractionState, type HtmlTableInteractionState } from './html-table-interaction.js';
+import type { HtmlTableContextMenuState } from '../context-menu/state.js';
+import { getHtmlTableContextMenuState } from '../context-menu/state.js';
+import { getHtmlTableInteractionState, type HtmlTableInteractionState } from '../interaction/plugin.js';
 import {
   getHtmlTableCellContextTriggerRenderState,
   getHtmlTableContextMenuAriaControls,
   isHtmlTableKeyboardClick,
-} from './html-table-menu-controller.js';
+} from './menu-controller.js';
 import {
   getHtmlTableSelectionAnchor,
   getHtmlTableSelectionScope,
   getHtmlTableVisibleSelectionRect,
-} from './html-table-overlay-geometry.js';
-import type { HtmlTableTiptapOptions } from './options.js';
-import { measureHtmlTableGeometry } from './table-dom.js';
-import { getTableSelectionInfo } from './table-utils.js';
+} from './geometry.js';
+import type { HtmlTableTiptapOptions } from '../options.js';
+import { measureHtmlTableGeometry } from '../table-dom.js';
+import { getTableSelectionInfo } from '../table-utils.js';
 
 export function isHtmlTableCellHandleVisible(
   interaction: HtmlTableInteractionState,

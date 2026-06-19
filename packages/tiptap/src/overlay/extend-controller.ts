@@ -6,13 +6,13 @@ import {
   createHtmlTableGrid,
 } from 'prosemirror-html-table';
 
-import { getHtmlTableInteractionState, htmlTableInteractionPluginKey, type HtmlTableInteractionState } from './html-table-interaction.js';
-import { isHtmlTableKeyboardClick } from './html-table-menu-controller.js';
-import { measureHtmlTableGeometry } from './table-dom.js';
+import { getHtmlTableInteractionState, htmlTableInteractionPluginKey, type HtmlTableInteractionState } from '../interaction/plugin.js';
+import { isHtmlTableKeyboardClick } from './menu-controller.js';
+import { measureHtmlTableGeometry } from '../table-dom.js';
 import {
   createColumnSelectionTransaction,
   createRowSelectionTransaction,
-} from './table-utils.js';
+} from '../table-utils.js';
 
 export function shouldHideHtmlTableExtendButtons(
   interaction: HtmlTableInteractionState,

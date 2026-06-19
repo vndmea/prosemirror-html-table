@@ -5,27 +5,27 @@ export {
   getHtmlTableContextActions,
   getPrimaryHtmlTableContextAction,
   runHtmlTableContextAction,
-} from './html-table-actions.js';
+} from './context-menu/actions.js';
 export {
   findHtmlTableContextMenuAction,
   getHtmlTableContextMenuState,
   getHtmlTableContextTriggerButtonState,
   runHtmlTableContextMenuAction,
-} from './html-table-context-menu.js';
+} from './context-menu/state.js';
 export {
   createHtmlTableEditingPlugin,
-} from './html-table-editing-plugin.js';
+} from './editing/plugin.js';
 export {
   createHtmlTableHandlePlugin,
   htmlTableHandlePluginKey,
-} from './html-table-handles.js';
+} from './overlay/plugin.js';
 export {
   createHtmlTableInteractionPlugin,
   findSelectedHtmlTable,
   getHtmlTableContextTriggerState,
   getHtmlTableInteractionState,
   htmlTableInteractionPluginKey,
-} from './html-table-interaction.js';
+} from './interaction/plugin.js';
 export { HtmlTableNodeView } from './table-view.js';
 
 export {
@@ -60,11 +60,11 @@ export type {
   HtmlTableContextActionGroup,
   HtmlTableContextActionGroupId,
   HtmlTableContextActionId,
-} from './html-table-actions.js';
+} from './context-menu/actions.js';
 export type {
   HtmlTableContextMenuState,
   HtmlTableContextTriggerButtonState,
-} from './html-table-context-menu.js';
+} from './context-menu/state.js';
 export type {
   HtmlTableContextActionResolver,
   HtmlTableContextActionResolverParams,
@@ -79,7 +79,7 @@ export type {
   HtmlTableReference,
   HtmlTableSelectedAxisKind,
   HtmlTableSelectedAxisState,
-} from './html-table-interaction.js';
+} from './interaction/plugin.js';
 export {
   findHtmlTableAtDOM,
   getRenderedHtmlTableContext,

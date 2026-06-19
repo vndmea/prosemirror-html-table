@@ -1,8 +1,8 @@
 import type { EditorState } from '@tiptap/pm/state';
 
-import type { HtmlTableContextAction } from './html-table-actions.js';
-import type { HtmlTableInteractionState } from './html-table-interaction.js';
-import type { HtmlTableSelectionScope } from './html-table-overlay-geometry.js';
+import type { HtmlTableContextAction } from './context-menu/actions.js';
+import type { HtmlTableInteractionState } from './interaction/plugin.js';
+import type { HtmlTableSelectionScope } from './overlay/geometry.js';
 import type { HtmlTableNodeView } from './table-view.js';
 
 export interface HtmlTableContextActionResolverParams {

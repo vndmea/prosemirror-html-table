@@ -3,12 +3,12 @@ import { Plugin, PluginKey } from 'prosemirror-state';
 import {
   S1000DTableOverlayView,
   type S1000DTableOverlayPluginOptions,
-} from './s1000d-overlay-view.js';
+} from './overlay-view.js';
 export type { TableGeometry, TableOverlayPositionState } from 'tiptap-html-table/table-interaction';
 
 export const s1000dTableOverlayPluginKey = new PluginKey('s1000d-table-overlay');
 
-export type { S1000DTableOverlayPluginOptions } from './s1000d-overlay-view.js';
+export type { S1000DTableOverlayPluginOptions } from './overlay-view.js';
 
 export { applyS1000DColumnWidthsToTgroup } from './column-widths.js';
 

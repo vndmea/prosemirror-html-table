@@ -1,6 +1,6 @@
 import type { Node as ProseMirrorNode } from '@tiptap/pm/model';
 
-import type { TableDOMContext, TableDomAdapter } from './table-interaction/dom-adapter.js';
+import type { TableDOMContext, TableDomAdapter } from '../table-interaction/dom-adapter.js';
 
 const HTML_TABLE_NODE_NAME = 'htmlTable';
 const HTML_TABLE_SELECTOR = '[data-html-table], table';

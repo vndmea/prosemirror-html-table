@@ -28,7 +28,7 @@ import {
 } from './menu.js';
 import { findS1000DEntryPosition } from './position.js';
 import { S1000DCellSelection, isS1000DCellSelection } from './selection.js';
-import { S1000DMenuAdapter } from './s1000d-menu-adapter.js';
+import { S1000DMenuAdapter } from './menu-adapter.js';
 import {
   applyRect,
   AXIS_DRAG_THRESHOLD,
@@ -65,8 +65,8 @@ import {
   syncCount,
   type S1000DAxisDragState,
   type S1000DOverlayRenderState,
-} from './s1000d-overlay-geometry.js';
-import { S1000DResizeController } from './s1000d-resize-controller.js';
+} from './overlay-geometry.js';
+import { S1000DResizeController } from './resize-controller.js';
 import {
   canToggleTableContextTriggerMenu,
   getScopedTableMenuToggleAction,

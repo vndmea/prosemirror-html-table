@@ -1,6 +1,6 @@
 import { tableEditing } from 'prosemirror-html-table';
 
-import type { HtmlTableTiptapOptions } from './options.js';
+import type { HtmlTableTiptapOptions } from '../options.js';
 
 export function createHtmlTableEditingPlugin(options: HtmlTableTiptapOptions) {
   return tableEditing({

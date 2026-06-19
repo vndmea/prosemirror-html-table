@@ -1,6 +1,6 @@
 import type { EditorView } from '@tiptap/pm/view';
 
-import { getTableOverlayMount, TableOverlayHost } from './table-interaction/overlay-host.js';
+import { getTableOverlayMount, TableOverlayHost } from '../table-interaction/overlay-host.js';
 
 export class HtmlTableOverlayHost extends TableOverlayHost {
   constructor(root: HTMLDivElement) {

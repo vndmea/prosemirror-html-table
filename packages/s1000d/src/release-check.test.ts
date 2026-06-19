@@ -13,16 +13,16 @@ describe('S1000D package release checks', () => {
       publishConfig?: { access?: string; provenance?: boolean };
       sideEffects?: boolean;
     };
-    const tsupConfigSource = readFileSync(new URL('../tsup.config.ts', import.meta.url), 'utf8');
+    const tsupConfigSource = readFileSync(new URL('../tsup.config.js', import.meta.url), 'utf8');
 
     expect(packageJson.sideEffects).toBe(false);
     expect(packageJson.files).toContain('dist');
     expect(packageJson.files).toContain('README.md');
     expect(packageJson.files).toContain('LICENSE');
     expect(packageJson.exports?.['.']).toBeDefined();
-    expect(packageJson.exports?.['./clipboard']).toBeDefined();
-    expect(packageJson.exports?.['./renderer']).toBeDefined();
-    expect(packageJson.exports?.['./tiptap']).toBeDefined();
+    expect(packageJson.exports?.['./clipboard.js']).toBeDefined();
+    expect(packageJson.exports?.['./renderer.js']).toBeDefined();
+    expect(packageJson.exports?.['./tiptap.js']).toBeDefined();
     expect(packageJson.scripts?.prepack).toBe('npm run build');
     expect(packageJson.publishConfig?.access).toBe('public');
     expect(packageJson.publishConfig?.provenance).toBe(true);

@@ -43,17 +43,17 @@ import {
   type HtmlTableCommandOptions,
 } from 'prosemirror-html-table';
 
-import { htmlTableInteractionPluginKey, type HtmlTableInteractionState } from './html-table-interaction.js';
+import { htmlTableInteractionPluginKey, type HtmlTableInteractionState } from '../interaction/plugin.js';
 import {
   getHtmlTableSelectionScope,
   type HtmlTableSelectionScope,
-} from './html-table-handles.js';
-import type { HtmlTableContextActionResolver, HtmlTableContextActionResolverParams } from './options.js';
+} from '../overlay/plugin.js';
+import type { HtmlTableContextActionResolver, HtmlTableContextActionResolverParams } from '../options.js';
 import {
   createColumnSelectionTransaction,
   createRowSelectionTransaction,
   getTableSelectionInfo,
-} from './table-utils.js';
+} from '../table-utils.js';
 
 type BuiltInHtmlTableContextActionId =
   | 'deleteTable'
