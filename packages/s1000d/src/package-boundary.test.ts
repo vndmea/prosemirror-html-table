@@ -26,7 +26,7 @@ describe('S1000D package boundaries', () => {
   });
 
   it('does not let tiptap import s1000d implementation files', () => {
-    const tiptapOverlay = readWorkspaceFile('packages/tiptap/src/html-table-overlay-view.ts');
+    const tiptapOverlay = readWorkspaceFile('packages/tiptap/src/overlay/view.ts');
     const tiptapPackage = readWorkspaceFile('packages/tiptap/package.json');
 
     expect(tiptapOverlay).not.toContain('packages/s1000d');
@@ -39,9 +39,9 @@ describe('S1000D package boundaries', () => {
     const index = readWorkspaceFile('packages/s1000d/src/index.ts');
     const overlay = readWorkspaceFile('packages/s1000d/src/overlay.ts');
 
-    expect(packageJson).toContain('"./clipboard.js"');
-    expect(packageJson).toContain('"./renderer.js"');
-    expect(packageJson).toContain('"./tiptap.js"');
+    expect(packageJson).toContain('"./clipboard"');
+    expect(packageJson).toContain('"./renderer"');
+    expect(packageJson).toContain('"./tiptap"');
     expect(index).not.toContain("./tiptap.js");
     expect(index).not.toContain("./clipboard.js");
     expect(index).not.toContain("./renderer.js");
