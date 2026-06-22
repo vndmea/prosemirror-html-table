@@ -1,5 +1,5 @@
 import { Fragment, Schema, type Node as ProseMirrorNode } from 'prosemirror-model';
-import { EditorState, TextSelection } from 'prosemirror-state';
+import { EditorState, NodeSelection, TextSelection } from 'prosemirror-state';
 import type { EditorView } from 'prosemirror-view';
 import { describe, expect, it } from 'vitest';
 
@@ -218,6 +218,24 @@ describe('S1000D tiptap integration', () => {
   it('deletes the whole table on Delete when every cell is selected', () => {
     const plugin = createS1000DTableEditingPlugin(defaultS1000DTableTiptapOptions);
     const state = createStateWithSelection(['A', 'B', 'C', 'D'], [0, 3]);
+    const view = createView(state);
+    const event = createKeyboardEvent('Delete');
+
+    const handled = plugin.props.handleKeyDown?.call(plugin, view, event as unknown as KeyboardEvent);
+
+    expect(handled).toBe(true);
+    expect(event.prevented).toBe(true);
+    expect(view.state.doc.child(0).type.name).toBe('paragraph');
+  });
+
+  it('deletes the whole table on Delete when the table node is selected', () => {
+    const plugin = createS1000DTableEditingPlugin(defaultS1000DTableTiptapOptions);
+    const baseState = createStateWithSelection(['A', 'B', 'C', 'D'], [0, 0]);
+    const state = EditorState.create({
+      schema,
+      doc: baseState.doc,
+      selection: NodeSelection.create(baseState.doc, 0),
+    });
     const view = createView(state);
     const event = createKeyboardEvent('Delete');
 

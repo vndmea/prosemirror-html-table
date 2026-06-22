@@ -739,7 +739,7 @@ function handleKeyDown(
     return collapsed;
   }
 
-  if ((event.key === 'Backspace' || event.key === 'Delete') && isS1000DCellSelection(view.state.selection)) {
+  if (event.key === 'Backspace' || event.key === 'Delete') {
     if (isWholeS1000DTableSelection(view.state) && options.deleteTableOnAllCellsSelected) {
       const deleted = deleteCurrentTable(view.state, view.dispatch);
       if (deleted) {
@@ -748,6 +748,7 @@ function handleKeyDown(
       return deleted;
     }
 
+    if (!isS1000DCellSelection(view.state.selection)) return false;
     if (!options.clearCellsOnDelete) return false;
     const cleared = clearS1000DSelectedCells(view.state, view.dispatch);
     if (cleared) {
