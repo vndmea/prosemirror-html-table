@@ -1331,6 +1331,28 @@ describe('html table commands', () => {
     expect(getSelectedCellType(nextState)).toBe('htmlTableHeaderCell');
   });
 
+  it('cycles previous cell navigation to the last cell when requested', () => {
+    const table = schema.nodes.htmlTable!.create(null, [
+      schema.nodes.htmlTableHead!.create(null, [
+        schema.nodes.htmlTableRow!.create(null, [
+          schema.nodes.htmlTableHeaderCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('H1'))]),
+          schema.nodes.htmlTableHeaderCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('H2'))]),
+        ]),
+      ]),
+      schema.nodes.htmlTableBody!.create(null, [
+        schema.nodes.htmlTableRow!.create(null, [
+          schema.nodes.htmlTableCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('A1'))]),
+          schema.nodes.htmlTableCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('A2'))]),
+        ]),
+      ]),
+    ]);
+
+    const previousState = applyCommand(createStateForTable(table), goToPreviousCell({ cycle: true }));
+
+    expect(getSelectedCellType(previousState)).toBe('htmlTableCell');
+    expect(getSelectedCellNode(previousState)?.textContent).toBe('A2');
+  });
+
   it('selects the current cell as a node selection', () => {
     const nextState = applyCommand(createStateWithTable(2, 2), selectCell());
 
@@ -1385,6 +1407,33 @@ describe('html table commands', () => {
     expect(firstCell.attrs.rowspan).toBe(2);
   });
 
+  it('preserves merged cell content in row-major order', () => {
+    const table = schema.nodes.htmlTable!.create(null, [
+      schema.nodes.htmlTableBody!.create(null, [
+        schema.nodes.htmlTableRow!.create(null, [
+          schema.nodes.htmlTableCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('A1'))]),
+          schema.nodes.htmlTableCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('A2'))]),
+        ]),
+        schema.nodes.htmlTableRow!.create(null, [
+          schema.nodes.htmlTableCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('B1'))]),
+          schema.nodes.htmlTableCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('B2'))]),
+        ]),
+      ]),
+    ]);
+    const doc = schema.nodes.doc!.create(null, [table]);
+    const cellPositions = findNodePositions(doc, 'htmlTableCell');
+    const state = EditorState.create({
+      schema,
+      doc,
+      selection: CellSelection.create(doc, cellPositions[0]!, cellPositions[cellPositions.length - 1]!),
+    });
+
+    const nextState = applyCommand(state, mergeCells());
+    const firstCell = getBody(getTable(nextState.doc)).child(0).child(0);
+
+    expect(firstCell.textContent).toBe('A1A2B1B2');
+  });
+
   it('does not merge a selection across table sections', () => {
     const table = schema.nodes.htmlTable!.create(null, [
       schema.nodes.htmlTableHead!.create(null, [
@@ -1435,6 +1484,37 @@ describe('html table commands', () => {
     expect(nextState.selection).toBeInstanceOf(TextSelection);
     expect(nextState.selection.from).toBeGreaterThan(splitCellPos);
     expect(nextState.selection.from).toBeLessThan(splitCellPos + firstCellNodeSize);
+  });
+
+  it('keeps header cell types when splitting a merged header cell', () => {
+    const table = schema.nodes.htmlTable!.create(null, [
+      schema.nodes.htmlTableHead!.create(null, [
+        schema.nodes.htmlTableRow!.create(null, [
+          schema.nodes.htmlTableHeaderCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('H1'))]),
+          schema.nodes.htmlTableHeaderCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('H2'))]),
+        ]),
+      ]),
+      schema.nodes.htmlTableBody!.create(null, [
+        schema.nodes.htmlTableRow!.create(null, [
+          schema.nodes.htmlTableCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('A1'))]),
+          schema.nodes.htmlTableCell!.create(null, [schema.nodes.paragraph!.create(null, schema.text('A2'))]),
+        ]),
+      ]),
+    ]);
+    const doc = schema.nodes.doc!.create(null, [table]);
+    const headerPositions = findNodePositions(doc, 'htmlTableHeaderCell');
+    const state = EditorState.create({
+      schema,
+      doc,
+      selection: CellSelection.create(doc, headerPositions[0]!, headerPositions[1]!),
+    });
+
+    const mergedState = applyCommand(state, mergeCells());
+    const nextState = applyCommand(mergedState, splitCell());
+    const head = getSection(getTable(nextState.doc), 'htmlTableHead')!;
+
+    expect(head.child(0).child(0).type.name).toBe('htmlTableHeaderCell');
+    expect(head.child(0).child(1).type.name).toBe('htmlTableHeaderCell');
   });
 
   it('merges first and splits on repeated mergeOrSplit', () => {
